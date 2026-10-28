@@ -1,0 +1,13 @@
+# Mac 助手（scripts/passport_assistant.py）及其打包
+bleak==0.22.3
+certifi==2026.10.19
+cryptography==50.0.2
+numpy==2.5.4
+paho-mqtt==2.1.0
+psutil==7.2.2
+pyobjc-framework-Cocoa==10.3.2
+pyobjc-framework-CoreBluetooth==10.3.2
+pyserial==3.5
+sounddevice==0.5.6
+websockets==17.3
+pyinstaller==6.22.3

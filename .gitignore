@@ -8,3 +8,7 @@ __pycache__/
 *.pyc
 .env
 .env.*
+# Mac 助手的构建目录和产物
+/experiments/passport-assistant-build/
+/experiments/passport-connectivity-tools/
+/releases/

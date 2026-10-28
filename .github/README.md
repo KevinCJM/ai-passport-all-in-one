@@ -27,6 +27,10 @@ firmware/passport_connectivity/main/            主循环、WiFi / 蓝牙 / USB 
 scripts/build_passport_suite.sh 编译脚本（参数 device）
 scripts/fetch_deps.sh           下载固定版本的依赖到 deps/
 scripts/generate_passport_font.py  按用到的汉字重新生成字体（可选，需要 Pillow）
+scripts/passport_*.py           Mac 助手（入口 passport_assistant.py）
+scripts/*.cpp                   Mac 助手的两个原生小工具：语音输入粘贴、USB PPP 网关
+scripts/build_passport_assistant.py  把 Mac 助手打包成 .app 和 .pkg
+tests/                          Mac 助手的单元测试
 ```
 
 ## 编译
@@ -86,15 +90,39 @@ python -m esptool --chip esp32c3 -p PORT erase-region 0x620000 0x10000   # 清�
 - 按屏幕提示用手机连上胸牌的配网热点，在网页里选择 WiFi；
 - 和电脑配合的 API token 由胸牌第一次开机时随机生成。
 
-## 需要电脑助手的功能
+## Mac 助手
 
-以下功能需要 Mac 上的配套助手程序，这个程序不在本仓库：
-- 语音输入
-- AI 额度、电脑监控、离座锁屏
-- 打开 Mac 程序
-- USB 联网（PPP）
+`scripts/passport_assistant.py` 是 Mac 上的配套程序，运行后在菜单栏显示图标，设置页面在 http://127.0.0.1:8768/ 。下面这些功能需要它：
+
+- **USB 联网：** 通过 PPP 共享电脑的网络（`passport_ppp_gateway.cpp`）。
+- **蓝牙连接：** 进入电脑功能后拔掉 USB 线，会自动切到蓝牙。
+- **语音输入：** 胸牌录音，交给小智识别，再把文字粘贴到当前光标处（`mac_dictation_bridge.cpp`）。
+- **AI 额度：** 显示 Codex 和 Claude Code 的用量，需要你自己安装并登录这两个工具。
+- **电脑监控：** CPU、内存、磁盘、网速、电池。
+- **离座锁屏：** 根据蓝牙信号强弱锁屏。
+- **打开 Mac 程序：** 对胸牌说「打开 Mac 的微信」。口令可以在设置页自定义。
+- **语音记账同步：** 把账目同步成 CSV 文件。
 
 其余功能只要胸牌连上 WiFi 就能用。
+
+需要 macOS 15 以上、Apple Silicon、Xcode Command Line Tools，以及 Homebrew 装的 `opus` 和 `libslirp`。
+
+```bash
+brew install opus libslirp
+python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
+
+.venv/bin/python scripts/passport_assistant.py          # 直接从源码运行
+.venv/bin/python scripts/build_passport_assistant.py    # 或者打包成 .app 和 .pkg 安装包，输出到 releases/
+```
+
+关于打包：
+- 第一次打包会自动下载 FFmpeg 7.1.2 和 LAME 3.100 的源码并编译，需要几分钟。
+- 打包时会在 `~/Library/Application Support/AI Passport/signing` 里生成一个本机用的签名证书，以后每次更新都用它签名。
+- 安装包没有经过 Apple 公证。
+
+**首次配对：** 用 USB 数据线连接胸牌，按助手的提示在胸牌上核对配对码，然后按确认键。配对信息、设置和日志都保存在 `~/Library/Application Support/AI Passport/`，不在仓库里。
+
+测试：`cd tests && ../.venv/bin/python -m unittest`
 
 ## 许可证
 
@@ -104,3 +132,4 @@ python -m esptool --chip esp32c3 -p PORT erase-region 0x620000 0x10000   # 清�
 - 中文字体：由思源黑体（SIL OFL 1.1）和 DejaVu Sans 生成
 - 状态图标：来自 Font Awesome 5
 - `deps/` 里的各个组件
+- 打包后的 Mac 助手里的 FFmpeg、LAME、libopus、libslirp 和各个 Python 包，许可证文件随安装包一起附带

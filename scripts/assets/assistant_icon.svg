@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- AI Passport Assistant app icon: the badge on its lanyard, an AI sparkle on its screen. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5B5BF0"/>
+      <stop offset="0.55" stop-color="#4338CA"/>
+      <stop offset="1" stop-color="#0E7490"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.3" cy="0.15" r="0.8">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E8ECF5"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#151A3A"/>
+      <stop offset="1" stop-color="#0B1024"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#67E8F9"/>
+      <stop offset="1" stop-color="#C4B5FD"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#7C83FF" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#7C83FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="clip" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F1F5F9"/>
+      <stop offset="1" stop-color="#94A3B8"/>
+    </linearGradient>
+    <clipPath id="body"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="22" stdDeviation="26" flood-color="#0B1024" flood-opacity="0.38"/>
+    </filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#sheen)"/>
+  <g clip-path="url(#body)">
+    <path d="M340 60 L486 214 M684 60 L538 214" stroke="#FFFFFF" stroke-opacity="0.32" stroke-width="58" stroke-linecap="round"/>
+  </g>
+  <rect x="466" y="178" width="92" height="104" rx="26" fill="url(#clip)"/>
+  <rect x="492" y="200" width="40" height="22" rx="11" fill="#475569"/>
+  <g filter="url(#shadow)">
+    <rect x="292" y="252" width="440" height="610" rx="68" fill="url(#card)"/>
+  </g>
+  <rect x="452" y="282" width="120" height="24" rx="12" fill="#C7CCE0"/>
+  <rect x="334" y="330" width="356" height="340" rx="40" fill="url(#screen)"/>
+  <circle cx="512" cy="496" r="150" fill="url(#glow)"/>
+  <path d="M512 392 C524 456 544 476 608 488 C544 500 524 520 512 584 C500 520 480 500 416 488 C480 476 500 456 512 392 Z" fill="url(#spark)"/>
+  <path d="M602 386 C606 408 612 414 634 418 C612 422 606 428 602 450 C598 428 592 422 570 418 C592 414 598 408 602 386 Z" fill="#E0E7FF"/>
+  <rect x="366" y="712" width="292" height="28" rx="14" fill="#C3CADB"/>
+  <rect x="366" y="764" width="186" height="28" rx="14" fill="#DCE1EC"/>
+  <circle cx="640" cy="778" r="17" fill="#22C55E"/>
+</svg>
