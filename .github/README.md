@@ -15,6 +15,8 @@ AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个�
 
 另外还有「你好小智」语音唤醒，可以说功能名直接跳转。
 
+> **平台说明：** 目前只在 macOS 上测试过（编译、刷机和 Mac 助手）。Windows 暂不支持电脑端助手，所以 USB 联网、蓝牙连电脑、语音输入、AI 额度这些要配合电脑的功能在 Windows 上都用不了。只靠 WiFi 的功能不受影响。
+
 ## 目录
 
 ```
@@ -105,7 +107,7 @@ python -m esptool --chip esp32c3 -p PORT erase-region 0x620000 0x10000   # 清�
 
 其余功能只要胸牌连上 WiFi 就能用。
 
-需要 macOS 15 以上、Apple Silicon、Xcode Command Line Tools，以及 Homebrew 装的 `opus` 和 `libslirp`。
+助手只支持 macOS，没有 Windows 版。需要 macOS 15 以上、Apple Silicon、Xcode Command Line Tools，以及 Homebrew 装的 `opus` 和 `libslirp`。
 
 ```bash
 brew install opus libslirp
