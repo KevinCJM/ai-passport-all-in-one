@@ -254,12 +254,13 @@ def gui(controller,background=False):
             except (OSError,ValueError):pass
             ip.setToolTip_('允许向 ipwho.is 提供当前公网 IP，以查询城市、天气和空气质量。')
             button('使用说明','help:',370,88,145)
-            label('foot','语音输入用小智识别，无需安装输入法；Codex 请自行安装并登录。',40,12)
-            button('设备内容','statusLabels:',370,36,145)
+            label('foot','语音输入用小智识别，无需安装输入法；Codex 请自行安装并登录。',6,12)
+            button('记账表格','ledger:',204,36,145);button('设备内容','statusLabels:',370,36,145)
             self.item=A.NSStatusBar.systemStatusBar().statusItemWithLength_(A.NSVariableStatusItemLength);self.item.button().setTitle_('Passport')
             menu=A.NSMenu.alloc().init();menu.addItemWithTitle_action_keyEquivalent_('打开助手','show:','').setTarget_(self)
             menu.addItemWithTitle_action_keyEquivalent_('设备内容（状态牌 / 倒数日 / 二维码）','statusLabels:','').setTarget_(self)
             menu.addItemWithTitle_action_keyEquivalent_('打开 Mac 程序的口令…','macApps:','').setTarget_(self)
+            menu.addItemWithTitle_action_keyEquivalent_('打开记账表格','ledger:','').setTarget_(self)
             menu.addItemWithTitle_action_keyEquivalent_('退出','quit:','q').setTarget_(self);self.item.setMenu_(menu)
             self.timer=NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(1,self,'refresh:',None,True)
             self.current_choices=[];self.refresh_(None)
@@ -333,6 +334,12 @@ def gui(controller,background=False):
         def help_(self,_):
             alert=A.NSAlert.alloc().init();alert.setMessageText_('AI Passport 使用说明');alert.setInformativeText_('1. 首次通过 USB 配对，核对配对码后按设备确认。\n2. Codex、Claude Code 需自行安装并登录。语音输入由助手请小智识别，文字粘贴到当前光标处，无需安装输入法。\n3. 在系统设置中为 AI Passport 助手授权辅助功能。\n\n日常插线优先使用 USB；拔线后进入语音输入、AI 额度或电脑状态，助手自动改用蓝牙。小智、天气和电台使用 WiFi，没 WiFi 时可通过 USB PPP 联网。');alert.runModal()
         def statusLabels_(self,_):A.NSWorkspace.sharedWorkspace().openURL_(A.NSURL.URLWithString_('http://127.0.0.1:8768/#status'))
+        def ledger_(self,_):
+            # 语音记账: the CSV passport_services keeps in sync with the badge, opened in Numbers or Excel.
+            path=controller.directory/'记账.csv'
+            if path.exists():A.NSWorkspace.sharedWorkspace().openURL_(A.NSURL.fileURLWithPath_(str(path)));return
+            alert=A.NSAlert.alloc().init();alert.setMessageText_('还没有记账记录')
+            alert.setInformativeText_('在胸牌「语音记账」记一笔，胸牌连上电脑后会自动同步到这里。');alert.runModal()
         def macApps_(self,_):A.NSWorkspace.sharedWorkspace().openURL_(A.NSURL.URLWithString_('http://127.0.0.1:8768/#mac'))
         def show_(self,_):self.window.makeKeyAndOrderFront_(None);A.NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
         def quit_(self,_):A.NSApplication.sharedApplication().terminate_(None)
