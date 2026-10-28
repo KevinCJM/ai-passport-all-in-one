@@ -1,0 +1,2 @@
+Trimmed copy of espressif/esp-sr 2.4.7 (components.espressif.com): ESP32-C3 libraries and the wn9s_nihaoxiaozhi
+wake word model only. Pack the model with model/pack_model.py (build_passport_suite.sh does).

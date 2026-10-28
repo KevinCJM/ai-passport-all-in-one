@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.16)
+set(EXTRA_COMPONENT_DIRS "${CMAKE_CURRENT_LIST_DIR}/../passport_suite/components/suite_lvgl" "${CMAKE_CURRENT_LIST_DIR}/../../experiments/xiaozhi-passport-workspace/managed_components/espressif__cjson" "${CMAKE_CURRENT_LIST_DIR}/../../experiments/xiaozhi-passport-workspace/managed_components/espressif__esp_audio_codec")
+set(COMPONENTS main suite_lvgl esp_wifi esp_event esp_netif nvs_flash mbedtls bt esp_http_server)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(passport_connectivity)

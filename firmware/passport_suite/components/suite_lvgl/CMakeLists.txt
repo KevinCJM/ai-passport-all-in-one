@@ -1,0 +1,18 @@
+# LVGL 9.5.0 from deps/ (scripts/fetch_deps.sh). Never modify it.
+get_filename_component(EMU_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../.." ABSOLUTE)
+set(LVGL_ROOT "${EMU_ROOT}/deps/lvgl__lvgl")
+if(NOT EXISTS "${LVGL_ROOT}/src/lvgl.h")
+  message(FATAL_ERROR "LVGL 9.5.0 missing: ${LVGL_ROOT}; run scripts/fetch_deps.sh")
+endif()
+file(GLOB_RECURSE LVGL_SOURCES "${LVGL_ROOT}/src/*.c" "${LVGL_ROOT}/src/*.cpp")
+list(APPEND LVGL_SOURCES "${CMAKE_CURRENT_LIST_DIR}/montserrat_14.c" "${CMAKE_CURRENT_LIST_DIR}/montserrat_20.c"
+    "${CMAKE_CURRENT_LIST_DIR}/montserrat_24.c" "${CMAKE_CURRENT_LIST_DIR}/montserrat_48.c")
+if(CMAKE_PROJECT_NAME STREQUAL "passport_device" OR CMAKE_PROJECT_NAME STREQUAL "passport_suite")
+  list(REMOVE_ITEM LVGL_SOURCES "${LVGL_ROOT}/src/stdlib/builtin/lv_mem_core_builtin.c")
+  list(APPEND LVGL_SOURCES "${CMAKE_CURRENT_LIST_DIR}/ui_memory_core.c")
+endif()
+idf_component_register(SRCS ${LVGL_SOURCES} INCLUDE_DIRS "${LVGL_ROOT}" "${CMAKE_CURRENT_LIST_DIR}" REQUIRES esp_timer)
+target_compile_definitions(${COMPONENT_LIB} PUBLIC LV_KCONFIG_IGNORE LV_CONF_INCLUDE_SIMPLE)
+if(CMAKE_PROJECT_NAME STREQUAL "passport_device" OR CMAKE_PROJECT_NAME STREQUAL "passport_suite")
+  target_compile_definitions(${COMPONENT_LIB} PUBLIC PASSPORT_LVGL_HEAP=1)
+endif()
