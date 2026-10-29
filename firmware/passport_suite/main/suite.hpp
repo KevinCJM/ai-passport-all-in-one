@@ -86,6 +86,8 @@ struct Model {
     int cpu{37}, ram{62}, quotaUsed{};
     uint8_t mediaIndex{}, mediaCount{};  // position in the station list
     bool mediaPlaying{};  // the radio or a podcast is playing: the screen goes off, but no deep sleep
+    // 收音机/播客 定时关闭: minutes chosen (0 = none) and when playback stops (monotonic seconds, 0 = not set).
+    uint8_t mediaTimer{};uint64_t mediaUntil{};
     // 播客: the program list (page.podcasts, sent by the device), or once one is opened its player.
     // podcastPos and podcastDur are the episode's place and length in seconds.
     uint8_t podcastCount{},podcastIndex{};bool podcastPlayer{};uint32_t podcastPos{},podcastDur{};
@@ -319,6 +321,7 @@ public:
     void forgetWifi();
     // Long Up / long Down on the word page: known / not known.
     void gradeWord(bool known, uint64_t now);
+    void stepMediaTimer(uint64_t now);
     // A key on the PPT page (long Up / long Down: black screen / end show).
     void slideKey(SlideKey key, uint64_t now);
     // Labels changed on the computer: reload them, keeping the shown label in range.

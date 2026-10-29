@@ -687,6 +687,14 @@ bool LiveServices::tick(uint64_t now) {
     // 播客: the device plays the program the page shows, or shows its list.
     if(active==App::Podcast&&!pending_){const int want=model.podcastPlayer?model.podcastIndex:-1;
         if(want!=podcastAsked_){podcastAsked_=want;char operation[12];if(want<0)copy(operation,"list");else snprintf(operation,sizeof(operation),"play:%d",want);request(operation);dirty=true;}}
+    // 定时关闭: the time left redraws each second; at zero a playing stream stops as Confirm would.
+    if((active==App::Radio||active==App::Podcast)&&model.mediaUntil){
+        if(now!=timerShown_){timerShown_=now;dirty=true;}
+        if(now>=model.mediaUntil&&!pending_){
+            model.mediaTimer=0;model.mediaUntil=0;
+            if(model.mediaPlaying&&(active==App::Radio||(model.podcastPlayer&&podcastAsked_>=0)))request("toggle");
+        }
+    }
     if(active==App::Stock&&!pending_&&!voiceJob_){char want[16];stockOperation(model,want);if(strcmp(want,stockAsked_)){request(want);dirty=true;}}
     if(active==App::Quiz&&model.quizWant&&!quizAsked_&&!pending_){quizAsked_=true;request("next");dirty=true;}
     // 台风: the picked typhoon's track; 热榜: the picked item in full (the device holds the board, so no download).

@@ -29,10 +29,12 @@ inline constexpr AlertMode kAlertModes[]{
     {"黄色频闪",2,{0xffb000,0}},
     {"白色频闪",2,{0xffffff,0}},
 };
-// 白噪音 (NoiseGen kinds in order) and the sleep timer's choices in minutes.
+// 白噪音 (NoiseGen kinds in order) and the sleep timer's choices in minutes (收音机 and 播客 share them).
 struct NoiseSound { const char* name; const char* note; };
 inline constexpr NoiseSound kNoiseSounds[]{{"雨声","细雨沙沙，夹着雨滴"},{"海浪","潮起潮落，约 8 秒一浪"},{"粉红噪音","柔和均匀，适合专注"},{"棕噪音","低沉厚重，适合入睡"},{"白噪音","明亮的沙沙声，遮住人声"}};
 inline constexpr uint8_t kNoiseTimers[]{0,15,30,60,90};
+constexpr uint8_t nextSleepTimer(uint8_t minutes){unsigned at=0;while(at<std::size(kNoiseTimers)&&kNoiseTimers[at]!=minutes)++at;return kNoiseTimers[(at+1)%std::size(kNoiseTimers)];}
+static_assert(nextSleepTimer(0)==15&&nextSleepTimer(60)==90&&nextSleepTimer(90)==0&&nextSleepTimer(7)==15);
 // Status sign presets: text ('\n' breaks the line), English tag, card colour.
 // generate_passport_font.py draws the 48 px status font from the characters between the markers.
 struct StatusLabel { const char* text; const char* tag; uint32_t color; };

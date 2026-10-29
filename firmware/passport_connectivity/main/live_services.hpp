@@ -37,6 +37,7 @@ class LiveServices {
     bool hostWasMissing_{};
     uint8_t newsAsked_{};  // the older 财经新闻 page requested and not yet answered
     int newsItemAsked_{-1}; // the 财经新闻 headline whose text was last asked for
+    uint64_t timerShown_{};  // the second the 定时关闭 countdown last redrew
     int dailyAsked_{-1};   // the 每日一句 day requested and not yet answered
     int wordAsked_{-1};    // the 背单词 card whose IPA and meaning were last requested
     bool quizAsked_{};     // the next 知识问答 question requested and not yet answered

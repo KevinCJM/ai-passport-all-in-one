@@ -81,9 +81,9 @@ inline const char* keyHint(App app,SettingsPage page,bool focusRunning,bool pair
     if(error)return "确认：重试  |  长按确认：返回";
     // tab: 0 ready, 1 listening, 2 recognising.
     if(app==App::Dictation){static const char* const hints[]{"确认：说话  |  下：回车  |  上：删除整行  |  长按确认：返回","确认：结束并输入  |  长按确认：放弃","正在识别，请稍候"};return hints[tab%3];}
-    if(app==App::Radio)return "上下：音量  |  长按上下：换台  |  确认：播放/停止  |  长按确认：返回";
+    if(app==App::Radio)return "上下：音量  |  长按上：换台  |  长按下：定时关闭  |  确认：播放/停止  |  长按确认：返回";
     // alt: a program is open in the player.
-    if(app==App::Podcast)return alt?"上下：音量  |  长按上下：换一期  |  确认：播放/暂停  |  长按确认：节目列表":"上下：选择  |  确认：收听  |  长按确认：返回";
+    if(app==App::Podcast)return alt?"上下：音量  |  长按上：换一期  |  长按下：定时关闭  |  确认：播放/暂停  |  长按确认：节目列表":"上下：选择  |  确认：收听  |  长按确认：返回";
     return "确认：刷新  |  长按确认：返回";
 }
 }

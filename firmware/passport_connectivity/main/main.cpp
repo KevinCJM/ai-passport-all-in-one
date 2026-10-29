@@ -687,8 +687,10 @@ int execute(const char* name) {
         restoreBleAfterAudio=true; puts("BLE_PAUSED_FOR_AUDIO");
     }
     if (!strcmp(name,"wake")) {runtime.wake(now);return 0;}
-    // The radio reuses the long Up/Down presses (otherwise hotspot / settings shortcuts) for tuning, a podcast for its episodes.
-    if ((previous==App::Radio||previous==App::Podcast)&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {live.station(!strcmp(name,"settings"));return 0;}
+    // The radio reuses the long Up/Down presses (otherwise hotspot / settings shortcuts): long Up tunes to the next station
+    // (a podcast: the next episode), long Down steps the sleep timer.
+    if ((previous==App::Radio||previous==App::Podcast)&&!strcmp(name,"ap_on")) {live.station(true);return 0;}
+    if ((previous==App::Radio||previous==App::Podcast)&&!strcmp(name,"settings")) {runtime.stepMediaTimer(now);return 0;}
     // The word page grades with them: long Up = known, long Down = not known.
     if (previous==App::Words&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {runtime.gradeWord(!strcmp(name,"ap_on"),now);return 0;}
     // The PPT page: long Up = black screen, long Down = end show.

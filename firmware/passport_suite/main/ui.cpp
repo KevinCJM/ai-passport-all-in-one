@@ -191,7 +191,7 @@ lv_obj_t *quotaNames[4],*quotaResets[4],*quotaValues[4],*quotaFills[4];App dashb
 lv_point_precise_t trendPoints[24];
 lv_obj_t *tileTitles[4],*tileValues[4],*tileBars[4];
 lv_obj_t *connectionRoot,*connectionTitle,*connectionSpinner,*connectionMessage,*connectionHint,*connectionError;
-lv_obj_t *mediaRoot,*mediaTitle,*mediaTitleText,*mediaPosition,*mediaArt,*mediaArtIcon,*mediaName,*mediaMeta,*mediaStatus,*mediaDetail;
+lv_obj_t *mediaRoot,*mediaTitle,*mediaTitleText,*mediaPosition,*mediaSleep,*mediaArt,*mediaArtIcon,*mediaName,*mediaMeta,*mediaStatus,*mediaDetail;
 lv_obj_t *mediaVolume,*mediaDial,*mediaNeedle,*mediaNext,*mediaNote;
 lv_obj_t *wordsRoot,*wordsPosition,*wordsTag,*wordsWord,*wordsIpa,*wordsMeaning,*wordsStatus,*wordsStats;
 lv_obj_t *slidesRoot,*slidesLink,*slidesTime,*slidesCaption,*slidesStatus,*slidesLast,*slidesName;
@@ -199,7 +199,7 @@ lv_obj_t *alertRoot,*alertName;
 lv_obj_t *statusRoot,*statusText,*statusTag,*statusFoot,*statusVoice;
 lv_obj_t *cells[kCells],*cellBadges[kCells],*cellIcons[kCells],*cellNames[kCells],*menuTitle,*menuPage;
 constexpr int kPodcastRows=5;
-lv_obj_t *podRoot,*podPosition,*podList,*podRows[kPodcastRows],*podNames[kPodcastRows],*podNotes[kPodcastRows],*podPlayer,*podTitle,*podProgram,*podStatus,*podVolume,*podDetail,*podFill,*podTime,*podNote;
+lv_obj_t *podRoot,*podPosition,*podSleep,*podList,*podRows[kPodcastRows],*podNames[kPodcastRows],*podNotes[kPodcastRows],*podPlayer,*podTitle,*podProgram,*podStatus,*podVolume,*podDetail,*podFill,*podTime,*podNote;
 lv_obj_t *torchRoot,*torchName;
 lv_obj_t *qrRoot,*qrCode,*qrTitleLabel,*qrInfo;uint32_t qrShown;
 lv_obj_t *calendarRoot,*calendarTitle,*calendarYearName,*calendarGrid;
@@ -388,11 +388,18 @@ void initConnection(lv_obj_t* screen){
     connectionHint=label(connectionRoot,18,178,204,LV_FONT_DEFAULT,kMuted);lv_obj_set_height(connectionHint,60);lv_label_set_long_mode(connectionHint,LV_LABEL_LONG_WRAP);setTextAlign(connectionHint,LV_TEXT_ALIGN_CENTER,0);
     visible(connectionRoot,false);
 }
+// 定时关闭 left, beside the page's chip; empty when no timer runs.
+void setSleepLabel(lv_obj_t* l,const Model& m){
+    char text[24]{};const uint64_t now=esp_timer_get_time()/1000000;
+    if(m.mediaUntil>now){const unsigned left=m.mediaUntil-now;snprintf(text,sizeof(text),"定时 %u:%02u",left/60,left%60);}
+    setLabel(l,text);
+}
 // Radio: a tuning dial with one mark per station.
 void initMedia(lv_obj_t* screen){
     mediaRoot=lv_obj_create(screen);box(mediaRoot,0,35,240,257,kBg);
     mediaTitle=lv_obj_create(mediaRoot);box(mediaTitle,8,4,70,24,kAccent,12);mediaTitleText=label(mediaTitle,0,2,70,LV_FONT_DEFAULT,kBg);setTextAlign(mediaTitleText,LV_TEXT_ALIGN_CENTER,0);setLabel(mediaTitleText,"收音机");
     mediaPosition=label(mediaRoot,160,8,72,&lv_font_montserrat_14,kMuted);setTextAlign(mediaPosition,LV_TEXT_ALIGN_RIGHT,0);
+    mediaSleep=label(mediaRoot,86,6,90,LV_FONT_DEFAULT,kAccent);
     auto* card=lv_obj_create(mediaRoot);box(card,8,34,224,138,kPanel,12);lv_obj_set_style_border_width(card,1,0);lv_obj_set_style_border_color(card,lv_color_hex(kBorder),0);
     mediaArt=lv_obj_create(card);box(mediaArt,12,12,56,56,kWarn,12);
     mediaArtIcon=label(mediaArt,0,16,56,&lv_font_montserrat_24,kBg);setTextAlign(mediaArtIcon,LV_TEXT_ALIGN_CENTER,0);
@@ -422,7 +429,7 @@ void renderMedia(const Model& model){
     const char* state=live?model.liveState:"已停止";
     char text[96];
     if(count)snprintf(text,sizeof(text),"%u / %u",index+1,count);else text[0]=0;
-    setLabel(mediaPosition,text);
+    setLabel(mediaPosition,text);setSleepLabel(mediaSleep,model);
     setBgColor(mediaArt,lv_color_hex(count?0xff8a73:kBorder),0);
     setLabel(mediaArtIcon,count?LV_SYMBOL_VOLUME_MAX:LV_SYMBOL_REFRESH);
     setLabel(mediaName,name);setLabel(mediaMeta,meta);setLabel(mediaDetail,detail);
@@ -446,6 +453,7 @@ void initPodcast(lv_obj_t* screen){
     podRoot=lv_obj_create(screen);box(podRoot,0,35,240,257,kBg);
     auto* chip=lv_obj_create(podRoot);box(chip,8,4,70,24,kAccent,12);auto* chipText=label(chip,0,2,70,LV_FONT_DEFAULT,kBg);setTextAlign(chipText,LV_TEXT_ALIGN_CENTER,0);setLabel(chipText,"播客");
     podPosition=label(podRoot,120,8,112,&lv_font_montserrat_14,kMuted);setTextAlign(podPosition,LV_TEXT_ALIGN_RIGHT,0);
+    podSleep=label(podRoot,86,6,90,LV_FONT_DEFAULT,kAccent);
     podList=lv_obj_create(podRoot);box(podList,0,34,240,220,kBg);
     for(int i=0;i<kPodcastRows;++i){
         podRows[i]=lv_obj_create(podList);box(podRows[i],8,i*44,224,42,kPanel,8);
@@ -474,7 +482,7 @@ void renderPodcast(const Model& m){
     const auto row=[&](unsigned i)->const Model::PodcastRow&{return live?m.page.podcasts[i]:kSample[i];};
     char text[96];
     if(count)snprintf(text,sizeof(text),"%u / %u",selected+1,count);else text[0]=0;
-    setLabel(podPosition,text);visible(podList,!player);visible(podPlayer,player);
+    setLabel(podPosition,text);setSleepLabel(podSleep,m);visible(podList,!player);visible(podPlayer,player);
     if(!player){
         const unsigned first=count>kPodcastRows?std::min(selected>2?selected-2:0,count-kPodcastRows):0;
         for(unsigned i=0;i<kPodcastRows;++i){

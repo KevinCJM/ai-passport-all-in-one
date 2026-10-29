@@ -849,6 +849,7 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
         if (d.year > 2000) { model.calendarYear = d.year; model.calendarMonth = d.month; model.calendarDay = d.day; }
     }
     if (target == App::Podcast) model.podcastPlayer = false;
+    if (target == App::Radio || target == App::Podcast) { model.mediaTimer = 0; model.mediaUntil = 0; }
     if (target == App::Chat) { model.chatCount = 0; model.chatTurn = 0; model.chatSentence[0] = 0; ++model.chatRevision; }
     return lastResult = Result::Ok;
 }
@@ -1069,8 +1070,7 @@ void Runtime::key(Key key, uint64_t now) {
         auto& m = model; constexpr unsigned rows = std::size(kNoiseSounds) + 1;
         if (key == Key::Up || key == Key::Down) m.noiseRow = (m.noiseRow + (key == Key::Up ? rows - 1 : 1)) % rows;
         if (key == Key::Confirm && m.noiseRow == rows - 1) {
-            unsigned at = 0; while (at < std::size(kNoiseTimers) && kNoiseTimers[at] != m.noiseTimer) ++at;
-            m.noiseTimer = kNoiseTimers[(at + 1) % std::size(kNoiseTimers)];
+            m.noiseTimer = nextSleepTimer(m.noiseTimer);
         } else if (key == Key::Confirm) {
             m.noisePlaying = !(m.noisePlaying && m.noiseKind == m.noiseRow); m.noiseKind = m.noiseRow;
         }
@@ -1168,6 +1168,13 @@ void Runtime::key(Key key, uint64_t now) {
         if(active_==App::Focus&&(key==Key::Up||key==Key::Down))model.selectFocus(key==Key::Up?-1:1);
         if((active_==App::Chat||active_==App::Radio)&&(key==Key::Up||key==Key::Down))model.volume=static_cast<uint8_t>(std::clamp(int(model.volume)+(key==Key::Up?5:-5),0,100));
     }
+}
+// 收音机/播客: long Down steps the sleep timer (白噪音's choices); it counts from now, LiveServices stops the stream.
+void Runtime::stepMediaTimer(uint64_t now) {
+    if (active_ != App::Radio && active_ != App::Podcast) return;
+    tick(now); lastInput_ = now;
+    model.mediaTimer = nextSleepTimer(model.mediaTimer);
+    model.mediaUntil = model.mediaTimer ? now + model.mediaTimer * 60u : 0;
 }
 void Runtime::gradeWord(bool known, uint64_t now) {
     if (active_ != App::Words) return;
