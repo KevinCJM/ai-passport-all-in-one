@@ -99,7 +99,7 @@ constexpr int kCells = 9;  // menu: a 3 x 3 page of icons
 constexpr unsigned kDrawRows = 20;
 struct Badge { const char* symbol; uint32_t color; };
 // Pages that draw their own title and body (no hero card, heading or notice line).
-constexpr bool ownPage(App app){return app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Voice;}
+constexpr bool ownPage(App app){return app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Voice||app==App::Walkie;}
 // Once these pages show content, a refresh or the next item loads behind it instead of under the loading screen.
 bool keepsContent(App app,const Model& m){
     return (app==App::Podcast&&m.podcastCount)||(app==App::Daily&&*m.page.daily.en)||(app==App::Quiz&&m.quizCount)||(app==App::Quake&&m.quakeCount)||(app==App::Hacker&&m.storyCount)||(app==App::Forecast&&m.page.forecast.days)||(app==App::Stock&&m.stockCount)||(app==App::Typhoon&&m.page.typhoon.count)||(app==App::Hot&&m.hotCount)||app==App::Memo||app==App::Translate||app==App::Guard;
@@ -152,6 +152,7 @@ Badge appBadge(App app){
     case App::Ledger: return {ICON_WALLET,0x34d399};
     case App::Calc: return {ICON_CALC,0xfbbf24};
     case App::Voice: return {ICON_MIC,0x5fd3ff};
+    case App::Walkie: return {LV_SYMBOL_CALL,0x4ade80};
     default: return {LV_SYMBOL_SETTINGS,0x9bbbd1};
     }
 }
@@ -252,10 +253,10 @@ void initChrome(lv_obj_t* screen){
 void renderChrome(const Runtime& runtime){
     statusBarRender(runtime);const auto& m=runtime.model;
     const auto app=runtime.active();
-    const bool alt=app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Stock?m.stockDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
+    const bool alt=app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Stock?m.stockDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Walkie?m.walkieAuto:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
     const auto* hint=keyHint(app,m.settingsPage,m.focusRunning,*m.pairingCode,m.live&&m.livePhase==LivePhase::Loading,m.live&&m.livePhase==LivePhase::Error,alt,app==App::Wifi?m.wifiTab:app==App::Settings?(m.settingsPage==SettingsPage::City?dictationTab(m):m.settingsPage==SettingsPage::Idle?m.idleRow:m.wifiSetup?0u:m.wifiArmed?3u:m.wifiRow?2u:1u):
         app==App::Rate?voiceTab(m,m.rateArmed):app==App::Stock?voiceTab(m,m.stockArmed):app==App::Countdown?voiceTab(m,m.countdownArmed):
-        app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:m.soundView);
+        app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:m.soundView);
     char text[256];
     // 打开 Mac 程序: what the computer is doing takes the key hints' place for a few seconds, on any page.
     if(*m.macNote)snprintf(text,sizeof(text),"%s",m.macNote);
@@ -2157,6 +2158,31 @@ void initVoice(lv_obj_t* screen){
     voiceView=lv_obj_create(voiceRoot);box(voiceView,8,2,224,255,kBg);lv_obj_add_event_cb(voiceView,drawVoice,LV_EVENT_DRAW_MAIN,nullptr);
 }
 void renderVoice(const Model& m){drawModel=&m;lv_obj_invalidate(voiceView);}
+// 对讲机: the channel in large type, then a card for what is going on (idle, talking with its time, hearing someone).
+lv_obj_t *walkieRoot,*walkieView;
+void drawWalkie(lv_event_t* e){
+    const auto& m=*drawModel;auto p=painter(e);char text[64];
+    p.text("对讲机",0,4,223,kText);
+    snprintf(text,sizeof(text),"频道 %u",m.walkieChannel);p.text(text,0,32,223,kAccent,LV_TEXT_ALIGN_CENTER,&passport_ui_font_x2);
+    snprintf(text,sizeof(text),m.walkieTalk?"音量 %u%%":"音量 %u%%  ·  长按上下换频道",m.volume);p.text(text,0,72,223,0x5f7f94,LV_TEXT_ALIGN_CENTER);
+    const unsigned phase=m.walkieTalk?1:m.walkiePhase;
+    static const uint32_t colors[]{kBorder,0xff5a5a,0x22c55e,kWarn};
+    p.rect(0,100,223,196,kPanel,12);p.rect(0,100,5,196,colors[phase],3);
+    const uint64_t now=esp_timer_get_time()/1000000,spent=now>m.walkieAt?now-m.walkieAt:0;
+    if(phase==1){snprintf(text,sizeof(text),"正在说话 %u:%02u",unsigned(spent/60),unsigned(spent%60));p.text(text,16,112,215,colors[1],LV_TEXT_ALIGN_LEFT,&passport_ui_font_x2);
+        snprintf(text,sizeof(text),"最长 %u 秒，按确认结束",Model::kWalkieTalk);p.text(text,16,160,215,kMuted);}
+    else if(phase==2){snprintf(text,sizeof(text),"%s",*m.walkieFrom?m.walkieFrom:"对方");p.text(text,16,112,215,colors[2],LV_TEXT_ALIGN_LEFT,&passport_ui_font_x2);p.text("正在说话…",16,160,215,kMuted);}
+    else if(phase==3){p.text("无法对讲",16,112,215,colors[3],LV_TEXT_ALIGN_LEFT,&passport_ui_font_x2);p.text("麦克风或内存不足，请重进本页",16,160,215,kMuted);}
+    else{p.text("待机",16,112,215,kText,LV_TEXT_ALIGN_LEFT,&passport_ui_font_x2);p.text("按确认开始说话",16,160,215,kMuted);}
+    const char* note=*m.lastNotice?m.lastNotice:!m.wifiConnected?"WiFi 未连接，无法对讲":nullptr;
+    if(note)p.text(note,0,208,223,kWarn,LV_TEXT_ALIGN_CENTER);
+    p.text(m.walkieListen?"后台接收：开":"后台接收：关（在设置里开）",0,236,223,0x5f7f94,LV_TEXT_ALIGN_CENTER);
+}
+void initWalkie(lv_obj_t* screen){
+    walkieRoot=lv_obj_create(screen);box(walkieRoot,0,35,240,257,kBg);
+    walkieView=lv_obj_create(walkieRoot);box(walkieView,8,2,224,255,kBg);lv_obj_add_event_cb(walkieView,drawWalkie,LV_EVENT_DRAW_MAIN,nullptr);
+}
+void renderWalkie(const Model& m){drawModel=&m;lv_obj_invalidate(walkieView);}
 // 离座锁屏: the computer's verdict in large type, the badge's signal against the line, then the four settings.
 lv_obj_t *guardRoot,*guardView;
 void drawGuard(lv_event_t* e){
@@ -2535,6 +2561,7 @@ void uiInit() {
     else if(guiApp==App::Ledger)initLedger(screen);
     else if(guiApp==App::Calc)initCalc(screen);
     else if(guiApp==App::Voice)initVoice(screen);
+    else if(guiApp==App::Walkie)initWalkie(screen);
     else if(guiApp==App::Dictation)initDictation(screen);
     else if(guiApp==App::Settings){
         // Status card (icon + main value) above a details card. Only text pages pay for it:
@@ -2650,7 +2677,7 @@ void uiRender(const Runtime& runtime) {
         strcpy(values[5],model.wakeWord?"已开启":"已关闭");
         // The city without its province ("杭州 · 浙江").
         snprintf(values[6],sizeof(values[6]),"%s",*model.cityName?model.cityName:"未设置");if(char* dot=strstr(values[6]," · "))*dot=0;
-        const char* names[kRows]={"WiFi 配置","蓝牙连接","屏幕亮度","默认音量","自动息屏","语音唤醒","所在城市"};
+        const char* names[kRows]={"WiFi 配置","蓝牙连接","屏幕亮度","默认音量","自动息屏","唤醒与对讲","所在城市"};
         for(unsigned i=0;i<kRows;++i){
             const bool selected=i==model.settingsSelection;
             setLabel(rowLabels[i],names[i]);setLabel(rowValues[i],values[i]);setBadge(rowBadges[i],rowIcons[i],settingsBadge(static_cast<SettingsPage>(i+1)),selected);
@@ -2702,6 +2729,7 @@ void uiRender(const Runtime& runtime) {
     } else if(app==App::Ledger){renderLedger(model);
     } else if(app==App::Calc){renderCalc(model);
     } else if(app==App::Voice){renderVoice(model);
+    } else if(app==App::Walkie){renderWalkie(model);
     } else if(app==App::Sound){renderSound(model);
     } else if(model.live && app!=App::Settings) {
         if(value)setTextFont(value,(app==App::Home||app==App::Focus||app==App::Codex) ? &lv_font_montserrat_24 : LV_FONT_DEFAULT,0);
@@ -2756,16 +2784,16 @@ void uiRender(const Runtime& runtime) {
                 setTextColor(lines[0],lv_color_hex(model.cityRow?kMuted:kAccent),0);setTextColor(lines[1],lv_color_hex(model.cityRow?kAccent:kMuted),0);
                 setLabel(lines[2],model.listening()?"说城市名，说完按确认":model.cityRow?"开了代理或 VPN 会不准":"说城市名，如「苏州」");setLabel(lines[3],"天气和收音机按这个城市");
             }else if(page==SettingsPage::Wake){
-                // Three switches, the one picked in the accent colour: the wake word (it keeps the microphone, codec and
-                // CPU running and rules out deep sleep on the home page and the menu), 说功能名跳转 and 打开 Mac 程序.
-                const unsigned at=model.wakeRow;const bool on[3]{model.wakeWord,model.voiceJump,model.macOpen};
-                const char* names[3]{"你好小智唤醒","说功能名跳转","打开 Mac 程序"};
-                setLabel(heading,"语音唤醒");setLabel(value,on[at]?"已开启":"已关闭");
-                for(unsigned i=0;i<3;++i){
+                // Four switches, the one picked in the accent colour: the wake word (it keeps the microphone, codec and
+                // CPU running and rules out deep sleep on the home page and the menu), 说功能名跳转, 打开 Mac 程序 and
+                // 后台接收对讲 (WiFi stays on and no page sleeps). What the picked one does shows in the notice line.
+                const unsigned at=model.wakeRow;const bool on[4]{model.wakeWord,model.voiceJump,model.macOpen,model.walkieListen};
+                const char* names[4]{"你好小智唤醒","说功能名跳转","打开 Mac 程序","后台接收对讲"};
+                setLabel(heading,"唤醒与对讲");setLabel(value,on[at]?"已开启":"已关闭");
+                for(unsigned i=0;i<4;++i){
                     char row[64];snprintf(row,sizeof(row),"%s  %s：%s",i==at?"●":"○",names[i],on[i]?"开":"关");
                     setLabel(lines[i],row);setTextColor(lines[i],lv_color_hex(i==at?kAccent:kMuted),0);
                 }
-                setLabel(lines[3],at==2?"说「打开 Mac 的微信」":at?"说「打开汇率」就进汇率":"麦克风常开，待机明显变短");
             }else if(page==SettingsPage::Idle){
                 // Two rows like 语音唤醒; the time is changed in place after Confirm.
                 const bool usb=model.idleRow==1,editing=model.idleRow==2;
@@ -2789,8 +2817,10 @@ void uiRender(const Runtime& runtime) {
         default: break;
         }
     }
+    static const char* const wakeNotes[]{"麦克风常开，待机明显变短","说「打开汇率」就进汇率","说「打开 Mac 的微信」","有对讲自动跳转，待机变短"};
+    const bool wakeNote=app==App::Settings&&model.settingsPage==SettingsPage::Wake&&!*model.lastNotice;
     setLabel(notice, runtime.lastResult != Result::Ok ? "切换未完成，请重试"
-        : model.lastNotice);
+        : wakeNote ? wakeNotes[model.wakeRow%4] : model.lastNotice);
     if(app==App::Chat){char status[192];snprintf(status,sizeof(status),"%s音量 %u%%",model.live&&*model.liveLines[2]?model.liveLines[2]:"",model.volume);setLabel(lines[0],status);}
     if(showDashboard){visible(value,false);for(auto* line:lines)visible(line,false);}
     renderConnection(runtime);

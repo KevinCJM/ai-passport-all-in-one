@@ -122,6 +122,7 @@ void state(char* data, size_t size) {
 #ifdef PASSPORT_DEVICE
     {const size_t tail=strlen(data);if(tail+48<size)snprintf(data+tail-1,size-tail+1,",\"slides\":[%d,%u,%u]}",slidesBle.ready(),slidesBle.sent.load(),slidesBle.failed.load());}
     {char wake[96];tools::wakeStatus(wake,sizeof(wake));const size_t tail=strlen(data);if(tail+strlen(wake)+12<size)snprintf(data+tail-1,size-tail+1,",\"wake\":%s}",wake);}
+    {char walkie[96];tools::walkieStatus(walkie,sizeof(walkie));const size_t tail=strlen(data);if(tail+strlen(walkie)+14<size)snprintf(data+tail-1,size-tail+1,",\"walkie\":%s}",walkie);}
 #endif
     {const size_t tail=strlen(data);if(tail+80<size)snprintf(data+tail-1,size-tail+1,",\"wifi_saved\":%u,\"wifi_scans\":%u,\"wifi_joins\":%u,\"wifi_connecting\":%s}",runtime.model.wifiSavedCount,wifiScans.load(),wifiJoins.load(),wifiConnecting?"true":"false");}
     {const auto l=ledgerStatus();const size_t tail=strlen(data);if(tail+32<size)snprintf(data+tail-1,size-tail+1,",\"ledger\":[%u,%u]}",l.pending,unsigned(l.monthKnown));}
@@ -712,7 +713,7 @@ int execute(const char* name) {
     // Long presses: the menu turns a page, the calendar steps a month, the sonar switches its filter,
     // the WiFi toolbox and the sound page change tab, the motion monitor turns its alarm on or off.
     // 白噪音 sets the volume with them, 闹钟 the hour; 语音笔记 deletes the open note with a long Down; 状态牌 switches 常亮.
-    if ((previous==App::Menu||previous==App::Calendar||previous==App::Sonar||previous==App::Wifi||previous==App::Sound||previous==App::Motion||previous==App::Noise||previous==App::Alarm||previous==App::Memo||previous==App::Status||previous==App::Wheel||previous==App::Todo||previous==App::Ledger||previous==App::Calc||previous==App::Rate||previous==App::Countdown)&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {
+    if ((previous==App::Menu||previous==App::Calendar||previous==App::Sonar||previous==App::Wifi||previous==App::Sound||previous==App::Motion||previous==App::Noise||previous==App::Alarm||previous==App::Memo||previous==App::Status||previous==App::Wheel||previous==App::Todo||previous==App::Ledger||previous==App::Calc||previous==App::Rate||previous==App::Countdown||previous==App::Walkie)&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {
         runtime.longKey(!strcmp(name,"ap_on"),now);
 #ifdef PASSPORT_DEVICE
         if(previous==App::Noise&&!board::setVolume(runtime.model.volume)){runtime.model.volume=board::volume();return -10;}
@@ -787,7 +788,7 @@ int execute(const char* name) {
             if(!board::setBrightness(page==SettingsPage::Brightness?runtime.model.settingsValue:settings.brightness))return -10;
             if(runtime.model.volume!=volumeBefore&&!board::setVolume(runtime.model.volume)){runtime.model.volume=volumeBefore;strcpy(runtime.model.lastNotice,"保存失败，请重试");return -10;}
         }
-        if((previous==App::Chat||previous==App::Radio||previous==App::Podcast)&&(!strcmp(name,"up")||!strcmp(name,"down"))&&!board::setVolume(runtime.model.volume)){runtime.model.volume=board::volume();return -10;}
+        if((previous==App::Chat||previous==App::Radio||previous==App::Podcast||previous==App::Walkie)&&(!strcmp(name,"up")||!strcmp(name,"down"))&&!board::setVolume(runtime.model.volume)){runtime.model.volume=board::volume();return -10;}
         if(previous==App::Slides&&(!strcmp(name,"up")||!strcmp(name,"down")||!strcmp(name,"ok"))){runtime.model.slidesFailed=!sendSlideKey(runtime.model.slidesLast);if(runtime.model.slidesFailed)return -7;}
 #endif
         if(!strcmp(name,"ok")) live.action(Key::Confirm);
@@ -1086,7 +1087,7 @@ extern "C" void app_main() {
             if(joinActive&&station){joinActive=false;runtime.rememberWifi(joinTarget.ssid,joinTarget.password);memset(&joinTarget,0,sizeof(joinTarget));dirty=true;}
             const bool idle=!station&&!wifiConnecting&&!wifiRetryBudget&&!wifiRetryAt;
             if(joinActive&&idle){joinActive=false;memset(&joinTarget,0,sizeof(joinTarget));}
-            const bool quiet=runtime.model.voiceBusy()||shown==App::Wifi||shown==App::Motion||shown==App::Slides||shown==App::Dictation;
+            const bool quiet=runtime.model.voiceBusy()||shown==App::Wifi||shown==App::Motion||shown==App::Slides||shown==App::Dictation||shown==App::Walkie;
             if(idle&&wifiInitialized&&!board::provisioning()&&!wifiPending&&!autoScanning&&*settings.wifiSsid&&!quiet&&clock>=nextAutoScan
                &&runtime.power(clock/1000000)==Power::Awake){
                 nextAutoScan=clock+60000000;wifi_scan_config_t config{};autoScanDone=false;
@@ -1139,6 +1140,8 @@ extern "C" void app_main() {
         // On the home page and the menu. The home page's own fetches (weather over TLS) come first: a queued one stops
         // the listening, and the native task starts only once the model's memory is back (tools::wakeHolding).
         dirty|=tools::wakeTick(runtime,runtime.model.wakeWord&&(runtime.active()==App::Home||runtime.active()==App::Menu)&&uiPreparedFor(runtime.active())&&!live.nativeBusy()&&!live.macWaiting());
+        // 对讲机: a call heard on any page (后台接收对讲) opens it; LiveServices then ends the page it interrupted.
+        dirty|=tools::walkieTick(runtime,staNetif,station,live.nativeIdle()&&uiPreparedFor(runtime.active()));
 #endif
         live.transport(pppLink.up()||station,runtime.connected(),encrypted);
         dirty |= live.tick(esp_timer_get_time() / 1000000);

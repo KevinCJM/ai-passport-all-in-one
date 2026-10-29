@@ -63,6 +63,7 @@ constexpr Profile kProfiles[] = {
     {"ledger", "语音记账", 0, false, false},
     {"calc", "语音计算器", 0, false, false, "计算器"},
     {"voice", "语音指令", 0, true, false},
+    {"walkie", "对讲机", 0, true, false},
 };
 static_assert(std::size(kProfiles) == static_cast<unsigned>(App::Count));
 }
@@ -172,6 +173,8 @@ bool Runtime::init(SystemSettings& settings) {
     model.voiceJump = SettingsStore::loadByte("jump_off") != 1;  // stored as off, so a badge that never saved it has it on
     model.macOpen = SettingsStore::loadByte("mac_off") != 1;
     model.usbAwake = SettingsStore::loadByte("usb_dim") != 1;
+    model.walkieListen = SettingsStore::loadByte("walkie_bg") == 1;
+    if (const auto channel = SettingsStore::loadByte("walkie_ch"); channel >= 1 && channel <= 9) model.walkieChannel = channel;
     if (!SettingsStore::loadAlarms(model.alarms)) model.alarms = {};
     reloadTodo();
     if (!ledgerLock) ledgerLock = xSemaphoreCreateMutexStatic(&ledgerLockStorage);
@@ -323,6 +326,14 @@ bool Runtime::longKey(bool up, uint64_t now) {
             m.calendarYear = month / 12; m.calendarMonth = month % 12 + 1;
             m.calendarDay = std::min(m.calendarDay, monthDays(m.calendarYear, m.calendarMonth));
         }
+        return true;
+    }
+    // 对讲机: long Up/Down step the channel round 1-9 (not while talking) and save it.
+    if (active_ == App::Walkie) {
+        m.walkieAuto = false; m.lastNotice[0] = 0;
+        if (m.walkieTalk) { strcpy(m.lastNotice, "说话时不能换频道"); return true; }
+        m.walkieChannel = static_cast<uint8_t>((m.walkieChannel + (up ? 7 : 0)) % 9 + 1);
+        if (!SettingsStore::saveByte("walkie_ch", m.walkieChannel)) strcpy(m.lastNotice, "保存失败");
         return true;
     }
     if (active_ == App::Wifi) { m.wifiTab = (m.wifiTab + (up ? 3 : 1)) % 4; m.wifiIndex = 0; return true; }
@@ -810,6 +821,7 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
     }
     if (target == App::Calc) { model.calcCount = model.calcIndex = 0; model.listenAt = 0; }
     if (target == App::Voice) model.listenAt = 0;
+    if (target == App::Walkie) { auto& m = model; m.walkieTalk = m.walkieAuto = false; m.walkiePhase = 0; m.walkieFrom[0] = 0; m.walkieAt = now_; }
     if (target == App::Guard) {
         auto& m = model; SettingsStore::loadGuard(m.guard);
         m.guardRow = m.guardPhase = m.guardLeft = 0; m.guardRssi = m.guardLine = m.guardBase = 0;
@@ -868,6 +880,8 @@ void Runtime::key(Key key, uint64_t now) {
         if (active_ == App::Alarm && model.alarmEdit && !model.voiceBusy()) { model.alarmEdit = false; return; }
         if (active_ == App::Todo && model.todoRinging) { endTodoRing(TodoRing::Stop); return; }
         if (active_ == App::Home) { screenOff_ = true; return; }
+        // A call that opened 对讲机 goes back to the page it interrupted.
+        if (active_ == App::Walkie && model.walkieAuto) { switchTo(model.walkieBack); return; }
         switchTo(active_ == App::Menu || active_ == App::Settings || active_ == App::Voice ? App::Home :
                  active_ == App::Home ? App::Home : App::Menu);
         return;
@@ -943,6 +957,16 @@ void Runtime::key(Key key, uint64_t now) {
                 b.items[i].category = static_cast<uint8_t>((b.items[i].category + 1) % kLedgerCount); category = b.items[i].category;
                 b.touch(static_cast<unsigned>(i)); return true; });
             if (ok) snprintf(m.lastNotice, sizeof(m.lastNotice), "分类改为 %s", kLedgerCategories[category]); else strcpy(m.lastNotice, "保存失败");
+        }
+    } else if (active_ == App::Walkie) {
+        // Any key keeps the page open after a call. Up/Down set the volume (main hands it to the codec), long Up/Down
+        // the channel (longKey); Confirm starts and ends talking (the device's task sends meanwhile), but not over
+        // someone already talking.
+        auto& m = model; m.walkieAuto = false; m.lastNotice[0] = 0;
+        if (key == Key::Up || key == Key::Down) m.volume = static_cast<uint8_t>(std::clamp(int(m.volume) + (key == Key::Up ? 10 : -10), 0, 100));
+        if (key == Key::Confirm) {
+            if (m.walkiePhase == 2 && !m.walkieTalk) { snprintf(m.lastNotice, sizeof(m.lastNotice), "%s 正在说话，请稍候", *m.walkieFrom ? m.walkieFrom : "对方"); return; }
+            m.walkieTalk = !m.walkieTalk; m.walkieAt = now;
         }
     } else if (active_ == App::Calc) {
         // Up/Down step through this visit's sums (Up newer, Down older); Confirm speaks the next one (LiveServices).
@@ -1170,6 +1194,13 @@ void Runtime::key(Key key, uint64_t now) {
     }
 }
 // 收音机/播客: long Down steps the sleep timer (白噪音's choices); it counts from now, LiveServices stops the stream.
+void Runtime::walkieCall(uint64_t now) {
+    if (active_ == App::Walkie) return;
+    const App back = active_;
+    wake(now);
+    if (switchTo(App::Walkie) != Result::Ok) return;
+    model.walkieBack = back; model.walkieAuto = true;
+}
 void Runtime::stepMediaTimer(uint64_t now) {
     if (active_ != App::Radio && active_ != App::Podcast) return;
     tick(now); lastInput_ = now;
@@ -1258,12 +1289,13 @@ bool Runtime::settingsKey(Key key) {
         if(!model.voiceBusy()&&(key==Key::Up||key==Key::Down)){model.cityRow^=1;model.lastNotice[0]=0;}
         return true;
     }
-    // 语音唤醒: Up/Down pick the wake word, 说功能名跳转 or 打开 Mac 程序; Confirm switches the one picked and saves it.
+    // 唤醒与对讲: Up/Down pick the wake word, 说功能名跳转, 打开 Mac 程序 or 后台接收对讲; Confirm switches the one picked and saves it.
     if(page==SettingsPage::Wake){
-        if(key==Key::Up||key==Key::Down){model.wakeRow=(model.wakeRow+(key==Key::Down?1:2))%3;model.lastNotice[0]=0;return true;}
+        if(key==Key::Up||key==Key::Down){model.wakeRow=(model.wakeRow+(key==Key::Down?1:3))%4;model.lastNotice[0]=0;return true;}
         if(key!=Key::Confirm)return true;
-        bool& on=model.wakeRow==2?model.macOpen:model.wakeRow?model.voiceJump:model.wakeWord;
-        if(!SettingsStore::saveByte(model.wakeRow==2?"mac_off":model.wakeRow?"jump_off":"wake_word",model.wakeRow?on:!on)){strcpy(model.lastNotice,"保存失败，请重试");return false;}
+        bool& on=model.wakeRow==3?model.walkieListen:model.wakeRow==2?model.macOpen:model.wakeRow?model.voiceJump:model.wakeWord;
+        const bool storedOff=model.wakeRow==1||model.wakeRow==2;  // these two are stored as "off", so they start on
+        if(!SettingsStore::saveByte(model.wakeRow==3?"walkie_bg":model.wakeRow==2?"mac_off":model.wakeRow?"jump_off":"wake_word",storedOff?on:!on)){strcpy(model.lastNotice,"保存失败，请重试");return false;}
         on=!on;return true;
     }
     // 自动息屏: Up/Down pick the time or 连电脑时常亮; Confirm on the time starts changing it (Up/Down, Confirm saves,
@@ -1320,6 +1352,9 @@ void Runtime::tick(uint64_t now) {
     if (m.noisePlaying && m.noiseUntil && now >= m.noiseUntil) { m.noisePlaying = false; m.noiseUntil = 0; }
     if (m.alarmRinging && now >= m.alarmRingAt + 180) m.alarmRinging = false;
     if (m.todoRinging && now >= m.todoRingAt + 180) endTodoRing(TodoRing::Stop);
+    // 对讲机: a talk ends by itself after kWalkieTalk seconds; a page a call opened goes back once the call is over.
+    if (active_ == App::Walkie && m.walkieTalk && now >= m.walkieAt + Model::kWalkieTalk) { m.walkieTalk = false; m.walkieAt = now; }
+    if (active_ == App::Walkie && m.walkieAuto && !m.walkieTalk && m.walkiePhase != 2 && now >= m.walkieAt + Model::kWalkieQuiet) switchTo(m.walkieBack);
     // 闹钟: checked once a second. A ring is due for a minute from its time (a snoozed one from its new time), so
     // a page switch or a boot from deep sleep a few seconds late still rings; alarmFired keeps it to once.
     if (!m.clockValid || now == alarmChecked_) return;
@@ -1371,7 +1406,7 @@ Power Runtime::automaticPower(uint64_t now) const {
     // A running metronome keeps its beat on screen.
     // A ringing alarm lights the screen.
     if ((connected_ && model.usbAwake) || flashBusy_ || quarantined_ || active_ == App::Alert || active_ == App::Torch || (active_ == App::Status && model.status.awake) || (active_ == App::Alarm && model.alarmRinging) || (active_ == App::Todo && model.todoRinging)
-        || (active_ == App::Sound && model.soundRunning)) return Power::Awake;
+        || (active_ == App::Sound && model.soundRunning) || (active_ == App::Walkie && (model.walkieTalk || model.walkiePhase == 2))) return Power::Awake;
     (void)suspended_; // USB suspend alone must not destroy an enumerated session.
     const auto idle = settings_ ? settings_->idleSeconds : 360;
     if (!idle || now - lastInput_ < idle || now - unpluggedAt_ < idle) return Power::Awake;
@@ -1381,10 +1416,11 @@ Power Runtime::automaticPower(uint64_t now) const {
     // A running stopwatch must not lose its time to deep sleep either, nor the motion monitor its watch, nor
     // 离座锁屏 its Bluetooth link (the computer reads its signal; a lost link locks the screen).
     // Voice wake listens on the home page and the menu, which deep sleep would end, and a playing radio or podcast plays on.
+    // 对讲机 listens on its page, and on every page with 后台接收对讲 on.
     // White noise plays on too, and a snoozed alarm must still be awake to ring again.
     // On USB with 连电脑时常亮 off only the screen goes dark: deep sleep would drop the computer link.
     if (connected_ || ((active_ == App::Radio || active_ == App::Podcast) && model.mediaPlaying) || (active_ == App::Noise && model.noisePlaying) || model.alarmSnooze || model.focusRunning || model.swRunning || active_ == App::Motion || active_ == App::Guard || ((active_ == App::Slides || active_ == App::Dictation) && model.bleConnected)
-        || ((active_ == App::Home || active_ == App::Menu) && model.wakeWord)) return Power::ScreenOff;
+        || ((active_ == App::Home || active_ == App::Menu) && model.wakeWord) || model.walkieListen || active_ == App::Walkie) return Power::ScreenOff;
     return Power::DeepSleepIntent;
 }
 bool Runtime::shutdown() {

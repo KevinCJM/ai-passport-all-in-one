@@ -2,17 +2,17 @@
 #include <array>
 #include <cstdint>
 namespace passport {
-enum class App : uint8_t { Home, Chat, Dictation, Codex, Focus, Monitor, Menu=7, RetiredOtp, Radio, Settings, Words, Slides, Alert, Status, Calendar, Countdown, Torch, Qr, News, Sonar, Rate, Stopwatch, History, Daily, Quake, Quiz, Hacker, Wifi, Sound, Motion, Podcast, Forecast, Noise, Alarm, Stock, Typhoon, Hot, Memo, Wheel, Translate, Guard, Todo, Ledger, Calc, Voice, Count };
+enum class App : uint8_t { Home, Chat, Dictation, Codex, Focus, Monitor, Menu=7, RetiredOtp, Radio, Settings, Words, Slides, Alert, Status, Calendar, Countdown, Torch, Qr, News, Sonar, Rate, Stopwatch, History, Daily, Quake, Quiz, Hacker, Wifi, Sound, Motion, Podcast, Forecast, Noise, Alarm, Stock, Typhoon, Hot, Memo, Wheel, Translate, Guard, Todo, Ledger, Calc, Voice, Walkie, Count };
 enum class SettingsPage : uint8_t { List, Wifi, Bluetooth, Brightness, Volume, Idle, Wake, City };
 inline constexpr uint8_t kSettingsRows = 7;
 // Menu order: themed pages of up to nine (3 x 3), each row of three alike; kMenuPages names them and kMenuStarts
 // holds each page's first entry. The voice pages come first, 系统设置 ends the last page.
-inline constexpr std::array<App,41> kFunctions{
+inline constexpr std::array<App,42> kFunctions{
     App::Chat,App::Memo,App::Dictation, App::Translate,App::Ledger,App::Calc, App::Todo,App::Alarm,App::Focus,
     App::Codex,App::Monitor,App::Guard, App::Slides,App::Status,App::Qr, App::Stopwatch,App::Countdown,App::Calendar,
     App::Forecast,App::Typhoon,App::Quake, App::News,App::Stock,App::Rate, App::Hot,App::Hacker,App::History,
     App::Words,App::Daily,App::Quiz, App::Radio,App::Podcast,App::Noise, App::Sound,
-    App::Torch,App::Alert,App::Wheel, App::Motion,App::Wifi,App::Sonar, App::Settings};
+    App::Torch,App::Alert,App::Wheel, App::Motion,App::Wifi,App::Sonar, App::Walkie,App::Settings};
 inline constexpr const char* kMenuPages[]{"小智 · 语音","电脑 · 时间","天气 · 财经 · 资讯","学习 · 影音","工具 · 设置"};
 inline constexpr uint8_t kMenuStarts[]{0,9,18,27,34,kFunctions.size()};  // the last marks the end
 static_assert(std::size(kMenuStarts)==std::size(kMenuPages)+1);

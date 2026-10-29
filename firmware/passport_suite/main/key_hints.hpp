@@ -56,6 +56,9 @@ inline const char* keyHint(App app,SettingsPage page,bool focusRunning,bool pair
     if(app==App::Calc){static const char* const hints[]{"确认：说算式  |  上下：翻看结果  |  长按确认：返回","确认：结束并计算  |  长按确认：放弃","正在识别，请稍候"};return hints[tab%3];}
     // 语音指令: tab 0 waiting, 1 listening, 2 recognising.
     if(app==App::Voice){static const char* const hints[]{"确认：再说一次  |  长按确认：返回","确认：说完了  |  长按确认：返回","正在识别，请稍候"};return error?"确认：重试  |  长按确认：返回":loading?"正在连接  |  长按确认：返回":hints[tab%3];}
+    // 对讲机 tab: 0 idle, 1 talking, 2 hearing someone; alt: a call opened the page (long Confirm goes back to the last one).
+    // Short enough not to scroll: a scrolling footer redraws 8 times a second while Opus runs.
+    if(app==App::Walkie){static const char* const hints[]{"上下：音量 | 确认：说话","确认：说完了 | 长按确认：返回","对方说话中 | 长按确认：返回"};return alt&&tab!=1?"任意键：留下 | 长按确认：回去":hints[tab%3];}
     if(app==App::Guard)return "上下：选项  |  确认：修改  |  长按上：校准  |  长按下：立即锁屏  |  长按确认：返回";
     // 中英翻译 tab: 0 ready, 1 listening, 2 recognising.
     if(app==App::Translate&&!error){static const char* const hints[]{"确认：说话  |  上下：滚动  |  长按上：朗读  |  长按确认：返回","确认：结束并翻译  |  长按确认：放弃","正在识别，请稍候"};return hints[tab%3];}

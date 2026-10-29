@@ -62,7 +62,7 @@ struct Model {
     HomeScreen homeScreen{HomeScreen::Weather};
     bool wakeWord{};  // 语音唤醒: listen for 你好小智 on the home page and the menu
     // 说功能名跳转: a 语音指令 phrase that is a page's name opens that page (on unless switched off). wakeRow: the
-    // 语音唤醒 page's row picked (0 the wake word, 1 this, 2 打开 Mac 程序).
+    // 唤醒与对讲 page's row picked (0 the wake word, 1 this, 2 打开 Mac 程序, 3 后台接收对讲).
     bool voiceJump{true};uint8_t wakeRow{};
     // 打开 Mac 程序: "打开 Mac 的微信" in 语音指令 has the computer open it (on unless switched off). macNote, shown in
     // the footer from macAt (seconds): the request on its way, then what the computer did.
@@ -229,6 +229,13 @@ struct Model {
     // 语音计算器: page.calc holds calcCount sums; calcIndex is the one on show (0 the newest), which a sum that
     // starts with an operator goes on from.
     uint8_t calcCount{},calcIndex{};
+    // 对讲机: walkieListen (Settings › 唤醒与对讲) keeps the receiver on from any page; walkieChannel is 1-9. Confirm sets
+    // walkieTalk, and the device's task sends while it is set (at most kWalkieTalk seconds from walkieAt). walkiePhase:
+    // 0 idle, 1 talking, 2 hearing walkieFrom, 3 the codec or memory failed; walkieAt is when it last changed or a frame
+    // last came. walkieAuto: a call opened the page; kWalkieQuiet seconds after the call it goes back to walkieBack.
+    static constexpr unsigned kWalkieTalk=30,kWalkieQuiet=5;
+    bool walkieListen{},walkieTalk{},walkieAuto{};uint8_t walkieChannel{1},walkiePhase{};App walkieBack{App::Home};
+    char walkieFrom[16]{};uint64_t walkieAt{};
     // 离座锁屏: the settings and the selected row (0 离开距离, 1 离开确认, 2 防锁屏, 3 回来亮屏); the computer reports
     // guardPhase (0 waiting, 1 USB, 2 at the desk, 3 about to lock, 4 locked), its reading of the badge's signal and
     // the line under which you count as away (dBm, 0 = none), the calibrated level, and the seconds left.
@@ -322,6 +329,8 @@ public:
     // Long Up / long Down on the word page: known / not known.
     void gradeWord(bool known, uint64_t now);
     void stepMediaTimer(uint64_t now);
+    // 对讲机: a call came in on another page; it opens 对讲机 at once (the page ends whatever it was doing).
+    void walkieCall(uint64_t now);
     // A key on the PPT page (long Up / long Down: black screen / end show).
     void slideKey(SlideKey key, uint64_t now);
     // Labels changed on the computer: reload them, keeping the shown label in range.
@@ -356,7 +365,7 @@ public:
     // Rescans the stored QR slots and loads the shown entry (WiFi last, built from the settings).
     void reloadQr();
     unsigned qrCount() const;
-    // Long Up / long Down: menu page, calendar month, sonar named filter, WiFi tab, sound view, motion alarm (up: 关 → 一次 → 连续, down: back).
+    // Long Up / long Down: 对讲机 channel, menu page, calendar month, sonar named filter, WiFi tab, sound view, motion alarm (up: 关 → 一次 → 连续, down: back).
     bool longKey(bool up, uint64_t now);
     const SystemSettings& settings() const { return *settings_; }
     Result switchTo(App target, bool failAlloc = false, bool failStart = false);

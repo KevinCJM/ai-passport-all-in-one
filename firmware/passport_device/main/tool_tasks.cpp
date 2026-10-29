@@ -2,6 +2,7 @@
 #include "board.hpp"
 #include "pitch.hpp"
 #include "noise_gen.hpp"
+#include "identity.hpp"
 #include "dsps_fft2r.h"
 #include "esp_heap_caps.h"
 #include "esp_partition.h"
@@ -11,6 +12,10 @@
 #include "esp_netif_net_stack.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
+#include "esp_mac.h"
+#include "esp_random.h"
+#include "esp_opus_enc.h"
+#include "esp_opus_dec.h"
 #include "freertos/semphr.h"
 #include "lwip/etharp.h"
 #include "lwip/netdb.h"
@@ -18,7 +23,9 @@
 #include "ping/ping_sock.h"
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -356,6 +363,171 @@ void wakeRun(void*) {
     wakeState = 0; wakeRunning = false;
 }
 
+// ---- 对讲机 ----
+// Push to talk over UDP broadcast on the WiFi subnet: each packet is one 60 ms Opus frame (16 kHz mono, 16 kbps CBR, so
+// 120 bytes) after a 28-byte header; a talk ends with three copies of an end packet. scripts/walkie_mac.py speaks it too.
+// The receiver keeps only the channel's current talk (the first talker wins until 1 s of silence) and queues its frames;
+// the page's audio task plays them a few frames late, or records and sends while 说话 is on (then nothing is heard).
+constexpr uint16_t kWalkiePort = 7310;
+constexpr unsigned kWalkieOpus = 160, kWalkieSlots = 16, kWalkieHeadStart = 3;
+struct WalkiePacket {
+    char magic[2]; uint8_t version, channel, sender[3], flags; uint16_t talk, seq;  // flags 1: the talk ended
+    char name[16];                                                                // the sender's card name, UTF-8
+    uint8_t opus[kWalkieOpus];
+};
+static_assert(offsetof(WalkiePacket, name) == 12 && offsetof(WalkiePacket, opus) == 28);
+struct WalkieFrame { uint16_t seq; uint8_t size; bool end; uint8_t opus[kWalkieOpus]; };
+struct WalkieQueue { WalkieFrame frames[kWalkieSlots]; unsigned head, count; };
+StaticSemaphore_t walkieLockStorage; SemaphoreHandle_t walkieLock;
+WalkieQueue* walkieQueue;  // the receiver's, while it runs
+char walkieFrom[16], walkieSelfName[16]; uint8_t walkieSelf[3];
+std::atomic<uint8_t> walkieChannel{1}, walkiePhase{};  // phase as Model::walkiePhase
+std::atomic<bool> walkieRxStop{}, walkieRxRunning{}, walkieStop{}, walkieRunning{}, walkieWant{}, walkieTalking{};
+std::atomic<unsigned> walkieCalls{}, walkieIn{}, walkiePlayed{}, walkieSent{}, walkieErrors{}, walkieStack{}, walkieHeap{};
+std::atomic<int> walkieLastError{};  // the last codec or socket error, for /status
+std::atomic<uint32_t> walkieBroadcast{};  // the WiFi subnet's broadcast address, 0 while unknown
+// Copies at most 15 bytes of a name, cut between UTF-8 characters.
+void walkieName(char (&to)[16], const char* from, size_t size) {
+    const bool cut = size > sizeof(to) - 1; size = std::min<size_t>(size, sizeof(to) - 1);
+    if (cut) while (size && (static_cast<uint8_t>(from[size]) & 0xc0) == 0x80) --size;
+    memcpy(to, from, size); to[size] = 0;
+}
+template<class F> void withWalkie(F f) { xSemaphoreTake(walkieLock, portMAX_DELAY); f(); xSemaphoreGive(walkieLock); }
+void walkieListen(void*) {
+    auto queue = std::unique_ptr<WalkieQueue>(new (std::nothrow) WalkieQueue{});
+    const int fd = queue ? socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP) : -1;
+    sockaddr_in at{}; at.sin_family = AF_INET; at.sin_port = htons(kWalkiePort); at.sin_addr.s_addr = htonl(INADDR_ANY);
+    const timeval wait{0, 200000};  // so a stop is seen within 0.2 s
+    if (fd >= 0 && bind(fd, reinterpret_cast<sockaddr*>(&at), sizeof(at)) == 0 && setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &wait, sizeof(wait)) == 0) {
+        withWalkie([&] { walkieQueue = queue.get(); });
+        WalkiePacket p; uint32_t current = 0; uint16_t last = 0; int64_t currentAt = 0;  // current: sender << 16 | talk + 1
+        while (!walkieRxStop) {
+            const int n = recv(fd, &p, sizeof(p), 0);
+            if (n < int(offsetof(WalkiePacket, opus)) || memcmp(p.magic, "PT", 2) || p.version != 1 || p.channel != walkieChannel || !memcmp(p.sender, walkieSelf, 3)) continue;
+            ++walkieIn;
+            if (walkieTalking) { current = 0; continue; }
+            const uint32_t key = ((uint32_t(p.sender[0]) << 16 | p.sender[1] << 8 | p.sender[2]) << 8 ^ p.talk) + 1;
+            const int64_t now = esp_timer_get_time(); const bool end = p.flags & 1;
+            if (key != current) {
+                if ((current && now - currentAt < 1000000) || end) continue;  // someone else holds the channel, or a stray end
+                current = key; last = p.seq - 1; ++walkieCalls;
+                withWalkie([&] { walkieName(walkieFrom, p.name, strnlen(p.name, sizeof(p.name))); });
+            }
+            if (int16_t(p.seq - last) <= 0) continue;  // a copy, or late
+            last = p.seq; currentAt = now; if (end) current = 0;
+            withWalkie([&] {
+                auto& q = *walkieQueue;
+                if (q.count == kWalkieSlots) { q.head = (q.head + 1) % kWalkieSlots; --q.count; }  // full: the oldest goes
+                auto& f = q.frames[(q.head + q.count++) % kWalkieSlots];
+                f.seq = p.seq; f.end = end; f.size = end ? 0 : std::min<unsigned>(n - offsetof(WalkiePacket, opus), kWalkieOpus); memcpy(f.opus, p.opus, f.size);
+            });
+        }
+        withWalkie([&] { walkieQueue = nullptr; });
+    }
+    if (fd >= 0) close(fd);
+    walkieRxRunning = false;
+}
+// Frames queued, and the oldest taken out (false: none).
+unsigned walkieQueued() { unsigned n = 0; withWalkie([&] { n = walkieQueue ? walkieQueue->count : 0; }); return n; }
+bool walkieTake(WalkieFrame& f) {
+    bool got = false;
+    withWalkie([&] { if (auto* q = walkieQueue; q && q->count) { f = q->frames[q->head]; q->head = (q->head + 1) % kWalkieSlots; --q->count; got = true; } });
+    return got;
+}
+void walkieClear() { withWalkie([&] { if (walkieQueue) walkieQueue->count = 0; }); }
+struct WalkieBuffers { int16_t pcm[kFrame], reference[kFrame]; WalkiePacket out; WalkieFrame in; };
+void walkieRun(void*) {
+    auto b = std::unique_ptr<WalkieBuffers>(new (std::nothrow) WalkieBuffers{});
+    const bool ready = b && board::audioOpen(true, 2, false);
+    walkiePhase = ready ? 0 : 3;
+    void *encoder = nullptr, *decoder = nullptr; int fd = -1;
+    std::unique_ptr<uint8_t[]> encoded; int encodedSize = 0;  // the encoder wants its own recommended output size
+    uint16_t talk = static_cast<uint16_t>(esp_random()), seq = 0, expected = 0; bool playing = false; int64_t waiting = 0, heard = 0;
+    // bytes 0: the end packet.
+    const auto send = [&](size_t bytes) {
+        auto& p = b->out; memcpy(p.magic, "PT", 2); p.version = 1; p.channel = walkieChannel; memcpy(p.sender, walkieSelf, 3);
+        p.flags = !bytes; p.talk = talk; p.seq = seq++; memcpy(p.name, walkieSelfName, sizeof(p.name));
+        sockaddr_in to{}; to.sin_family = AF_INET; to.sin_port = htons(kWalkiePort); to.sin_addr.s_addr = walkieBroadcast;
+        return sendto(fd, &p, offsetof(WalkiePacket, opus) + bytes, 0, reinterpret_cast<sockaddr*>(&to), sizeof(to)) > 0;
+    };
+    const auto stopPlaying = [&] {
+        if (!playing) return;
+        memset(b->pcm, 0, sizeof(b->pcm)); board::speaker(b->pcm, 640, 16000, 1);  // let the last frame leave the DMA
+        board::silence(); esp_opus_dec_close(decoder); decoder = nullptr; playing = false; walkiePhase = 0;
+    };
+    while (ready && !walkieStop) {
+        if (walkieWant) {
+            // Talking: one microphone frame in, one packet out, every 60 ms.
+            if (!encoder) {
+                stopPlaying();
+                esp_opus_enc_config_t c = ESP_OPUS_ENC_CONFIG_DEFAULT(); c.sample_rate = 16000; c.channel = 1; c.bitrate = 16000;
+                c.frame_duration = ESP_OPUS_ENC_FRAME_DURATION_60_MS;
+                fd = walkieBroadcast ? socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP) : -1; int yes = 1;
+                int inSize = 0;
+                if (fd < 0 || setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes)) || esp_opus_enc_open(&c, sizeof(c), &encoder) != ESP_AUDIO_ERR_OK
+                    || esp_opus_enc_get_frame_size(encoder, &inSize, &encodedSize) != ESP_AUDIO_ERR_OK || inSize != int(sizeof(b->pcm))
+                    || !(encoded = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[encodedSize]))) {
+                    if (fd >= 0) close(fd);
+                    if (encoder) esp_opus_enc_close(encoder);
+                    fd = -1; encoder = nullptr; ++walkieErrors; walkieLastError = -100 - inSize; walkieWant = false; walkiePhase = 3; continue;
+                }
+                walkieHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+                ++talk; seq = 0; walkieTalking = true; walkieClear(); walkiePhase = 1;
+                for (unsigned i = 0; i < 20 && board::microphone(b->pcm, b->reference); ++i) {}  // what came before Confirm
+            }
+            if (!board::microphone(b->pcm, b->reference)) { vTaskDelay(pdMS_TO_TICKS(5)); continue; }
+            esp_audio_enc_in_frame_t in{}; in.buffer = reinterpret_cast<uint8_t*>(b->pcm); in.len = sizeof(b->pcm);
+            esp_audio_enc_out_frame_t out{}; out.buffer = encoded.get(); out.len = encodedSize;
+            const auto rc = esp_opus_enc_process(encoder, &in, &out);
+            if (rc != ESP_AUDIO_ERR_OK || !out.encoded_bytes || out.encoded_bytes > kWalkieOpus) { ++walkieErrors; walkieLastError = rc ? rc : -int(out.encoded_bytes); continue; }
+            memcpy(b->out.opus, encoded.get(), out.encoded_bytes);
+            if (send(out.encoded_bytes)) ++walkieSent; else { ++walkieErrors; walkieLastError = -1000 - errno; }
+            walkieStack = uxTaskGetStackHighWaterMark(nullptr);
+            continue;
+        }
+        if (encoder) {
+            const uint16_t end = seq;
+            for (unsigned i = 0; i < 3; ++i) { seq = end; send(0); vTaskDelay(pdMS_TO_TICKS(20)); }  // one end packet, three times
+            esp_opus_enc_close(encoder); encoder = nullptr; encoded.reset(); close(fd); fd = -1; walkieTalking = false; walkiePhase = 0;
+        }
+        // Hearing: start a few frames behind, so a late packet still finds the speaker going.
+        const int64_t now = esp_timer_get_time();
+        if (!playing) {
+            const unsigned queued = walkieQueued();
+            if (!queued) { waiting = 0; board::discardMicrophone(); vTaskDelay(pdMS_TO_TICKS(10)); continue; }
+            if (!waiting) waiting = now;
+            if (queued < kWalkieHeadStart && now - waiting < 200000) { vTaskDelay(pdMS_TO_TICKS(10)); continue; }
+            esp_opus_dec_cfg_t c = ESP_OPUS_DEC_CONFIG_DEFAULT(); c.sample_rate = 16000; c.channel = 1;
+            if (esp_opus_dec_open(&c, sizeof(c), &decoder) != ESP_AUDIO_ERR_OK) { decoder = nullptr; ++walkieErrors; walkieClear(); walkiePhase = 3; continue; }
+            walkieHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+            playing = true; waiting = 0; heard = now; expected = 0; walkiePhase = 2;
+        }
+        board::discardMicrophone();
+        auto& f = b->in;
+        if (!walkieTake(f)) {
+            // Nothing yet: the speaker plays silence meanwhile (its DMA callback clears what it played); 0.6 s without
+            // a frame ends the talk.
+            if (now - heard > 600000) { stopPlaying(); continue; }
+            vTaskDelay(pdMS_TO_TICKS(20)); continue;
+        }
+        if (f.end) { stopPlaying(); continue; }
+        heard = now;
+        if (walkieQueued() > 8) { expected = f.seq + 1; continue; }  // fallen behind: skip a frame to catch up
+        if (expected && f.seq != expected) { memset(b->pcm, 0, sizeof(b->pcm)); for (unsigned i = 0; i < std::min<unsigned>(uint16_t(f.seq - expected), 2); ++i) board::speaker(b->pcm, kFrame, 16000, 1); }
+        expected = f.seq + 1;
+        esp_audio_dec_in_raw_t raw{}; raw.buffer = f.opus; raw.len = f.size;
+        esp_audio_dec_out_frame_t out{}; out.buffer = reinterpret_cast<uint8_t*>(b->pcm); out.len = sizeof(b->pcm); esp_audio_dec_info_t info{};
+        const auto rc = esp_opus_dec_decode(decoder, &raw, &out, &info);
+        if (rc == ESP_AUDIO_ERR_OK && board::speaker(b->pcm, out.decoded_size / 2, 16000, 1)) ++walkiePlayed; else { ++walkieErrors; walkieLastError = rc ? -2000 + rc : -3000; }
+        walkieStack = uxTaskGetStackHighWaterMark(nullptr);
+    }
+    stopPlaying();
+    if (encoder) { esp_opus_enc_close(encoder); close(fd); }
+    walkieTalking = false;
+    if (ready) board::audioClose();
+    walkieRunning = false;
+}
+
 // ---- 移动监控 ----
 // CSI is the channel's amplitude and phase on each OFDM subcarrier of a received frame. A body moving in the room
 // changes the paths the router's signal takes to the badge, so the amplitudes start to wander from frame to frame.
@@ -591,6 +763,56 @@ bool wakeTick(Runtime& runtime, bool listen) {
     wakeStop = false; wakeRunning = true; wakeState = 1;
     if (xTaskCreate(taskMain<wakeRun>, "wake", 4096, nullptr, 2, nullptr) != pdPASS) { wakeRunning = false; wakeState = 2; wakeError = 2; retryAt = esp_timer_get_time() + 10000000; }
     return false;
+}
+bool walkieTick(Runtime& runtime, esp_netif_t* station, bool connected, bool codecFree) {
+    if (!walkieLock) {
+        walkieLock = xSemaphoreCreateMutexStatic(&walkieLockStorage);
+        uint8_t mac[6]{}; esp_read_mac(mac, ESP_MAC_WIFI_STA); memcpy(walkieSelf, mac + 3, 3);
+    }
+    auto& m = runtime.model; const bool page = runtime.active() == App::Walkie; const auto now = esp_timer_get_time() / 1000000;
+    walkieChannel = m.walkieChannel;
+    esp_netif_ip_info_t info{};
+    walkieBroadcast = connected && esp_netif_get_ip_info(station, &info) == ESP_OK && info.ip.addr ? info.ip.addr | ~info.netmask.addr : 0;
+    // The receiver: a small task and a socket, on while it is wanted and WiFi is up.
+    if (!(connected && (page || m.walkieListen))) walkieRxStop = true;
+    else if (!walkieRxRunning) {
+        walkieRxStop = false; walkieRxRunning = true;
+        if (xTaskCreate(taskMain<walkieListen>, "walkie_rx", 3072, nullptr, 3, nullptr) != pdPASS) walkieRxRunning = false;
+    }
+    // A new call heard on another page opens the page (the page it interrupts closes first).
+    static unsigned calls = 0; const unsigned heard = walkieCalls;
+    if (heard != calls) { calls = heard; if (!page && m.walkieListen) { runtime.walkieCall(now); return true; } }
+    if (!page) {
+        // Stop before anyone else opens the codec: the task ends a talk (its end packets) and closes it on its way out.
+        if (walkieRunning) { walkieWant = false; walkieStop = true; for (unsigned i = 0; i < 150 && walkieRunning; ++i) vTaskDelay(pdMS_TO_TICKS(10)); }
+        if (!walkieRunning) walkiePhase = 0;
+        return false;
+    }
+    bool changed = false;
+    if (const uint8_t phase = walkiePhase; phase != m.walkiePhase) {
+        if (phase == 3) { m.walkieTalk = false; walkieWant = false; }
+        if (phase == 2) { withWalkie([&] { memcpy(m.walkieFrom, walkieFrom, sizeof(m.walkieFrom)); }); runtime.wake(now); }
+        if (phase != 1) m.walkieAt = now;  // talking counts from Confirm
+        m.walkiePhase = phase; changed = true;
+    }
+    if (m.walkieTalk && !walkieBroadcast) { m.walkieTalk = false; strcpy(m.lastNotice, "WiFi 未连接，无法对讲"); }
+    walkieWant = m.walkieTalk;
+    // The codec is free once the page it interrupted has let go of it.
+    const bool codecTaken = soundRunning || noiseRunning || wakeRunning;
+    if (!walkieRunning && codecFree && !codecTaken && m.walkiePhase != 3) {  // a failure waits for the page to open again
+        const char* name = identity().valid && *identity().name ? identity().name : "胸牌"; walkieName(walkieSelfName, name, strlen(name));
+        walkieStop = false; walkieRunning = true; walkiePhase = 0;
+        // Opus needs a deep stack: chat measured 28 KB at its peak.
+        if (xTaskCreate(taskMain<walkieRun>, "walkie", 32768, nullptr, 4, nullptr) != pdPASS) { walkieRunning = false; walkiePhase = 3; }
+    }
+    // The talk's clock on screen, once a second.
+    static uint64_t shown = 0;
+    if ((m.walkieTalk || m.walkiePhase == 2) && now != shown) { shown = now; changed = true; }
+    return changed;
+}
+void walkieStatus(char* output, size_t size) {
+    snprintf(output, size, "[%u,%u,%u,%u,%u,%u,%u,%d]", unsigned(walkieRxRunning.load()), walkieIn.load(), walkiePlayed.load(), walkieSent.load(),
+             walkieErrors.load(), walkieStack.load(), walkieHeap.load(), walkieLastError.load());
 }
 bool wakeHolding() { return wakeRunning; }
 void wakeStatus(char* output, size_t size) {

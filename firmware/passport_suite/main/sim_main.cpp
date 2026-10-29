@@ -115,7 +115,7 @@ void domainTests(Runtime& runtime) {
     puts("CASE_PASS foreground_only_timer_pause_notifications");
 }
 void settingsTests(Runtime& runtime){
-    CHECK(kFunctions.size()==41&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
+    CHECK(kFunctions.size()==42&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
     // Physical long-confirm emits Back: each step must follow the hierarchy.
     for(auto app:kFunctions){
         CHECK(runtime.switchTo(app)==Result::Ok);runtime.model.settingsPage=SettingsPage::List;
@@ -189,7 +189,11 @@ void settingsTests(Runtime& runtime){
     CHECK(runtime.model.macOpen);runtime.key(Key::Down,29);CHECK(runtime.model.wakeRow==2);
     runtime.key(Key::Confirm,29);CHECK(!runtime.model.macOpen&&SettingsStore::loadByte("mac_off")==1&&runtime.model.voiceJump);uiRender(runtime);uiCapture("settings_wake_mac");
     runtime.key(Key::Confirm,29);CHECK(runtime.model.macOpen&&SettingsStore::loadByte("mac_off")==0);
-    runtime.key(Key::Down,29);CHECK(runtime.model.wakeRow==0);runtime.key(Key::Up,29);CHECK(runtime.model.wakeRow==2);
+    // The fourth, 后台接收对讲, is off until switched on (walkie_bg); Down from it and Up from the first wrap round.
+    CHECK(!runtime.model.walkieListen);runtime.key(Key::Down,29);CHECK(runtime.model.wakeRow==3);
+    runtime.key(Key::Confirm,29);CHECK(runtime.model.walkieListen&&SettingsStore::loadByte("walkie_bg")==1&&runtime.model.macOpen);uiRender(runtime);uiCapture("settings_wake_walkie");
+    runtime.key(Key::Confirm,29);CHECK(!runtime.model.walkieListen&&SettingsStore::loadByte("walkie_bg")==0);
+    runtime.key(Key::Down,29);CHECK(runtime.model.wakeRow==0);runtime.key(Key::Up,29);CHECK(runtime.model.wakeRow==3);
     runtime.key(Key::Back,29);runtime.model.settingsSelection=0;
     uiRender(runtime);uiCapture("settings_menu");runtime.model.settingsSelection=2;runtime.key(Key::Confirm,30);uiRender(runtime);uiCapture("settings_brightness");runtime.key(Key::Back,31);runtime.key(Key::Back,32);CHECK(runtime.active()==App::Menu);
     CHECK(runtime.switchTo(App::Home)==Result::Ok);
@@ -240,6 +244,11 @@ void powerTests(Runtime& runtime) {
     runtime.model.mediaPlaying=true;CHECK(runtime.power(1000) == Power::ScreenOff);
     CHECK(runtime.switchTo(App::Podcast) == Result::Ok);CHECK(runtime.power(1000) == Power::ScreenOff);runtime.model.mediaPlaying=false;
     CHECK(runtime.switchTo(App::Home) == Result::Ok);runtime.model.wakeWord=false;
+    // 对讲机 listens on its page, and on every page with 后台接收对讲 on; talking or hearing keeps the screen lit.
+    CHECK(runtime.switchTo(App::Walkie) == Result::Ok);CHECK(runtime.power(1000) == Power::ScreenOff);
+    runtime.model.walkiePhase=2;CHECK(runtime.power(1000) == Power::Awake);runtime.model.walkiePhase=0;
+    CHECK(runtime.switchTo(App::Radio) == Result::Ok);runtime.model.walkieListen=true;CHECK(runtime.power(1000) == Power::ScreenOff);
+    runtime.model.walkieListen=false;CHECK(runtime.switchTo(App::Home) == Result::Ok);
     // Long Confirm on the home page turns the screen off, on USB too, until the next key; it stays on Home.
     runtime.connection(true,1000);CHECK(runtime.power(1000) == Power::Awake);
     runtime.key(Key::Back,1000);CHECK(runtime.active() == App::Home && runtime.power(1000) == Power::ScreenOff);
@@ -404,6 +413,36 @@ void calcTests(Runtime& runtime){
     // Leaving forgets them.
     CHECK(runtime.switchTo(App::Menu)==Result::Ok&&runtime.switchTo(App::Calc)==Result::Ok&&!m.calcCount);
     puts("CASE_PASS calc");
+}
+// 对讲机: a call opens it from any page and goes back when over; keys keep it; the channel and talks.
+void walkieTests(Runtime& runtime){
+    auto& m=runtime.model;
+    CHECK(runtime.switchTo(App::Radio)==Result::Ok);
+    runtime.walkieCall(500);CHECK(runtime.active()==App::Walkie&&m.walkieAuto&&m.walkieBack==App::Radio&&!m.walkieTalk&&m.walkieChannel==1);
+    runtime.walkieCall(501);CHECK(runtime.active()==App::Walkie&&m.walkieBack==App::Radio);  // already open: nothing changes
+    m.walkiePhase=2;strcpy(m.walkieFrom,"张三");m.wifiConnected=true;runtime.tick(520);CHECK(runtime.active()==App::Walkie);  // still hearing
+    uiRender(runtime);uiCapture("walkie_hearing");
+    m.walkiePhase=0;m.walkieAt=530;runtime.tick(534);CHECK(runtime.active()==App::Walkie);
+    runtime.tick(535);CHECK(runtime.active()==App::Radio);  // 5 s after the call
+    // Long Confirm goes back at once; any other key keeps the page.
+    runtime.walkieCall(600);runtime.key(Key::Back,601);CHECK(runtime.active()==App::Radio);
+    runtime.walkieCall(700);m.walkiePhase=2;runtime.key(Key::Confirm,701);CHECK(!m.walkieTalk&&strstr(m.lastNotice,"对方 正在说话")&&!m.walkieAuto);
+    m.walkiePhase=0;runtime.tick(800);CHECK(runtime.active()==App::Walkie);
+    // Up/Down set the volume in tens; long Up/Down step the channel round 1-9 and save it.
+    const auto volume=m.volume;m.volume=95;runtime.key(Key::Up,801);CHECK(m.volume==100);runtime.key(Key::Down,801);runtime.key(Key::Down,801);CHECK(m.volume==80);m.volume=volume;
+    runtime.longKey(true,801);CHECK(m.walkieChannel==9&&SettingsStore::loadByte("walkie_ch")==9);
+    runtime.longKey(false,802);CHECK(m.walkieChannel==1);runtime.longKey(false,802);CHECK(m.walkieChannel==2&&SettingsStore::loadByte("walkie_ch")==2);
+    uiRender(runtime);uiCapture("walkie_idle");
+    // Confirm starts and ends a talk; the channel stays while talking; a talk ends by itself after 30 s.
+    runtime.key(Key::Confirm,810);CHECK(m.walkieTalk&&m.walkieAt==810);runtime.longKey(true,811);CHECK(m.walkieChannel==2&&strstr(m.lastNotice,"不能换频道"));
+    m.walkiePhase=1;runtime.tick(822);uiRender(runtime);uiCapture("walkie_talking");
+    runtime.key(Key::Confirm,823);CHECK(!m.walkieTalk);m.walkiePhase=0;
+    runtime.key(Key::Confirm,830);runtime.tick(859);CHECK(m.walkieTalk);runtime.tick(860);CHECK(!m.walkieTalk);
+    // Not opened by a call: long Confirm goes to the menu, and leaving forgets the talk.
+    runtime.key(Key::Confirm,861);runtime.key(Key::Back,862);CHECK(runtime.active()==App::Menu);
+    CHECK(runtime.switchTo(App::Walkie)==Result::Ok&&!m.walkieTalk&&!m.walkiePhase&&!*m.walkieFrom);
+    m.walkieChannel=1;SettingsStore::saveByte("walkie_ch",1);CHECK(runtime.switchTo(App::Home)==Result::Ok);
+    puts("CASE_PASS walkie");
 }
 // 语音指令 (你好小智 opens it; not in the menu): listening, then what was not understood; Back goes home.
 void voiceCommandTests(Runtime& runtime){
@@ -1318,7 +1357,7 @@ extern "C" void app_main() {
     domainTests(runtime);
     settingsTests(runtime);
     powerTests(runtime);
-    slidesTests(runtime);alertTests(runtime);statusTests(runtime);wheelTests(runtime);translateTests(runtime);guardTests(runtime);todoTests(runtime);ledgerTests(runtime);calcTests(runtime);voiceCommandTests(runtime);voiceAddTests(runtime);toolPagesTests(runtime);
+    slidesTests(runtime);alertTests(runtime);statusTests(runtime);wheelTests(runtime);translateTests(runtime);guardTests(runtime);todoTests(runtime);ledgerTests(runtime);calcTests(runtime);walkieTests(runtime);voiceCommandTests(runtime);voiceAddTests(runtime);toolPagesTests(runtime);
     bleTests(runtime);
     identityUploadTests(runtime);
     failureTests(runtime);

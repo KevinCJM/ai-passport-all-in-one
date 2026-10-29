@@ -17,6 +17,13 @@ bool noiseTick(Runtime& runtime,bool codecFree);
 bool wakeTick(Runtime& runtime,bool listen);
 // True from the wake task's start until its memory is freed: NativeServices waits for that before starting.
 bool wakeHolding();
+// 对讲机: the receiver runs while the page is open or 后台接收对讲 is on (connected: WiFi is up); a new call heard on
+// another page opens the page. On the page a task plays what comes and sends while 说话 is on. codecFree: no native
+// task holds the codec. True when the page should redraw.
+bool walkieTick(Runtime& runtime,esp_netif_t* station,bool connected,bool codecFree);
+// Diagnostics for /status: "walkie":[receiver on, packets in, frames played, frames sent, errors, audio stack left,
+// heap free after the codecs opened, the last error (codec code, -1000-errno for the socket)].
+void walkieStatus(char* output,size_t size);
 // Diagnostics for /status: "wake":[state,error,heap after create,largest,chunk,frames,detects,detect us,stack,
 // heap and largest block just after the last wake word was heard and the task had freed its memory].
 void wakeStatus(char* output,size_t size);
