@@ -706,6 +706,8 @@ void NativeServices::chat(){
     if(nvs_flash_init_partition("legacy_nvs")==ESP_OK){
         nvs_handle_t h;if(nvs_open_from_partition("legacy_nvs","websocket",NVS_READONLY,&h)==ESP_OK){found=nvsString(h,"url",credentials->url,sizeof(credentials->url));nvsString(h,"token",credentials->token,sizeof(credentials->token));nvs_close(h);}
         if(nvs_open_from_partition("legacy_nvs","xiaozhi",NVS_READONLY,&h)==ESP_OK){if(!found)found=nvsString(h,"ws_url",credentials->url,sizeof(credentials->url));if(!*credentials->token)nvsString(h,"token",credentials->token,sizeof(credentials->token));found=nvsString(h,"client_id",credentials->client,sizeof(credentials->client))&&found;nvs_close(h);}
+        // Newer XiaoZhi firmware (OTA layout) keeps no "xiaozhi" namespace: its Client-Id is the board's uuid.
+        if(found&&!*credentials->client&&nvs_open_from_partition("legacy_nvs","board",NVS_READONLY,&h)==ESP_OK){nvsString(h,"uuid",credentials->client,sizeof(credentials->client));nvs_close(h);}
         nvs_flash_deinit_partition("legacy_nvs");
     }
     // 语音笔记 is a second XiaoZhi device (same server and token) so notes stay out of the chat's history and memory:
@@ -713,7 +715,7 @@ void NativeServices::chat(){
     // (transcriber() in passport_device_cloud.py). A board that never ran XiaoZhi's firmware uses that Client-Id
     // form for its chat too, and asks XiaoZhi for the server and token.
     uint8_t mac[6];esp_read_mac(mac,ESP_MAC_WIFI_STA);if(memo)mac[0]|=2;
-    if(memo||!found)snprintf(credentials->client,sizeof(credentials->client),"61692d70-6173-4000-8000-%02x%02x%02x%02x%02x%02x",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+    if(memo||!found||!*credentials->client)snprintf(credentials->client,sizeof(credentials->client),"61692d70-6173-4000-8000-%02x%02x%02x%02x%02x%02x",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
     if(!found&&!cloudIdentity(mac,credentials->client,credentials->url,sizeof(credentials->url),credentials->token,sizeof(credentials->token),probe))return;
     if(strncmp(credentials->url,"wss://",6)||strpbrk(credentials->token,"\r\n")||strpbrk(credentials->client,"\r\n")){status("云端连接凭据无效","error");return;}
     const char* authority=credentials->url+6;const char* slash=strchr(authority,'/');const char* end=slash?slash:authority+strlen(authority);const char* colon=static_cast<const char*>(memchr(authority,':',end-authority));
