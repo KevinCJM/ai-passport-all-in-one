@@ -1201,7 +1201,7 @@ void NativeServices::history(){
     if(!eventCount_){publish(current_,"历史今日解析失败","error");return;}
     publish(current_,"已更新","ready");
 }
-// 每日一句: 金山词霸's HTTPS JSON (no key). The task stays for the page: "day:N" fetches N days back and
+// 每日一句: 金山词霸's sentence.iciba.com HTTPS JSON (no key; the old open.iciba.com/dsapi stopped answering). The task stays for the page: "day:N" fetches N days back and
 // "say" plays the sentence, whose mp3 the CDN also serves over plain HTTP (openStream refuses TLS).
 void NativeServices::daily(){
     daily_={};publish(current_,"正在获取每日一句","loading");
@@ -1220,12 +1220,12 @@ void NativeServices::daily(){
         }else{
             if(!strncmp(current_.operation,"day:",4))back=std::clamp(atoi(current_.operation+4),0,365);
             const time_t at=time(nullptr)-time_t(back)*86400;tm t{};localtime_r(&at,&t);
-            char url[64];snprintf(url,sizeof(url),"https://open.iciba.com/dsapi/?date=%04d-%02d-%02d",t.tm_year+1900,t.tm_mon+1,t.tm_mday);
+            char url[112];snprintf(url,sizeof(url),"https://sentence.iciba.com/index.php?c=dailysentence&m=getdetail&title=%04d-%02d-%02d",t.tm_year+1900,t.tm_mon+1,t.tm_mday);
             char* text=reinterpret_cast<char*>(bytes.get());
             Json json(fetch(url,text,2048)?cJSON_Parse(text):nullptr);
             if(!*str(json.value,"content")){if(!cancelled())publish(current_,"每日一句获取失败","error");}
             else{
-                copy(daily_.en,str(json.value,"content"));copy(daily_.cn,str(json.value,"note"));copy(daily_.date,str(json.value,"dateline"));daily_.back=back;
+                copy(daily_.en,str(json.value,"content"));copy(daily_.cn,str(json.value,"note"));copy(daily_.date,str(json.value,"title"));daily_.back=back;
                 asciiPunctuation(daily_.en);
                 const char* tts=str(json.value,"tts");if(!strncmp(tts,"https://",8))snprintf(audio,sizeof(audio),"http://%s",tts+8);else copy(audio,tts);
                 publish(current_,"按确认朗读","ready");
