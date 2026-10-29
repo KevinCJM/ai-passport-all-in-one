@@ -21,6 +21,7 @@ export IDF_COMPONENT_CHECK_NEW_VERSION=0 IDF_COMPONENT_MANAGER=0
 
 if [[ "${1:-}" == connectivity || "${1:-}" == device ]]; then
   HELPER="$ROOT/experiments/passport-connectivity-tools/bin/passport-dictation"
+  mkdir -p "${HELPER%/*}"
   if [[ -f "$ROOT/scripts/mac_dictation_bridge.cpp" && ( ! -x "$HELPER" || "$ROOT/scripts/mac_dictation_bridge.cpp" -nt "$HELPER" ) ]]; then
     /usr/bin/clang++ -std=c++20 "$ROOT/scripts/mac_dictation_bridge.cpp" -framework CoreFoundation -framework ApplicationServices -o "$HELPER"
   fi
