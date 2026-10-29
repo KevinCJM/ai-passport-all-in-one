@@ -1,0 +1,186 @@
+{
+  "schema_version": "1.2",
+  "scope": {
+    "root": ".",
+    "mode": "subtree_only",
+    "parent_inspection_allowed": false,
+    "notes": [
+      "initial AI Hermes routing scaffold",
+      "implementation facts require code confirmation"
+    ]
+  },
+  "modules": [
+    {
+      "id": "project_entrypoints",
+      "name": "project_entrypoints",
+      "path": "requirements.txt",
+      "kind": "project_overview",
+      "purpose": "Initial project anchors discovered during AI Hermes routing bootstrap; implementation behavior still needs code confirmation.",
+      "module_tags": [
+        "project",
+        "bootstrap",
+        "needs_code_confirmation"
+      ],
+      "entry_files": [
+        "requirements.txt",
+        "tests"
+      ],
+      "key_symbols": [],
+      "child_modules": [],
+      "first_read_files": [
+        "requirements.txt",
+        "tests"
+      ],
+      "then_check_files": [
+        "tests"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [],
+      "related_tests": [
+        "tests"
+      ],
+      "related_configs": [
+        "requirements.txt"
+      ],
+      "risk_flags": [
+        "bootstrap_facts_require_confirmation"
+      ],
+      "edit_risk": "unknown",
+      "blast_radius": [
+        "unknown until routed code is sampled"
+      ],
+      "pitfall_ids": [
+        "P01"
+      ],
+      "minimum_regression": [],
+      "routing_confidence": "low",
+      "scope_flags": [
+        "subtree_only",
+        "initial_bootstrap"
+      ],
+      "grounding": {
+        "fact_status": "needs_code_confirmation",
+        "evidence": [
+          "requirements.txt",
+          "tests"
+        ],
+        "unsampled_paths": [
+          "requirements.txt",
+          "tests"
+        ]
+      }
+    },
+    {
+      "id": "ai_routing_files",
+      "name": "ai_routing_files",
+      "path": "docs/repo_map.json",
+      "kind": "routing_docset",
+      "purpose": "AI Hermes routing files and project-local skill scripts created by the routing initializer.",
+      "module_tags": [
+        "ai_routing",
+        "bootstrap",
+        "skills",
+        "scripts"
+      ],
+      "entry_files": [
+        "AGENTS.md",
+        "docs/repo_map.json",
+        "docs/task_routes.json",
+        "docs/pitfalls.json",
+        "docs/ai_routing_evolution_policy.json",
+        "skills/ai-hermes-self-evolve/README.md",
+        "skills/ai-hermes-self-evolve/SKILL.md",
+        "skills/ai-hermes-self-evolve/agents/openai.yaml",
+        "skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py",
+        "skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py",
+        "skills/ai-hermes-self-evolve/scripts/route_task.py",
+        "skills/ai-hermes-routing-init/README.md",
+        "skills/ai-hermes-routing-init/SKILL.md",
+        "skills/ai-hermes-routing-init/agents/openai.yaml",
+        "skills/ai-hermes-routing-init/scripts/init_ai_routing.py",
+        "skills/ai-hermes-routing-init/scripts/evolve_ai_routing.py",
+        "skills/ai-hermes-routing-init/scripts/validate_ai_routing.py",
+        "skills/ai-hermes-routing-init/scripts/route_task.py"
+      ],
+      "key_symbols": [
+        "validate_docset",
+        "build_report",
+        "main"
+      ],
+      "child_modules": [],
+      "first_read_files": [
+        "AGENTS.md",
+        "docs/repo_map.json",
+        "docs/task_routes.json",
+        "docs/pitfalls.json"
+      ],
+      "then_check_files": [
+        "docs/ai_routing_evolution_policy.json",
+        "skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py",
+        "skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py",
+        "skills/ai-hermes-self-evolve/scripts/route_task.py",
+        "skills/ai-hermes-routing-init/scripts/init_ai_routing.py"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [
+        "unverified external runtime behavior"
+      ],
+      "related_tests": [],
+      "related_configs": [
+        "AGENTS.md",
+        "docs/ai_routing_evolution_policy.json"
+      ],
+      "risk_flags": [
+        "routing_memory_drift",
+        "bootstrap_facts_require_confirmation",
+        "routing_only_scope_leak"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "AI Hermes routing",
+        "future agent task narrowing"
+      ],
+      "pitfall_ids": [
+        "P01",
+        "P02"
+      ],
+      "minimum_regression": [
+        "python3 -m py_compile skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py skills/ai-hermes-self-evolve/scripts/route_task.py skills/ai-hermes-routing-init/scripts/init_ai_routing.py",
+        "python3 skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py --routing-only --changed-file docs/repo_map.json --changed-file skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py --json",
+        "python3 skills/ai-hermes-self-evolve/scripts/route_task.py --route-id R02 --mode context",
+        "python3 skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py"
+      ],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "subtree_only",
+        "routing_memory_coverage_check"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "AGENTS.md",
+          "docs/repo_map.json",
+          "docs/task_routes.json",
+          "docs/pitfalls.json",
+          "docs/ai_routing_evolution_policy.json",
+          "skills/ai-hermes-self-evolve/README.md",
+          "skills/ai-hermes-self-evolve/SKILL.md",
+          "skills/ai-hermes-self-evolve/agents/openai.yaml",
+          "skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py",
+          "skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py",
+          "skills/ai-hermes-self-evolve/scripts/route_task.py",
+          "skills/ai-hermes-routing-init/README.md",
+          "skills/ai-hermes-routing-init/SKILL.md",
+          "skills/ai-hermes-routing-init/agents/openai.yaml",
+          "skills/ai-hermes-routing-init/scripts/init_ai_routing.py",
+          "skills/ai-hermes-routing-init/scripts/evolve_ai_routing.py",
+          "skills/ai-hermes-routing-init/scripts/validate_ai_routing.py",
+          "skills/ai-hermes-routing-init/scripts/route_task.py"
+        ],
+        "unsampled_paths": []
+      }
+    }
+  ]
+}

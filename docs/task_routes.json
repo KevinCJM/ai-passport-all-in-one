@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.2",
+  "scope_mode": "subtree_only",
+  "routing_policy": {
+    "operational_list_owner": "docs/repo_map.json",
+    "route_to_module_field": "first_read_modules",
+    "expand_module_field": "expand_to_modules",
+    "operational_list_resolution": {
+      "apply_to_fields": [
+        "first_read_files",
+        "then_check_files",
+        "related_tests",
+        "related_configs",
+        "minimum_regression"
+      ],
+      "selected_modules_order": "first_read_modules_then_expand_to_modules_when_triggered",
+      "merge_strategy": "stable_order_union",
+      "dedupe": "exact_string",
+      "route_level_override": "forbidden"
+    },
+    "grounding_gate": {
+      "blocking_fact_status": [
+        "mixed",
+        "needs_code_confirmation"
+      ],
+      "required_action": "read_grounding_unsampled_paths_before_claim"
+    }
+  },
+  "rule_catalog": {
+    "expand_search": {
+      "read_reference_map_first": {
+        "action": "read_reference_map"
+      }
+    },
+    "stop_and_verify": {
+      "run_minimum_regression": {
+        "action": "run_minimum_regression"
+      }
+    },
+    "fact_check": {
+      "read_reference_map_first": {
+        "action": "read_reference_map"
+      },
+      "read_unsampled_module_paths": {
+        "action": "read_grounding_unsampled_paths"
+      }
+    }
+  },
+  "routes": [
+    {
+      "id": "R01",
+      "task_type": "general_project_work",
+      "match_keywords": [
+        "project",
+        "code",
+        "test",
+        "config",
+        "README",
+        "implementation"
+      ],
+      "negative_keywords": [
+        "repo_map",
+        "task_routes",
+        "pitfalls",
+        "AI routing"
+      ],
+      "route_priority": 10,
+      "first_read_modules": [
+        "project_entrypoints"
+      ],
+      "expand_to_modules": [],
+      "pitfall_ids": [
+        "P01"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_unsampled_module_paths"
+      ],
+      "scope_flags": [
+        "subtree_only",
+        "initial_bootstrap"
+      ]
+    },
+    {
+      "id": "R02",
+      "task_type": "ai_routing_initialization_or_maintenance",
+      "match_keywords": [
+        "AGENTS.md",
+        "repo_map",
+        "task_routes",
+        "pitfalls",
+        "AI routing",
+        "Hermes",
+        "evolve_ai_routing",
+        "validate_ai_routing",
+        "routing memory",
+        "routing files"
+      ],
+      "negative_keywords": [],
+      "route_priority": 100,
+      "first_read_modules": [
+        "ai_routing_files"
+      ],
+      "expand_to_modules": [],
+      "pitfall_ids": [
+        "P01",
+        "P02"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_reference_map_first"
+      ],
+      "scope_flags": [
+        "subtree_only",
+        "routing_memory_coverage_check"
+      ]
+    }
+  ]
+}

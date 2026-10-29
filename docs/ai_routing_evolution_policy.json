@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "scope_mode": "subtree_writable_external_read_allowed",
+  "role": "governance_only",
+  "purpose": "Govern the AI Hermes routing self-evolution lifecycle without becoming a source of routing facts.",
+  "authoritative_owners": {
+    "task_matching_module_expansion_and_operational_list_merge": "docs/task_routes.json",
+    "module_facts_and_operational_lists": "docs/repo_map.json",
+    "pitfall_facts": "docs/pitfalls.json",
+    "agent_protocol": "AGENTS.md"
+  },
+  "non_authoritative_for": [
+    "task_matching",
+    "module_operational_lists",
+    "module_facts",
+    "pitfall_facts",
+    "runtime_behavior_claims"
+  ],
+  "invariants": [
+    "task_routes_remains_single_machine_owner",
+    "policy_must_not_duplicate_module_operational_lists",
+    "policy_must_not_duplicate_route_match_rules",
+    "policy_must_not_duplicate_pitfall_facts",
+    "agents_md_stays_protocol_only",
+    "business_code_is_not_modified_by_routing_only_tasks",
+    "stable_routing_references_are_git_tracked_or_explicit_artifacts"
+  ],
+  "commit_scope_guard": {
+    "routing_only_allowed_globs": [
+      "AGENTS.md",
+      "docs/ai_routing_evolution_policy.json",
+      "docs/repo_map.json",
+      "docs/task_routes.json",
+      "docs/pitfalls.json",
+      "skills/ai-hermes-self-evolve/**",
+      "skills/ai-hermes-routing-init/**"
+    ]
+  },
+  "cli_contracts": {
+    "evolve_ai_routing": {
+      "default_mode": "check_report_only",
+      "must_not_modify_files": true,
+      "stable_json_fields": [
+        "changed_files",
+        "ignored_files",
+        "covered_files",
+        "uncovered_files",
+        "routing_only_violations",
+        "suggested_updates",
+        "missing_required_files",
+        "next_action",
+        "exit_code_reason"
+      ],
+      "smoke_commands": [
+        "python3 -m py_compile skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py skills/ai-hermes-self-evolve/scripts/route_task.py",
+        "python3 skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py --routing-only --changed-file docs/repo_map.json --changed-file skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py --json",
+        "python3 skills/ai-hermes-self-evolve/scripts/route_task.py --route-id R02 --mode context",
+        "python3 skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py"
+      ]
+    }
+  },
+  "change_detection": {
+    "ignored_globs": [
+      ".idea/**",
+      ".pytest_cache/**",
+      ".ruff_cache/**",
+      "__pycache__/**",
+      "**/__pycache__/**",
+      "*.pyc",
+      ".DS_Store"
+    ]
+  },
+  "reproducibility": {
+    "tracked_reference_check": {
+      "enabled": true,
+      "allowed_untracked_globs": [
+        ".idea/**",
+        ".pytest_cache/**",
+        ".ruff_cache/**",
+        "__pycache__/**",
+        "**/__pycache__/**",
+        "*.pyc",
+        ".DS_Store"
+      ]
+    }
+  }
+}

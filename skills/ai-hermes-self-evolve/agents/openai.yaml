@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Hermes Self-Evolve"
+  short_description: "Keep AI Hermes routing memory aligned"
+  default_prompt: "Use $ai-hermes-self-evolve to check whether current project changes require AI Hermes routing updates before commit or PR."

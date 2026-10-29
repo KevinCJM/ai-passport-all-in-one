@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.1",
+  "scope_mode": "subtree_only",
+  "pitfalls": [
+    {
+      "id": "P01",
+      "title": "initial_routing_facts_require_code_confirmation",
+      "severity": "medium",
+      "confidence": "high",
+      "risk_codes": [
+        "bootstrap_fact_uncertainty",
+        "over_learning_from_scaffold"
+      ],
+      "symptoms": [
+        "routing facts are broader than verified code behavior",
+        "future agents treat bootstrap anchors as grounded implementation facts"
+      ],
+      "trigger_actions": [
+        "create initial routing files",
+        "edit routing facts before sampling code"
+      ],
+      "related_paths": [
+        "docs/repo_map.json",
+        "docs/task_routes.json",
+        "docs/pitfalls.json"
+      ],
+      "affected_modules": [
+        "project_entrypoints",
+        "ai_routing_files"
+      ],
+      "blast_radius": [
+        "future agent task narrowing"
+      ],
+      "check_before_edit": [
+        "read sampled code before promoting facts",
+        "keep fact_status as needs_code_confirmation until verified"
+      ],
+      "safe_observation_methods": [
+        "read grounding.unsampled_paths",
+        "run smallest visible smoke command"
+      ]
+    },
+    {
+      "id": "P02",
+      "title": "routing_files_are_machine_owned_contracts",
+      "severity": "medium",
+      "confidence": "high",
+      "risk_codes": [
+        "routing_memory_drift",
+        "routing_only_scope_leak"
+      ],
+      "symptoms": [
+        "task_routes duplicates repo_map operational lists",
+        "routing-only changes include business code"
+      ],
+      "trigger_actions": [
+        "edit AGENTS.md or docs routing JSON",
+        "prepare routing-only commit"
+      ],
+      "related_paths": [
+        "AGENTS.md",
+        "docs/repo_map.json",
+        "docs/task_routes.json",
+        "docs/pitfalls.json",
+        "docs/ai_routing_evolution_policy.json",
+        "skills/ai-hermes-self-evolve/README.md",
+        "skills/ai-hermes-self-evolve/SKILL.md",
+        "skills/ai-hermes-self-evolve/agents/openai.yaml",
+        "skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py",
+        "skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py",
+        "skills/ai-hermes-self-evolve/scripts/route_task.py",
+        "skills/ai-hermes-routing-init/README.md",
+        "skills/ai-hermes-routing-init/SKILL.md",
+        "skills/ai-hermes-routing-init/agents/openai.yaml",
+        "skills/ai-hermes-routing-init/scripts/init_ai_routing.py",
+        "skills/ai-hermes-routing-init/scripts/evolve_ai_routing.py",
+        "skills/ai-hermes-routing-init/scripts/validate_ai_routing.py",
+        "skills/ai-hermes-routing-init/scripts/route_task.py"
+      ],
+      "affected_modules": [
+        "ai_routing_files"
+      ],
+      "blast_radius": [
+        "AI Hermes routing",
+        "future agent task narrowing"
+      ],
+      "check_before_edit": [
+        "keep routing facts in JSON owners",
+        "run evolve and validate after routing changes"
+      ],
+      "safe_observation_methods": [
+        "python3 skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py --routing-only --changed-file <path> --json",
+        "python3 skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py"
+      ]
+    }
+  ]
+}

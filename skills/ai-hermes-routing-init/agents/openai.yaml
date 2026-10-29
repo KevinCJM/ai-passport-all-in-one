@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Hermes Routing Init"
+  short_description: "Create and self-audit AI Hermes routing files"
+  default_prompt: "Use $ai-hermes-routing-init to create initial AI Hermes routing files for this repository, then self-audit and validate them."
