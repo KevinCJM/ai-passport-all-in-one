@@ -43,6 +43,7 @@ class LiveServices {
     bool quizAsked_{};     // the next 知识问答 question requested and not yet answered
     int podcastAsked_{-1}; // the 播客 program the device was asked to play, -1 = its list
     char stockAsked_[16]{}; // what 自选股 last asked for: "list" or "chart:<row>:<days>"
+    char macroAsked_[16]{};
     uint8_t warnAsked_{};   // the 预警 detail (1-based) last asked for, 0 none
     int typhoonAsked_{-1};  // the 台风 row whose track was last asked for
     int hotAsked_{-1};      // the 热榜 item last asked for in full

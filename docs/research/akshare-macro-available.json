@@ -1,0 +1,3372 @@
+{
+  "schema_version": 1,
+  "checked_on": "2026-10-30",
+  "source_commit": "62a56b2159add40f41b2c19129be3ac2af297d09",
+  "scope": "AKShare macro directory excluding five core helpers, plus central-bank/interbank/repo rates and China-US yields",
+  "validation": "anonymous host transport + dated actual data + per-entry freshness; statistical definitions and ESP32 behavior require separate validation",
+  "firmware_integrated": false,
+  "entries": [
+    {
+      "api": "bond_zh_us_rate",
+      "name": "中美国债收益率",
+      "group": "中美国债",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 16473,
+      "request": {
+        "url": "https://datacenter.eastmoney.com/api/data/get",
+        "params": {
+          "type": "RPTA_WEB_TREASURYYIELD",
+          "sty": "ALL",
+          "st": "SOLAR_DATE",
+          "sr": "-1",
+          "token": "894050c76af8597a853f5b408b759f5d",
+          "p": "1",
+          "ps": "60",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "6d8a7631d1ee39bef97c28a2c5e819b3ce6d6ef640b7d71f784aceefc1f97e84",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/bond/bond_em.py#L14"
+    },
+    {
+      "api": "rate_interbank",
+      "name": "拆借利率一览-具体市场的具体品种的具体指标的拆借利率数据",
+      "group": "银行间利率",
+      "latest_actual": "2026-10-30",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 15406,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_IMP_INTRESTRATEN",
+          "columns": "REPORT_DATE,REPORT_PERIOD,IR_RATE,CHANGE_RATE,INDICATOR_ID,LATEST_RECORD,MARKET,MARKET_CODE,CURRENCY,CURRENCY_CODE",
+          "quoteColumns": "",
+          "filter": "(MARKET_CODE=\"001\")(CURRENCY_CODE=\"CNY\")\n        (INDICATOR_ID=\"001\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortTypes": "-1",
+          "sortColumns": "REPORT_DATE",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "b2da371c3859fa59d1d8a1dd4f0d66e9ef3ffb1235a0622b431188c1dea09482",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/interest_rate/interest_rate_interbank_em.py#L14"
+    },
+    {
+      "api": "repo_rate_query",
+      "name": "中国外汇交易中心暨全国银行间同业拆借中心-回购定盘利率-历史数据",
+      "group": "回购利率",
+      "latest_actual": "2026-10-30",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 23473,
+      "request": {
+        "url": "https://www.chinamoney.com.cn/r/cms/www/chinamoney/data/currency/frr-chrt.csv",
+        "params": {},
+        "method": "GET",
+        "body": null,
+        "headers": {}
+      },
+      "sha256": "5a7982d3247b02f7225b20dc0376e3b1e8f626a4b7e539ceca4bfbe4cd488817",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/interest_rate/interest_rate_repo.py#L13"
+    },
+    {
+      "api": "repo_rate_hist",
+      "name": "中国外汇交易中心暨全国银行间同业拆借中心-回购定盘利率-历史数据",
+      "group": "回购利率",
+      "latest_actual": "2026-10-30",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 4788,
+      "request": {
+        "url": "https://www.chinamoney.com.cn/ags/ms/cm-u-bk-currency/FrrHis",
+        "params": {
+          "lang": "CN",
+          "startDate": "2026-10-16",
+          "endDate": "2026-10-30"
+        },
+        "body": null,
+        "method": "POST",
+        "headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
+        }
+      },
+      "sha256": "a9e348ff61e3ff9d3101ddd66125275d11a39a479e49949f66549f72f023a752",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/interest_rate/interest_rate_repo.py#L46"
+    },
+    {
+      "api": "macro_australia_unemployment_rate",
+      "name": "澳大利亚-失业率",
+      "group": "澳大利亚",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15110,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_AUSTRALIA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00101141\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "a57348e1ee632c3e35e9dbb763bc5b96b1c5f7daf926027bf43f0b00fc4e8f89",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_australia.py#L117"
+    },
+    {
+      "api": "macro_australia_ppi_quarterly",
+      "name": "澳大利亚-生产者物价指数季率",
+      "group": "澳大利亚",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "quarterly",
+      "response_bytes": 14642,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_AUSTRALIA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00152722\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "64c7b4c452a48ea821e45339a5c4467bc0fe770bfb36f9c4bc0fcaacc184d1b9",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_australia.py#L168"
+    },
+    {
+      "api": "macro_australia_cpi_quarterly",
+      "name": "澳大利亚-消费者物价指数季率",
+      "group": "澳大利亚",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "quarterly",
+      "response_bytes": 14161,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_AUSTRALIA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00101104\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "e1fc3dfc81284246762b52bead55751c7873ced2938cab8ab6a32a324aaab6c9",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_australia.py#L219"
+    },
+    {
+      "api": "macro_australia_cpi_yearly",
+      "name": "澳大利亚-消费者物价指数年率",
+      "group": "澳大利亚",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 14019,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_AUSTRALIA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00101093\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "ff68796d10e95e45950bdd46c96f5b79ae9a35733fc0b69b20094bfc704c13cf",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_australia.py#L270"
+    },
+    {
+      "api": "macro_canada_new_house_rate",
+      "name": "加拿大-新屋开工",
+      "group": "加拿大",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15954,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00342247\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "989b81b69b1000ba669f31bbe2dc253b2f691c4b682faf4490ced2b7e49efa99",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_canada.py#L15"
+    },
+    {
+      "api": "macro_canada_unemployment_rate",
+      "name": "加拿大-失业率",
+      "group": "加拿大",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15520,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00157746\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "dc0cb1207b3d418ce8cc4f86e00dd2973beb87b2f194c6ce511e4339762305c1",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_canada.py#L66"
+    },
+    {
+      "api": "macro_canada_trade",
+      "name": "加拿大-贸易帐",
+      "group": "加拿大",
+      "latest_actual": "2026-08-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 17491,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00102022\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "e1648de7a9530b8e5e0d7ce57986487b788880b5b659c801d2091ed31989b72a",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_canada.py#L117"
+    },
+    {
+      "api": "macro_canada_bank_rate",
+      "name": "加拿大-央行公布利率决议",
+      "group": "加拿大",
+      "latest_actual": "2026-10-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "event; older records require manual confirmation",
+      "response_bytes": 16135,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00342248\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "1dc4b383bc6ba94b0a61136261e828d5b7475b8bf26bbb637716d3aeeabc7747",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_canada.py#L219"
+    },
+    {
+      "api": "macro_canada_core_cpi_yearly",
+      "name": "加拿大-核心消费者物价指数年率",
+      "group": "加拿大",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 16552,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00102030\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "93f209124a41f347e32016296aa0bfeb248ec2295098c8d77b9607545f7b482d",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_canada.py#L270"
+    },
+    {
+      "api": "macro_canada_core_cpi_monthly",
+      "name": "加拿大-核心消费者物价指数月率",
+      "group": "加拿大",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 16556,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00102044\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "765a1fb2647654e3f9dae0069256b72f1c219091ee725034d3db815e0d6e459a",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_canada.py#L321"
+    },
+    {
+      "api": "macro_canada_cpi_yearly",
+      "name": "加拿大-消费者物价指数年率",
+      "group": "加拿大",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 16184,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00102029\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "f203a0532b8afaeb04ca8daa6b705895ba36fa607be5b55eaad3a29ac8ad2f35",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_canada.py#L372"
+    },
+    {
+      "api": "macro_canada_cpi_monthly",
+      "name": "加拿大-消费者物价指数月率",
+      "group": "加拿大",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 16413,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00158719\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "425baa4d08cce5b55f5f4bbbc9fbba75e8b6d2ea15bdd07b91b53daa2b555481",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_canada.py#L423"
+    },
+    {
+      "api": "macro_canada_gdp_monthly",
+      "name": "加拿大-GDP 月率",
+      "group": "加拿大",
+      "latest_actual": "2026-07-01",
+      "maximum_age_days": 140,
+      "frequency_rule": "monthly; allows normal two-month publication lag",
+      "response_bytes": 16606,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00159259\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "0f155e563ab8fcdc202b791912547910341df43daa2143b8638d3fc7ef01d264",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_canada.py#L474"
+    },
+    {
+      "api": "macro_china_qyspjg",
+      "name": "中国-企业商品价格指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 23093,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,BASE,BASE_SAME,BASE_SEQUENTIAL,FARM_BASE,FARM_BASE_SAME,FARM_BASE_SEQUENTIAL,MINERAL_BASE,MINERAL_BASE_SAME,MINERAL_BASE_SEQUENTIAL,ENERGY_BASE,ENERGY_BASE_SAME,ENERGY_BASE_SEQUENTIAL",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_GOODS_INDEX",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "48c152aeebcedb24d2610d20549c2293c96921077dd1806b856951f8794c332d",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L107"
+    },
+    {
+      "api": "macro_china_shibor_all",
+      "name": "上海银行业同业拆借报告",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-30",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 489604,
+      "request": {
+        "url": "https://cdn.jin10.com/data_center/reports/il_1.json",
+        "params": {
+          "_": 1793338262.583676
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "470b0a838deb5047a9e6fb595c7bd5a3462a7d73dfd72233d0ac5bbd8813d692",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L656"
+    },
+    {
+      "api": "macro_china_hk_market_info",
+      "name": "香港同业拆借报告",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 485919,
+      "request": {
+        "url": "https://cdn.jin10.com/data_center/reports/il_2.json",
+        "params": {
+          "_": 1793338262.583676
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "32833e85c1b20fa28b6996edf1dce3ce73ae855e93954207d9be44486af8af1e",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L702"
+    },
+    {
+      "api": "macro_china_market_margin_sz",
+      "name": "深圳融资融券报告",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 299502,
+      "request": {
+        "url": "https://cdn.jin10.com/data_center/reports/fs_2.json",
+        "params": {
+          "_": 1793338262.583676
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "d617d4abb59e8e54eef1b488c24b7835a8246917a6440543c0990c0372d372d2",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L886"
+    },
+    {
+      "api": "macro_china_market_margin_sh",
+      "name": "上海融资融券报告",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 334579,
+      "request": {
+        "url": "https://cdn.jin10.com/data_center/reports/fs_1.json",
+        "params": {
+          "_": 1793338262.583676
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "689559a5e28cd0fcec9e2a05241d1042e55d7818dabe3af3770d7e81da8f3161",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L917"
+    },
+    {
+      "api": "macro_china_au_report",
+      "name": "上海黄金交易所报告",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 3331358,
+      "request": {
+        "url": "https://cdn.jin10.com/data_center/reports/sge.json",
+        "params": {
+          "_": 1793338262.583676
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "0a17c3facc45285decc2ed464671316383057212b1e580598932db82b07613be",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L951"
+    },
+    {
+      "api": "macro_china_lpr",
+      "name": "LPR品种详细数据",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-20",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 5413,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPTA_WEB_RATE",
+          "columns": "ALL",
+          "sortColumns": "TRADE_DATE",
+          "sortTypes": "-1",
+          "token": "894050c76af8597a853f5b408b759f5d",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "2d80ea9386eb1df0d4032c10a0c541e2fb4af5f8b0f67056c11e89090db18008",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1010"
+    },
+    {
+      "api": "macro_china_new_house_price",
+      "name": "中国-新房价指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15483,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMY_HOUSE_PRICE",
+          "columns": "REPORT_DATE,CITY,FIRST_COMHOUSE_SAME,FIRST_COMHOUSE_SEQUENTIAL,FIRST_COMHOUSE_BASE,SECOND_HOUSE_SAME,SECOND_HOUSE_SEQUENTIAL,SECOND_HOUSE_BASE,REPORT_DAY",
+          "filter": "(CITY in (\"北京\",\"上海\"))",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE,CITY",
+          "sortTypes": "-1,-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "02235d9b45c9e9cb4e4d51d26e4293f0b88b4b01c2b1ce2660c210ee8b07d88d",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1057"
+    },
+    {
+      "api": "macro_china_enterprise_boom_index",
+      "name": "企业景气及企业家信心指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-06-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "quarterly",
+      "response_bytes": 12624,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,BOOM_INDEX,FAITH_INDEX,BOOM_INDEX_SAME,BOOM_INDEX_SEQUENTIAL,FAITH_INDEX_SAME,FAITH_INDEX_SEQUENTIAL",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_BOOM_INDEX",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "ac62ff1b48cb806c895257e9f1f3f1a24f4d1f9a4c855c189d49f0f7fe0de413",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1136"
+    },
+    {
+      "api": "macro_china_national_tax_receipts",
+      "name": "中国-全国税收收入",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 8807,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,TAX_INCOME,TAX_INCOME_SAME,TAX_INCOME_SEQUENTIAL",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_TAX",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "653293f5d804d68982448da45a667df841ee79d845652f3bfba47c96ee6e0ebf",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1204"
+    },
+    {
+      "api": "macro_china_bank_financing",
+      "name": "银行理财产品发行数量",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "event; older records require manual confirmation",
+      "response_bytes": 13805,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI01516267\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "fca5650fdf6458bb30f55122915b7968e7bac1b1a4fed2e342651f209f5ee5da",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1239"
+    },
+    {
+      "api": "macro_china_insurance_income",
+      "name": "原保险保费收入",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 13983,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMM00088870\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "36260f2b462ffae71cc4d4947197c9dc61dd0cb12fd366074c0ca12a75cb01a3",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1285"
+    },
+    {
+      "api": "macro_china_mobile_number",
+      "name": "手机出货量",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 13908,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00225823\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "55c7d510ac61c82d86a42c6b80478b95444db6d4418ccf8cb8a863d2e5187fa8",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1331"
+    },
+    {
+      "api": "macro_china_vegetable_basket",
+      "name": "菜篮子产品批发价格指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 13812,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00009275\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "e65db703be1d87aae829d5c2c7f80a260208d18fd77b2475737452575a5157e7",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1378"
+    },
+    {
+      "api": "macro_china_agricultural_product",
+      "name": "农产品批发价格总指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 13800,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00009274\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "51a68ffe693c814e13ce63afdebfd94b5d653dc2097bae95d5dcd7b39ce11c45",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1433"
+    },
+    {
+      "api": "macro_china_agricultural_index",
+      "name": "农副指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 13281,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00662543\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "ca7f985fde96b8f212afbd7404aacf8348da35abed681172c2629fda6b3b9008",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1488"
+    },
+    {
+      "api": "macro_china_energy_index",
+      "name": "能源指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 13506,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00662539\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "381b92e249309d3d789e50b5ce80e313f233c03eb647e1a8153a0181b622353f",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1543"
+    },
+    {
+      "api": "macro_china_commodity_price_index",
+      "name": "大宗商品价格",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 13376,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00662535\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "98b4074e8e0cda4bdc272df375711ed7d5f40f2c6b885106d425d0e05251d253",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1598"
+    },
+    {
+      "api": "macro_global_sox_index",
+      "name": "费城半导体指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 14039,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00055562\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "c5816987eb26ff8f3c407601465b3978553bf2118f2476b6d0b057e08c0d773b",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1653"
+    },
+    {
+      "api": "macro_china_construction_index",
+      "name": "建材指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 13126,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00662541\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "0676b1bcea88083367c1110ff6cd1bbfd84efe343e2fdd128e1beedd2b17db0c",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1763"
+    },
+    {
+      "api": "macro_china_lpi_index",
+      "name": "物流景气指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 13471,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00352262\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "e70023f97fffa30152513fc0976af4a43f1f3769dd1a685f1a31fcdd24f476aa",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1876"
+    },
+    {
+      "api": "macro_china_bdti_index",
+      "name": "原油运输指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 13872,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00107668\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "aef67a75049527651a7e441d3dd37e1032fe7dc8c3c7c9089c58826566ee14f6",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1931"
+    },
+    {
+      "api": "macro_china_bsi_index",
+      "name": "超灵便型船运价指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 13556,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00107667\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "9a72f29a637660c94fb274768d6da8b913fc8a9c34c8e7ea7859c9042f45261a",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L1986"
+    },
+    {
+      "api": "macro_shipping_bci",
+      "name": "海岬型运费指数(BCI)",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 13742,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00107666\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "41c4a0bfbcbf795ca854ad13e7f73f36bf624b072b2c82435279e4804988038e",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2096"
+    },
+    {
+      "api": "macro_shipping_bdi",
+      "name": "波罗的海干散货指数(BDI)",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 13691,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00107664\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "fb55b39c899345bc5cb2cdfe2af03ca6d1bfdc8b7636d52dd82d174dd81a0a29",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2107"
+    },
+    {
+      "api": "macro_shipping_bpi",
+      "name": "巴拿马型运费指数(BPI)",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 13610,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00107665\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "26eedf5647ff000d73b383a259c7e88f3d8dcf8ecef96faacd01c1694dcb8d84",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2118"
+    },
+    {
+      "api": "macro_shipping_bcti",
+      "name": "成品油运输指数（BCTI）",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 13822,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageSize": "60",
+          "pageNumber": "1",
+          "reportName": "RPT_INDUSTRY_INDEX",
+          "columns": "REPORT_DATE,INDICATOR_VALUE,CHANGE_RATE,CHANGERATE_3M,CHANGERATE_6M,CHANGERATE_1Y,CHANGERATE_2Y,CHANGERATE_3Y",
+          "filter": "(INDICATOR_ID=\"EMI00107669\")",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "ac16ebac8df038bac0e251fa8671cd9ab97140c45e61cf0770fe3c9bded1e44c",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2129"
+    },
+    {
+      "api": "macro_china_new_financial_credit",
+      "name": "中国-新增信贷数据",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 12515,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,RMB_LOAN,RMB_LOAN_SAME,RMB_LOAN_SEQUENTIAL,RMB_LOAN_ACCUMULATE,LOAN_ACCUMULATE_SAME",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_RMB_LOAN",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "cb4d0091aebb6873d9f24f757d4e28023392cace0a4bc2c0dc3beb6987eacc26",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2140"
+    },
+    {
+      "api": "macro_china_fx_gold",
+      "name": "外汇和黄金储备",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 13881,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,GOLD_RESERVES,GOLD_RESERVES_SAME,GOLD_RESERVES_SEQUENTIAL,FOREX,FOREX_SAME,FOREX_SEQUENTIAL",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_GOLD_CURRENCY",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36"
+        }
+      },
+      "sha256": "0ea260dacf23f6f97fada0c3bafa421dfec75db21bbb73d47ce1ed7ed48b855a",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2188"
+    },
+    {
+      "api": "macro_china_stock_market_cap",
+      "name": "全国股票交易统计表",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-10-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 22431,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMY_STOCK_STATISTICS",
+          "columns": "REPORT_DATE,TIME,TOTAL_SHARES_SH,TOTAL_MARKE_SH,DEAL_AMOUNT_SH,VOLUME_SH,HIGH_INDEX_SH,LOW_INDEX_SH,TOTAL_SZARES_SZ,TOTAL_MARKE_SZ,DEAL_AMOUNT_SZ,VOLUME_SZ,HIGH_INDEX_SZ,LOW_INDEX_SZ",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36"
+        }
+      },
+      "sha256": "14430d15972e9cd9cd97ac7e98c78bcd9770f83ee54bdb4a4b0d9212e8e65ca1",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2254"
+    },
+    {
+      "api": "macro_china_money_supply",
+      "name": "货币供应量",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 18561,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,BASIC_CURRENCY,BASIC_CURRENCY_SAME,BASIC_CURRENCY_SEQUENTIAL,CURRENCY,CURRENCY_SAME,CURRENCY_SEQUENTIAL,FREE_CASH,FREE_CASH_SAME,FREE_CASH_SEQUENTIAL",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_CURRENCY_SUPPLY",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "e1f1097e084d70c2d6605ca9ca636d32739dc103540ecfa156d30a013cd7a1ae",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2340"
+    },
+    {
+      "api": "macro_china_cpi",
+      "name": "中国居民消费价格指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 19353,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,NATIONAL_SAME,NATIONAL_BASE,NATIONAL_SEQUENTIAL,NATIONAL_ACCUMULATE,CITY_SAME,CITY_BASE,CITY_SEQUENTIAL,CITY_ACCUMULATE,RURAL_SAME,RURAL_BASE,RURAL_SEQUENTIAL,RURAL_ACCUMULATE",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_CPI",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "9713b5c1f7f8cdf30c5e9fdb4440b682e681066971442a1d20e8a7a60d0b279b",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2423"
+    },
+    {
+      "api": "macro_china_gdp",
+      "name": "中国国内生产总值",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "quarterly",
+      "response_bytes": 15468,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,DOMESTICL_PRODUCT_BASE,FIRST_PRODUCT_BASE,SECOND_PRODUCT_BASE,THIRD_PRODUCT_BASE,SUM_SAME,FIRST_SAME,SECOND_SAME,THIRD_SAME",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_GDP",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "45a363bde6c2e6278dcc3b208ce1b42bcc2c9e0665eec5fd99fc22f2f5274cfa",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2498"
+    },
+    {
+      "api": "macro_china_ppi",
+      "name": "中国工业品出厂价格指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 7031,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,BASE,BASE_SAME,BASE_ACCUMULATE",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_PPI",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "d2056abab0821c4bf8c00dd8012861a9325c411f2766ad4940180550383ed6b3",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2575"
+    },
+    {
+      "api": "macro_china_pmi",
+      "name": "中国采购经理人指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 8886,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,MAKE_INDEX,MAKE_SAME,NMAKE_INDEX,NMAKE_SAME",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_PMI",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "6315b1adb6c2eb5dfb87b71ceeefcdb9fdd57f71124218bfef8cdea49e9452fa",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2620"
+    },
+    {
+      "api": "macro_china_gdzctz",
+      "name": "中国城镇固定资产投资",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 8678,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,BASE,BASE_SAME,BASE_SEQUENTIAL,BASE_ACCUMULATE",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_ASSET_INVEST",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "55a5e7d5d29811121f937c749de0612a81f1b539503ddc89ab8b40ef0b8b89c7",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2672"
+    },
+    {
+      "api": "macro_china_hgjck",
+      "name": "海关进出口增减情况一览表",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 21393,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,EXIT_BASE,IMPORT_BASE,EXIT_BASE_SAME,IMPORT_BASE_SAME,EXIT_BASE_SEQUENTIAL,IMPORT_BASE_SEQUENTIAL,EXIT_ACCUMULATE,IMPORT_ACCUMULATE,EXIT_ACCUMULATE_SAME,IMPORT_ACCUMULATE_SAME",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_CUSTOMS",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "cf9f10d5ee8914f7231e043670de96feb1de2e2ea0f608d5939e16da057e61c3",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2721"
+    },
+    {
+      "api": "macro_china_czsr",
+      "name": "财政收入",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 10629,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,BASE,BASE_SAME,BASE_SEQUENTIAL,BASE_ACCUMULATE,ACCUMULATE_SAME",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_INCOME",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "3470ece4ddcb863fa936cb6bec65ae1b4445452da30dfd4b3c7b6998867fa622",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2811"
+    },
+    {
+      "api": "macro_china_whxd",
+      "name": "外汇贷款数据",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 8571,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,BASE,BASE_SAME,BASE_SEQUENTIAL,BASE_ACCUMULATE",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_FOREX_LOAN",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "cc2dcb298c8f353319b7d6b3218a4d24dd2b10f1e27c46d67d260e6f838e0df3",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2864"
+    },
+    {
+      "api": "macro_china_wbck",
+      "name": "本外币存款",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 9919,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,BASE,BASE_SAME,BASE_SEQUENTIAL,BASE_ACCUMULATE",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_FOREX_DEPOSIT",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "3dcaba10c5cba53b612a4498462eaf66c52620d94b30a7af9794ea05cffb0cd7",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2914"
+    },
+    {
+      "api": "macro_china_xfzxx",
+      "name": "消费者信心指数",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-08-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 21270,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,CONSUMERS_FAITH_INDEX,FAITH_INDEX_SAME,FAITH_INDEX_SEQUENTIAL,CONSUMERS_ASTIS_INDEX,ASTIS_INDEX_SAME,ASTIS_INDEX_SEQUENTIAL,CONSUMERS_EXPECT_INDEX,EXPECT_INDEX_SAME,EXPECT_INDEX_SEQUENTIAL",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_FAITH_INDEX",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "9c2f395ca09b98c9deccc1b02579d97bf4d74295b69b51bea96863e2925f1cf4",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L2963"
+    },
+    {
+      "api": "macro_china_gyzjz",
+      "name": "工业增加值增长",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 6182,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,BASE_SAME,BASE_ACCUMULATE",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_INDUS_GROW",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "0d323cbc1ca0687f72070d6648453b0200641b11bf391f760d12bab328ecf3d2",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L3048"
+    },
+    {
+      "api": "macro_china_consumer_goods_retail",
+      "name": "社会消费品零售总额",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 12700,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "columns": "REPORT_DATE,TIME,RETAIL_TOTAL,RETAIL_TOTAL_SAME,RETAIL_TOTAL_SEQUENTIAL,RETAIL_TOTAL_ACCUMULATE,RETAIL_ACCUMULATE_SAME",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "reportName": "RPT_ECONOMY_TOTAL_RETAIL",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36"
+        }
+      },
+      "sha256": "55132f3d66daa8c87a89057ed56318507868b6f126af61bd8d1359e5474699c0",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L3177"
+    },
+    {
+      "api": "macro_china_society_electricity",
+      "name": "全社会用电分类情况表",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 11771,
+      "request": {
+        "url": "https://quotes.sina.cn/mac/api/jsonp_v3.php/SINAREMOTECALLCALLBACK1601557771972/MacPage_Service.get_pagedata",
+        "params": {
+          "cate": "industry",
+          "event": "6",
+          "from": "0",
+          "num": "31",
+          "condition": ""
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "481e98cde81da5a4aab3390c43970afb701361e5cb0480ccb219701e6884e7f8",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L3233"
+    },
+    {
+      "api": "macro_china_society_traffic_volume",
+      "name": "全社会客货运输量",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 17877,
+      "request": {
+        "url": "https://quotes.sina.cn/mac/api/jsonp_v3.php/SINAREMOTECALLCALLBACK1601559094538/MacPage_Service.get_pagedata",
+        "params": {
+          "cate": "industry",
+          "event": "10",
+          "from": "0",
+          "num": "31",
+          "condition": ""
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "13c4718e57db4a7ce21d951ac6cd284082126c4759b5f7d4fde30a69ef183337",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L3286"
+    },
+    {
+      "api": "macro_china_postal_telecommunicational",
+      "name": "邮电业务基本情况",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 27830,
+      "request": {
+        "url": "https://quotes.sina.cn/mac/api/jsonp_v3.php/SINAREMOTECALLCALLBACK1601624495046/MacPage_Service.get_pagedata",
+        "params": {
+          "cate": "industry",
+          "event": "11",
+          "from": "0",
+          "num": "31",
+          "condition": ""
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "08a8336564e60c16caf9f45057820ced602bc8dada8c9780eca972cddc4c8156",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L3344"
+    },
+    {
+      "api": "macro_china_international_tourism_fx",
+      "name": "国际旅游外汇收入构成",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2025-01-01",
+      "maximum_age_days": 730,
+      "frequency_rule": "annual; dates denote observation year",
+      "response_bytes": 2342,
+      "request": {
+        "url": "https://quotes.sina.cn/mac/api/jsonp_v3.php/SINAREMOTECALLCALLBACK1601651495761/MacPage_Service.get_pagedata",
+        "params": {
+          "cate": "industry",
+          "event": "15",
+          "from": "0",
+          "num": "31",
+          "condition": ""
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "35d7721723d28bf5ed02499c3931202f8da423a26997a11a4bb81dc280347828",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L3378"
+    },
+    {
+      "api": "macro_china_passenger_load_factor",
+      "name": "民航客座率及载运率",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 7551,
+      "request": {
+        "url": "https://quotes.sina.cn/mac/api/jsonp_v3.php/SINAREMOTECALLCALLBACK1601651495761/MacPage_Service.get_pagedata",
+        "params": {
+          "cate": "industry",
+          "event": "20",
+          "from": "0",
+          "num": "31",
+          "condition": ""
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "f6355803f4bdb15ba8f361d06a3ec63cf600a40d74001156af1081c253f378f9",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L3412"
+    },
+    {
+      "api": "macro_china_central_bank_balance",
+      "name": "央行货币当局资产负债",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "event; older records require manual confirmation",
+      "response_bytes": 18651,
+      "request": {
+        "url": "https://quotes.sina.cn/mac/api/jsonp_v3.php/SINAREMOTECALLCALLBACK1601651495761/MacPage_Service.get_pagedata",
+        "params": {
+          "cate": "fininfo",
+          "event": "8",
+          "from": "0",
+          "num": "31",
+          "condition": ""
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "32f0f9703db67ab620d8caf7a87563443ee963d11fe0b41c2708ff59ac17be2b",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L3523"
+    },
+    {
+      "api": "macro_china_insurance",
+      "name": "保险业经营情况",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15287,
+      "request": {
+        "url": "https://quotes.sina.cn/mac/api/jsonp_v3.php/SINAREMOTECALLCALLBACK1601651495761/MacPage_Service.get_pagedata",
+        "params": {
+          "cate": "fininfo",
+          "event": "19",
+          "from": "0",
+          "num": "31",
+          "condition": ""
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "572eb0cd464f5f9bfd16e915cd83891366e0c6475d0de3e838f745ae50b26b8d",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L3557"
+    },
+    {
+      "api": "macro_china_supply_of_money",
+      "name": "货币供应量",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 20663,
+      "request": {
+        "url": "https://quotes.sina.cn/mac/api/jsonp_v3.php/SINAREMOTECALLCALLBACK1601651495761/MacPage_Service.get_pagedata",
+        "params": {
+          "cate": "fininfo",
+          "event": "1",
+          "from": "0",
+          "num": "31",
+          "condition": ""
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "5250c738316614ad6a3b12042ab20a77ed53a384a1e1587f3af275a86bcb7fca",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L3591"
+    },
+    {
+      "api": "macro_china_foreign_exchange_gold",
+      "name": "央行黄金和外汇储备",
+      "group": "中国内地、行业及航运",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 12386,
+      "request": {
+        "url": "https://quotes.sina.cn/mac/api/jsonp_v3.php/SINAREMOTECALLCALLBACK1601651495761/MacPage_Service.get_pagedata",
+        "params": {
+          "cate": "fininfo",
+          "event": "5",
+          "from": "0",
+          "num": "31",
+          "condition": ""
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "cfc5a4f7bd499fdb65db59d6edc861ff084a32681dd44e33f30c287bdbc7f0ae",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china.py#L3625"
+    },
+    {
+      "api": "macro_china_hk_rate_of_unemployment",
+      "name": "中国香港-失业率",
+      "group": "中国香港",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 14000,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_HK",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00059647\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "3cbf57d68d227d8da8d34d1919edc1cf07d81d6ec32522bec181b0a94de5ab60",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china_hk.py#L91"
+    },
+    {
+      "api": "macro_china_hk_gbp",
+      "name": "中国香港-香港 GDP",
+      "group": "中国香港",
+      "latest_actual": "2026-06-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "quarterly",
+      "response_bytes": 15004,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_HK",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG01337008\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "55bc1a338431adaaf2bae4a86313f63f85381b737acf30d3ca5f93bfb96a9bb1",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china_hk.py#L102"
+    },
+    {
+      "api": "macro_china_hk_gbp_ratio",
+      "name": "中国香港-香港 GDP 同比",
+      "group": "中国香港",
+      "latest_actual": "2026-06-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "quarterly",
+      "response_bytes": 14835,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_HK",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG01337009\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "800ae39cb70316622aac0b4a18d2ea8006240a9ffc9814c4a4669d33664cb461",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china_hk.py#L113"
+    },
+    {
+      "api": "macro_china_hk_building_volume",
+      "name": "中国香港-香港楼宇买卖合约数量",
+      "group": "中国香港",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15307,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_HK",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00158055\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "b7b4909c1494bb251d71f2acda68e1dc233d0ff490c3d50c4fcb6db1baa4102d",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china_hk.py#L124"
+    },
+    {
+      "api": "macro_china_hk_building_amount",
+      "name": "中国香港-香港楼宇买卖合约成交金额",
+      "group": "中国香港",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15786,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_HK",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00158066\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "72a0c9800c9ae70d396e1e2b2e9134844ead6d25cdfcb437b1cb064720a67167",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china_hk.py#L135"
+    },
+    {
+      "api": "macro_china_hk_trade_diff_ratio",
+      "name": "中国香港-香港商品贸易差额年率",
+      "group": "中国香港",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15968,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_HK",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00157898\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "08dfc75fca9f37d97b8d50a29ef892d0a14d3a7b444ccbad6c336ea5d8fc3814",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china_hk.py#L146"
+    },
+    {
+      "api": "macro_china_hk_ppi",
+      "name": "中国香港-香港制造业 PPI 年率",
+      "group": "中国香港",
+      "latest_actual": "2026-06-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "quarterly",
+      "response_bytes": 14438,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_HK",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00157818\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "937e0eca95e3a94c71657f659cf7ebc5b13468bf565557eca2efbd1e97109e88",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_china_hk.py#L157"
+    },
+    {
+      "api": "macro_cons_gold",
+      "name": "黄金 ETF 持仓",
+      "group": "全球 ETF",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 1106,
+      "request": {
+        "url": "https://datacenter-api.jin10.com/reports/list_v2",
+        "params": {
+          "category": "etf",
+          "attr_id": "1",
+          "max_date": "",
+          "_": "1793338262584"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36",
+          "x-app-id": "rU6QIu7JHe2gOUeR",
+          "x-csrf-token": "x-csrf-token",
+          "x-version": "1.0.0"
+        }
+      },
+      "sha256": "dea25bbf14b4180c620e6c8757214b3660056dee38715f2a3c386c01b5cae67d",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_constitute.py#L18"
+    },
+    {
+      "api": "macro_cons_silver",
+      "name": "白银 ETF 持仓",
+      "group": "全球 ETF",
+      "latest_actual": "2026-10-28",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 1024,
+      "request": {
+        "url": "https://datacenter-api.jin10.com/reports/list_v2",
+        "params": {
+          "category": "etf",
+          "attr_id": "2",
+          "max_date": "",
+          "_": "1793338262584"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {
+          "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36",
+          "x-app-id": "rU6QIu7JHe2gOUeR",
+          "x-csrf-token": "x-csrf-token",
+          "x-version": "1.0.0"
+        }
+      },
+      "sha256": "6d4d994c168c626c684190017b09eb83272d3343c98c4e6988e77b7a515d564b",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_constitute.py#L83"
+    },
+    {
+      "api": "macro_germany_ifo",
+      "name": "德国-IFO商业景气指数",
+      "group": "德国",
+      "latest_actual": "2026-10-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 16419,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_GER",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00179154\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "dc49812fb754d65ec50597b70a32425ca34758219b3fcb5c1efda9b447e9d22b",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_germany.py#L69"
+    },
+    {
+      "api": "macro_germany_cpi_monthly",
+      "name": "德国-消费者物价指数月率终值",
+      "group": "德国",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15984,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_GER",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00009758\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "ec0dbd25f5ce9a9d0038ceaa4c1f2d7f9d97eadd3c5a473f2441b0f8e901ada9",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_germany.py#L81"
+    },
+    {
+      "api": "macro_germany_cpi_yearly",
+      "name": "德国-消费者物价指数年率终值",
+      "group": "德国",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15946,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_GER",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00009756\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "c7801d6be78e0d6fab963f67708054c0aff57859000655415dd1eb9766c71153",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_germany.py#L93"
+    },
+    {
+      "api": "macro_germany_trade_adjusted",
+      "name": "德国-贸易帐（季调后）",
+      "group": "德国",
+      "latest_actual": "2026-08-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15877,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_GER",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00009753\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "5ed7c310a0b0ae0bfc1b3b48dade953edc1f673a6170a438087c8e32d981a0a4",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_germany.py#L105"
+    },
+    {
+      "api": "macro_germany_gdp",
+      "name": "德国-GDP",
+      "group": "德国",
+      "latest_actual": "2026-06-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "quarterly",
+      "response_bytes": 16624,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_GER",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00009720\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "a8bc327c330256123586dbcb3b6a320989c25d0b29242ed77ba223f3e99803c7",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_germany.py#L117"
+    },
+    {
+      "api": "macro_germany_retail_sale_monthly",
+      "name": "德国-实际零售销售月率",
+      "group": "德国",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 16942,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_GER",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG01333186\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "d2fe508346f3e04fb7f911ace29f5df0bc6dfc13dfa2f951dc31d3b314d0fa73",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_germany.py#L129"
+    },
+    {
+      "api": "macro_germany_zew",
+      "name": "德国-ZEW 经济景气指数",
+      "group": "德国",
+      "latest_actual": "2026-10-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 16033,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_GER",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00172577\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "21f1831201a8dbb0c02481e0cee0db1f81c8852cc5424cd542460d99d7959cd5",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_germany.py#L153"
+    },
+    {
+      "api": "macro_info_ws",
+      "name": "华尔街见闻-日历-宏观",
+      "group": "财经日历",
+      "latest_actual": "2026-10-30",
+      "maximum_age_days": 2,
+      "frequency_rule": "calendar",
+      "response_bytes": 42129,
+      "request": {
+        "url": "https://api-one-wscn.awtmt.com/apiv1/finance/macrodatas",
+        "method": "GET",
+        "body": null,
+        "params": {
+          "start": 1793289600,
+          "end": 1793376000
+        },
+        "headers": {}
+      },
+      "sha256": "f78adbb17b4fa9ea0b38cbd75d922a5836f0820ddb7a44466cc3745c8769b676",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_info_ws.py#L39"
+    },
+    {
+      "api": "macro_japan_bank_rate",
+      "name": "日本-央行公布利率决议",
+      "group": "日本",
+      "latest_actual": "2026-10-30",
+      "maximum_age_days": 190,
+      "frequency_rule": "event; older records require manual confirmation",
+      "response_bytes": 13475,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_JPAN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00342252\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "ecd61d61b69099540fc19d3486a155e90400e66dd33c863dc04dbe8d30335532",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_japan.py#L70"
+    },
+    {
+      "api": "macro_japan_cpi_yearly",
+      "name": "日本-全国消费者物价指数年率",
+      "group": "日本",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 13660,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_JPAN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00005004\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "c6b13e9e52404405a1e71c3921a62df269372fd8e5210ad9ddeabee0409a5790",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_japan.py#L82"
+    },
+    {
+      "api": "macro_japan_core_cpi_yearly",
+      "name": "日本-全国核心消费者物价指数年率",
+      "group": "日本",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 14055,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_JPAN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00158099\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "44dd17ac55c02286d0658303552ef1ca93df06ec24dcc2f7d9dff5ce85e7459a",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_japan.py#L94"
+    },
+    {
+      "api": "macro_japan_unemployment_rate",
+      "name": "日本-失业率",
+      "group": "日本",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 13688,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_JPAN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00005047\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "833414ce8c9ae8dce9ee7d2e173a039ba8e8ecd9b38ba0aed17e4e5d4df4c539",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_japan.py#L106"
+    },
+    {
+      "api": "macro_japan_head_indicator",
+      "name": "日本-领先指标终值",
+      "group": "日本",
+      "latest_actual": "2026-08-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15592,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_JPAN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00005117\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "c098669f01da7083fbf4a9673ce0b8b36ac030b78295b3ef35d416dd01c8dbf6",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_japan.py#L118"
+    },
+    {
+      "api": "macro_swiss_svme",
+      "name": "瑞士-SVME采购经理人指数",
+      "group": "瑞士",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 14315,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CH",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00341602\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "86cf5fa41909a11d593fe9894fe991e70e8a39b06244bea44827281c17d15635",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_swiss.py#L70"
+    },
+    {
+      "api": "macro_swiss_trade",
+      "name": "瑞士-贸易帐",
+      "group": "瑞士",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 13281,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CH",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00341603\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "1b6e027e3c4d102a5c00ab7b9c3fd654cf2ac02af0e0081615b0bbb6b7d01c1f",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_swiss.py#L82"
+    },
+    {
+      "api": "macro_swiss_gdp_quarterly",
+      "name": "瑞士-GDP季率",
+      "group": "瑞士",
+      "latest_actual": "2026-06-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "quarterly",
+      "response_bytes": 13040,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CH",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00341600\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "4b4c59d860adaa23ba64d7e88a5e41d1a7c026451433a806a50e2b82c1988249",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_swiss.py#L106"
+    },
+    {
+      "api": "macro_swiss_gbd_yearly",
+      "name": "瑞士-GDP 年率",
+      "group": "瑞士",
+      "latest_actual": "2026-06-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "quarterly",
+      "response_bytes": 13178,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CH",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00341601\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "431e9e4206a902b629f11070d063fafc4cb480ca316afa92da8232b81c91e5c5",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_swiss.py#L118"
+    },
+    {
+      "api": "macro_swiss_gbd_bank_rate",
+      "name": "瑞士-央行公布利率决议",
+      "group": "瑞士",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "event; older records require manual confirmation",
+      "response_bytes": 13582,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_CH",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00341606\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "0ee4d5c5616cb83c1369e749ac33f2408d318d8404ed3d31f1e6e3c488e7dc64",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_swiss.py#L130"
+    },
+    {
+      "api": "macro_uk_halifax_monthly",
+      "name": "英国-Halifax 房价指数月率",
+      "group": "英国",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15166,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00342256\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "80489ab438564e9074441b62901f3a037c5582f46b4c9679c7ca3ef19f152b12",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L70"
+    },
+    {
+      "api": "macro_uk_halifax_yearly",
+      "name": "英国-Halifax 房价指数年率",
+      "group": "英国",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15140,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00010370\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "3dbc9fc0273c2d0ee334daf525de473377bd7d8bf762742cd54780880e80cd9f",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L82"
+    },
+    {
+      "api": "macro_uk_trade",
+      "name": "英国-贸易帐",
+      "group": "英国",
+      "latest_actual": "2026-08-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 14484,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00158309\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "06eeb1896147dc33ae962d646db6a6ce0aff7ec45cbc910a56d7d25cac2aad8b",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L94"
+    },
+    {
+      "api": "macro_uk_bank_rate",
+      "name": "英国-央行公布利率决议",
+      "group": "英国",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "event; older records require manual confirmation",
+      "response_bytes": 13415,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00342253\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "e62bfc35aa2ced3ab181c4326965acfe31473c0006bb38b465b138194b5acf8f",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L106"
+    },
+    {
+      "api": "macro_uk_core_cpi_yearly",
+      "name": "英国-核心消费者物价指数年率",
+      "group": "英国",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 13684,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00010279\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "4011693be49dcb2ffbfc21461c7a60da1e3e8c1672561fa4e0a49723a3932f9b",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L118"
+    },
+    {
+      "api": "macro_uk_core_cpi_monthly",
+      "name": "英国-核心消费者物价指数月率",
+      "group": "英国",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 13694,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00010291\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "beb75f0e0e1cc61621b5dde4f755ba95b69add3efc4e1e3141afab9449638da0",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L130"
+    },
+    {
+      "api": "macro_uk_cpi_yearly",
+      "name": "英国-消费者物价指数年率",
+      "group": "英国",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 13308,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00010267\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "d23059e08eb1033fe8138418b1ccf6cb5403c1135863d3e9a89bf1c284fbc0ee",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L142"
+    },
+    {
+      "api": "macro_uk_cpi_monthly",
+      "name": "英国-消费者物价指数月率",
+      "group": "英国",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 13694,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00010291\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "beb75f0e0e1cc61621b5dde4f755ba95b69add3efc4e1e3141afab9449638da0",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L154"
+    },
+    {
+      "api": "macro_uk_retail_monthly",
+      "name": "英国-零售销售月率",
+      "group": "英国",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 16013,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00158298\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "20eb88e2cf048c97a3a83a3aec666f91431f607cac10150b7d58fc78d1b8a1d8",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L166"
+    },
+    {
+      "api": "macro_uk_retail_yearly",
+      "name": "英国-零售销售年率",
+      "group": "英国",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 15990,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00158297\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "b6e8f05fc2bda48e7481018d5f731ec47dcd8703ce7c6d32e69122006c2d7943",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L178"
+    },
+    {
+      "api": "macro_uk_rightmove_yearly",
+      "name": "英国-Rightmove 房价指数年率",
+      "group": "英国",
+      "latest_actual": "2026-10-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 14428,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00341608\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "a74c904b1ab766a8efbeb2c816a0a1570943b01cc9be0ca489f26d9a8c031dfe",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L190"
+    },
+    {
+      "api": "macro_uk_rightmove_monthly",
+      "name": "英国-Rightmove 房价指数月率",
+      "group": "英国",
+      "latest_actual": "2026-10-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 14421,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00341607\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "455c2c8c078d9131c38080f896f2b405f126885aca3c4fdfde453c80516395d0",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L202"
+    },
+    {
+      "api": "macro_uk_gdp_quarterly",
+      "name": "英国-GDP 季率初值",
+      "group": "英国",
+      "latest_actual": "2026-06-01",
+      "maximum_age_days": 190,
+      "frequency_rule": "quarterly",
+      "response_bytes": 14449,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00158277\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "62e9481da168d3106e10f480a3055bdea3b194e71180c97ac08dcd94ffa1ebea",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L214"
+    },
+    {
+      "api": "macro_uk_unemployment_rate",
+      "name": "英国-失业率",
+      "group": "英国",
+      "latest_actual": "2026-08-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 14676,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_BRITAIN",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00010348\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "7e4999805b6454f906e6bb02ac89a1077f1fbbfcaabaabf06125cca19126d5ae",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_uk.py#L238"
+    },
+    {
+      "api": "macro_usa_phs",
+      "name": "美国-未决房屋销售月率",
+      "group": "美国及相关机构",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 14284,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_USA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00342249\")",
+          "pageNumber": "1",
+          "pageSize": "60",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB",
+          "p": "1",
+          "pageNo": "1",
+          "pageNum": "1"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "2f1fbe374b7d8116fa74fe1bf77c3d35405c93fcd39eff0a8b5a11bb35b4c9b3",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_usa.py#L81"
+    },
+    {
+      "api": "macro_usa_cpi_yoy",
+      "name": "美国-CPI年率",
+      "group": "美国及相关机构",
+      "latest_actual": "2026-09-01",
+      "maximum_age_days": 95,
+      "frequency_rule": "monthly",
+      "response_bytes": 53130,
+      "request": {
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "params": {
+          "reportName": "RPT_ECONOMICVALUE_USA",
+          "columns": "ALL",
+          "filter": "(INDICATOR_ID=\"EMG00000733\")",
+          "sortColumns": "REPORT_DATE",
+          "sortTypes": "-1",
+          "source": "WEB",
+          "client": "WEB"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "835ef9c41b90130e9b9aa30dbb57b270b5f623551a5640005a26e41c07511752",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_usa.py#L131"
+    },
+    {
+      "api": "macro_usa_crude_inner",
+      "name": "美国原油产量报告",
+      "group": "美国及相关机构",
+      "latest_actual": "2026-10-23",
+      "maximum_age_days": 35,
+      "frequency_rule": "weekly",
+      "response_bytes": 317476,
+      "request": {
+        "url": "https://cdn.jin10.com/data_center/reports/usa_oil.json",
+        "params": {
+          "_": 1793338262.583676
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "1fa47f07abd12b84492f32cae94158f13aaab599486c6cb9100657667ca76f51",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_usa.py#L963"
+    },
+    {
+      "api": "macro_usa_cftc_nc_holding",
+      "name": "美国商品期货交易委员会CFTC外汇类非商业持仓报告",
+      "group": "美国及相关机构",
+      "latest_actual": "2026-10-20",
+      "maximum_age_days": 35,
+      "frequency_rule": "weekly",
+      "response_bytes": 395900,
+      "request": {
+        "url": "https://cdn.jin10.com/data_center/reports/cftc_4.json",
+        "params": {
+          "_": "1793338262584"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "ab2c4284e374080d6bb66f1faaf2ced282fb2149d008ef395168d7f0c72f60a5",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_usa.py#L999"
+    },
+    {
+      "api": "macro_usa_cftc_c_holding",
+      "name": "美国商品期货交易委员会CFTC商品类非商业持仓报告",
+      "group": "美国及相关机构",
+      "latest_actual": "2026-10-20",
+      "maximum_age_days": 35,
+      "frequency_rule": "weekly",
+      "response_bytes": 660007,
+      "request": {
+        "url": "https://cdn.jin10.com/data_center/reports/cftc_2.json",
+        "params": {
+          "_": "1793338262584"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "8245f5d52a6b86f37230a734ad85f7a681ffc9cdf4818d07b467dfb5115a1eab",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_usa.py#L1030"
+    },
+    {
+      "api": "macro_usa_cftc_merchant_currency_holding",
+      "name": "美国商品期货交易委员会CFTC外汇类商业持仓报告",
+      "group": "美国及相关机构",
+      "latest_actual": "2026-10-20",
+      "maximum_age_days": 35,
+      "frequency_rule": "weekly",
+      "response_bytes": 402243,
+      "request": {
+        "url": "https://cdn.jin10.com/data_center/reports/cftc_3.json",
+        "params": {
+          "_": "1793338262584"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "d01746b87d26f2ff5e4e70a6510476558c3729391ddd426475e3acde800f9bc9",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_usa.py#L1061"
+    },
+    {
+      "api": "macro_usa_cftc_merchant_goods_holding",
+      "name": "美国商品期货交易委员会CFTC商品类商业持仓报告",
+      "group": "美国及相关机构",
+      "latest_actual": "2026-10-20",
+      "maximum_age_days": 35,
+      "frequency_rule": "weekly",
+      "response_bytes": 689114,
+      "request": {
+        "url": "https://cdn.jin10.com/data_center/reports/cftc_1.json",
+        "params": {
+          "_": "1793338262584"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "214a9180eaa9247c42df40478b6c696e7c2e984734c1c15f51c39dcf9fb29abe",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_usa.py#L1092"
+    },
+    {
+      "api": "macro_usa_cme_merchant_goods_holding",
+      "name": "CME-贵金属",
+      "group": "美国及相关机构",
+      "latest_actual": "2026-10-29",
+      "maximum_age_days": 14,
+      "frequency_rule": "daily",
+      "response_bytes": 1432139,
+      "request": {
+        "url": "https://cdn.jin10.com/data_center/reports/cme_3.json",
+        "params": {
+          "_": "1793338262584"
+        },
+        "body": null,
+        "method": "GET",
+        "headers": {}
+      },
+      "sha256": "a6383515ef2ad226ed7437168b41bee61f541e21ffb136b9f2b77b48f7df8e5d",
+      "source": "https://github.com/akfamily/akshare/blob/62a56b2159add40f41b2c19129be3ac2af297d09/akshare/macro/macro_usa.py#L1123"
+    }
+  ]
+}

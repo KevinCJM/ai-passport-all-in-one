@@ -10,6 +10,7 @@
 #include "typhoon.hpp"
 #include "alarm.hpp"
 #include "calc.hpp"
+#include "macro.hpp"
 #include "word_study.hpp"
 #include "lunar.hpp"
 #include "freertos/FreeRTOS.h"
@@ -140,6 +141,7 @@ struct Model {
         WeatherForecast forecast;
         // chart: 0-999 between chartLow and chartHigh; minute prices, or four (open, close, high, low) per day.
         struct{std::array<StockRow,12> rows;std::array<int16_t,200> chart;} stocks;
+        MacroView macro;
         TyphoonView typhoon;
         // title and desc: item detailFor in full (255: none yet).
         struct{std::array<HotRow,kHotRows> rows;char title[72],desc[240];uint8_t detailFor;} hot;
@@ -175,6 +177,7 @@ struct Model {
     // stockArmed: a long Down asked to delete the picked one (LiveServices has the device do it).
     uint8_t stockCount{},stockIndex{},chartFor{255},chartCount{};bool stockDetail{},stockDays{},chartDays{},stockArmed{};uint16_t chartTotal{};
     float chartLow{},chartHigh{};char chartFrom[8]{},chartMid[16]{},chartTo[12]{};uint32_t stockUpdated{};
+    uint8_t macroIndex{},macroGroup{};bool macroDetail{},macroLong{};
     // 天气预报: page.forecast from the native fetch; Up/Down step through the seven days, the next 24 hours and air.
     uint8_t forecastView{},forecastWarn{};  // forecastWarn: the 预警 tab shows warning n-1's text, 0 the list
     // 汇率: units of each currency per one unit of the base, as fetched; rateUpdated is the source's epoch.
@@ -411,6 +414,8 @@ bool uiPrepare(App);
 unsigned uiTextLines(const char* text,int width=224);  // lines the page's paragraph needs for text, at 16 px across width px
 unsigned uiWrappedLines(const char* text);  // the same, English wrapped between words (中英翻译)
 void uiRender(const Runtime& runtime);
+// Animation tick without a model change; Macro's footer can scroll without redrawing its body.
+void uiAnimate(const Runtime& runtime);
 bool uiAnimating(const Runtime& runtime);
 void uiCapture(const char* name);
 void uiCheck();

@@ -32,6 +32,9 @@ double number(const cJSON* object,const char* name,double fallback=-1) {
 void stockOperation(const Model& m,char (&out)[16]) {
     if(m.stockDetail)snprintf(out,sizeof(out),"chart:%u:%u",m.stockIndex,unsigned(m.stockDays));else snprintf(out,sizeof(out),"list");
 }
+void macroOperation(const Model& m,char (&out)[16]) {
+    if(m.macroDetail)snprintf(out,sizeof(out),"chart:%u:%u",m.macroGroup,m.macroIndex);else snprintf(out,sizeof(out),"list:%u",m.macroGroup);
+}
 template<size_t N> void copy(char (&to)[N],const char* from) {
     size_t count=std::min(strlen(from),N-1);
     // Truncate at a UTF-8 boundary, never halfway through a Chinese character.
@@ -112,6 +115,7 @@ bool LiveServices::snapshotJson(char* output,size_t size){
      if(a==App::Memo)snprintf(values,sizeof(values),",\"memo\":[%u,%u,%u,%u,%u,%u,%u]",m.memoCount,m.memoIndex,unsigned(m.memoDetail),m.memoScroll,unsigned(m.memoArmed),m.listening()?1u:m.voiceBusy()?2u:0u,unsigned(m.memoMounted));
      if(a==App::Noise)snprintf(values,sizeof(values),",\"noise\":[%u,%u,%u]",m.noiseKind,unsigned(m.noisePlaying),m.noiseTimer);
      if(a==App::Stock)snprintf(values,sizeof(values),",\"stock\":[%u,%u,%u,%u,%u,%u,%u]",m.stockCount,m.stockIndex,unsigned(m.stockDetail),unsigned(m.stockDays),m.chartFor,m.chartCount,unsigned(m.stockArmed));
+     if(a==App::Macro)snprintf(values,sizeof(values),",\"macro\":[%u,%u,%u,%u,%u,%u,%u,%u,%u]",m.page.macro.count,m.macroIndex,unsigned(m.macroDetail),unsigned(m.macroLong),m.page.macro.chartFor,m.page.macro.points,0u,m.macroGroup,0u);
      // rates shown, the one picked, delete asked; 倒数日's own events, the one on show, delete asked.
      if(a==App::Rate)snprintf(values,sizeof(values),",\"rate\":[%u,%u,%u]",m.rateCount,m.rateIndex,unsigned(m.rateArmed));
      if(a==App::Countdown){unsigned own=0;for(auto& e:m.countdown.events)own+=*e.name!=0;snprintf(values,sizeof(values),",\"countdown\":[%u,%u,%u]",own,m.countdownIndex,unsigned(m.countdownArmed));}
@@ -194,6 +198,8 @@ void LiveServices::request(const char* operation) {
     // A delete ("del:<row>") fetches the list too.
     if(runtime_.active()==App::Stock){if(!strcmp(operation,"refresh")||!strcmp(operation,"enter")){stockOperation(runtime_.model,stock);operation=stock;}
         if(!strncmp(operation,"del:",4))stockOperation(runtime_.model,stockAsked_);else copy(stockAsked_,operation);}
+    if(runtime_.active()==App::Macro){if(!strcmp(operation,"refresh")||!strcmp(operation,"enter")){macroOperation(runtime_.model,stock);operation=stock;}
+        copy(macroAsked_,operation);}
     // 离座锁屏 sends its settings with every request: "cfg:DLKW", and "cal:"/"lock:" for calibrate and lock now.
     if(runtime_.active()==App::Guard){const auto& g=runtime_.model.guard;const char* verb=!strcmp(operation,"cal")||!strcmp(operation,"lock")?operation:"cfg";
         const char digits[]{char('0'+g.distance%10),char('0'+g.delay%10),char('0'+g.keep%10),char('0'+g.wake%10),0};
@@ -300,7 +306,7 @@ void LiveServices::action(Key key) {
 #endif
         copy(m.lastNotice,m.cityRow?"正在按 IP 查询…":"正在连接小智…");request(m.cityRow?"locate":"speak");return;
     }
-    if(key==Key::Confirm&&runtime_.model.livePhase==LivePhase::Error) { request("enter");runtime_.model.livePhase=LivePhase::Loading;loadingAt_=requestedAt_=esp_timer_get_time()/1000000;return; }
+    if(key==Key::Confirm&&runtime_.model.livePhase==LivePhase::Error&&active!=App::Macro) { request("enter");runtime_.model.livePhase=LivePhase::Loading;loadingAt_=requestedAt_=esp_timer_get_time()/1000000;return; }
     if(key==Key::Confirm&&active==App::Daily) { request("say"); return; }
     // Confirm on the list opens the player (tick asks for the program); in the player it plays or pauses.
     if(key==Key::Confirm&&active==App::Podcast) { if(runtime_.model.podcastPlayer&&podcastAsked_>=0)request("toggle"); return; }
@@ -323,6 +329,7 @@ void LiveServices::say() {
 }
 void LiveServices::speak() {
     auto& m=runtime_.model;const auto active=runtime_.active();
+    if(active==App::Macro){if(m.macroDetail)request("refresh");return;}
     if(active==App::Wheel||active==App::Countdown){
         if(m.livePhase==LivePhase::Error){if(!nativeIdle())return;m.livePhase=LivePhase::Ready;copy(m.liveState,"本地功能");}
         if(m.livePhase==LivePhase::Ready&&!m.voiceBusy()&&!m.wheelSpinning()){m.wheelArmed=m.countdownArmed=false;copy(m.lastNotice,active==App::Countdown?"正在连接小智…":"");request("toggle");}
@@ -377,7 +384,7 @@ bool LiveServices::tick(uint64_t now) {
         audioReady=audio_.start(active,runtime_.generation());
 #endif
         copy(model.liveValue,"--"); copy(model.liveState,"连接中"); for(auto& line:model.liveLines) line[0]=0;
-        model.mediaCount=0;model.mediaPlaying=false;model.podcastCount=0;newsAsked_=0;newsItemAsked_=-1;dailyAsked_=wordAsked_=podcastAsked_=-1;quizAsked_=false;stockAsked_[0]=0;warnAsked_=0;typhoonAsked_=hotAsked_=-1;
+        model.mediaCount=0;model.mediaPlaying=false;model.podcastCount=0;newsAsked_=0;newsItemAsked_=-1;dailyAsked_=wordAsked_=podcastAsked_=-1;quizAsked_=false;stockAsked_[0]=macroAsked_[0]=0;warnAsked_=0;typhoonAsked_=hotAsked_=-1;
 #ifdef PASSPORT_DEVICE
         if(active==App::Settings)native_->cityName(model.cityName,sizeof(model.cityName));
 #endif
@@ -536,6 +543,23 @@ bool LiveServices::tick(uint64_t now) {
                     copy(w.type,text(item,2));copy(w.where,text(item,3));copy(w.time,text(item,4));}
                 const auto* detail=field(o,"detail");f.detailFor=cJSON_IsArray(detail)?value(detail,0,0,255):0xff;copy(f.detail,text(detail,1));
             }
+            if(message.native&&active==App::Macro&&cJSON_IsObject(field(json,"macro"))){
+                const auto* o=field(json,"macro");auto& view=model.page.macro;view=MacroView{};view.group=std::clamp(number(o,"g",1),0.0,2.0);
+                view.updated=std::clamp(number(o,"at",0),0.0,double(UINT32_MAX));const cJSON* row;
+                const auto value=[](const cJSON* v){return cJSON_IsNumber(v)&&std::isfinite(v->valuedouble)&&std::fabs(v->valuedouble)<1e12?float(v->valuedouble):NAN;};
+                cJSON_ArrayForEach(row,field(o,"r")){
+                    if(view.count==view.rows.size())break;
+                    const auto* id=cJSON_GetArrayItem(row,0);
+                    if(!cJSON_IsNumber(id)||id->valuedouble<0||id->valuedouble>=std::size(kMacroSeries)||std::trunc(id->valuedouble)!=id->valuedouble)continue;
+                    auto& r=view.rows[view.count++];r.series=id->valuedouble;r.value=value(cJSON_GetArrayItem(row,1));r.previous=value(cJSON_GetArrayItem(row,2));
+                    const auto* date=cJSON_GetArrayItem(row,3);if(cJSON_IsNumber(date)&&date->valuedouble>=19000101&&date->valuedouble<=22001231&&std::trunc(date->valuedouble)==date->valuedouble&&std::isfinite(r.value))r.date=date->valuedouble;
+                }
+                if(model.macroIndex>=view.count)model.macroIndex=0;
+                const auto* c=field(o,"c");view.chartFor=std::clamp(number(c,"i",255),0.0,255.0);view.low=value(field(c,"lo"));view.high=value(field(c,"hi"));
+                view.from=std::clamp(number(c,"from",0),0.0,22001231.0);view.zoomFrom=std::clamp(number(c,"zoom",0),0.0,22001231.0);view.to=std::clamp(number(c,"to",0),0.0,22001231.0);
+                const cJSON* point;cJSON_ArrayForEach(point,field(c,"p")){if(view.points==view.chart.size())break;if(cJSON_IsNumber(point)&&std::isfinite(point->valuedouble)&&point->valuedouble>=0&&point->valuedouble<=999)view.chart[view.points++]=point->valuedouble;}
+                if(!view.valid())view.points=0;
+            }
             if(active==App::Stock&&cJSON_IsObject(field(json,"stock"))){
                 // Rows: [name, code, market tag, decimals, price, change, change %, open, high, low, previous close,
                 // turnover], null when not traded. With "i" only that row came, with its chart in "c".
@@ -641,7 +665,7 @@ bool LiveServices::tick(uint64_t now) {
         cJSON_Delete(json); mbedtls_platform_zeroize(&message,sizeof(message)); renderLocal(now);
         printf("SERVICE_APPLIED received=%lu stale=%lu\n",static_cast<unsigned long>(received_),static_cast<unsigned long>(stale_));
     }
-    const uint64_t interval=active==App::Monitor ? 2 : active==App::Codex ? 10 : active==App::Guard ? 30 : active==App::News ? (model.newsPage==1?120:0) : active==App::Rate||active==App::Forecast ? 1800 : active==App::Stock ? 20 : active==App::Quake ? 300 : active==App::Hacker ? 900 : active==App::Typhoon ? 1800 : active==App::Hot ? 600 : (active==App::Home) ?
+    const uint64_t interval=active==App::Monitor ? 2 : active==App::Codex ? 10 : active==App::Guard ? 30 : active==App::News ? (model.newsPage==1?120:0) : active==App::Rate||active==App::Forecast||active==App::Macro ? 1800 : active==App::Stock ? 20 : active==App::Quake ? 300 : active==App::Hacker ? 900 : active==App::Typhoon ? 1800 : active==App::Hot ? 600 : (active==App::Home) ?
 #ifdef PASSPORT_DEVICE
         weatherRefreshSeconds(model.weatherReading.known)
 #else
@@ -696,6 +720,7 @@ bool LiveServices::tick(uint64_t now) {
         }
     }
     if(active==App::Stock&&!pending_&&!voiceJob_){char want[16];stockOperation(model,want);if(strcmp(want,stockAsked_)){request(want);dirty=true;}}
+    if(active==App::Macro&&!voiceJob_&&!model.voiceBusy()){char want[16];macroOperation(model,want);if(strcmp(want,macroAsked_)){request(want);dirty=true;}}
     if(active==App::Quiz&&model.quizWant&&!quizAsked_&&!pending_){quizAsked_=true;request("next");dirty=true;}
     // 台风: the picked typhoon's track; 热榜: the picked item in full (the device holds the board, so no download).
     if(active==App::Typhoon&&!pending_&&model.page.typhoon.count&&model.typhoonIndex!=typhoonAsked_){request("refresh");dirty=true;}

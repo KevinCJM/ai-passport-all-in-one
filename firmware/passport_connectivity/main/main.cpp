@@ -705,6 +705,12 @@ int execute(const char* name) {
     // 随机转盘, 倒数日, 汇率 and 自选股: a long Up speaks a mode or options, an event, a currency, a security; a long Down
     // (twice) deletes the one on show, below (自选股's through the device's task).
     if ((previous==App::Wheel||previous==App::Countdown||previous==App::Rate||previous==App::Stock)&&!strcmp(name,"ap_on")) {runtime.wake(now);live.speak();return 0;}
+    if(previous==App::Macro&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))){
+        runtime.wake(now);
+        if(runtime.model.macroDetail){if(!strcmp(name,"ap_on"))live.refresh();}
+        else runtime.longKey(!strcmp(name,"ap_on"),now);
+        return 0;
+    }
     if (previous==App::Stock&&!strcmp(name,"settings")) {runtime.wake(now);live.dropStock();return 0;}
     // 离座锁屏: a long Up calibrates the at-desk signal, a long Down locks the computer now.
     if (previous==App::Guard&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {runtime.wake(now);live.guardCommand(!strcmp(name,"ap_on"));return 0;}
@@ -1190,10 +1196,12 @@ extern "C" void app_main() {
         }
         const auto wallMicros=esp_timer_get_time();
         // Frames land on 125 ms boundaries so each warning-light step lasts the same time.
-        if(uiAnimating(runtime) && wallMicros/125000!=lastEmotion/125000) { dirty=true; lastEmotion=wallMicros; }
-        if (dirty) {
+        const bool animate=uiAnimating(runtime)&&wallMicros/125000!=lastEmotion/125000;
+        if(animate)lastEmotion=wallMicros;
+        if (dirty||animate) {
             const auto started=esp_timer_get_time();const auto pixels=uiFlushPixels(),spi=uiFlushMicros();
-            uiRender(runtime);renderPixelsLast=uiFlushPixels()-pixels;renderSpiUsLast=uiFlushMicros()-spi; uiCapture("live"); dirty=false; printState();
+            if(dirty)uiRender(runtime);else uiAnimate(runtime);
+            renderPixelsLast=uiFlushPixels()-pixels;renderSpiUsLast=uiFlushMicros()-spi; uiCapture("live"); dirty=false; printState();
             const auto spent=static_cast<unsigned>(esp_timer_get_time()-started);
             #ifdef PASSPORT_DEVICE
             if(freshPage){freshPage=false;pageRenderUs=spent;pageSpiUs=renderSpiUsLast.load();}

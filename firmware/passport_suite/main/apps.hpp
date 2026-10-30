@@ -2,19 +2,19 @@
 #include <array>
 #include <cstdint>
 namespace passport {
-enum class App : uint8_t { Home, Chat, Dictation, Codex, Focus, Monitor, Menu=7, RetiredOtp, Radio, Settings, Words, Slides, Alert, Status, Calendar, Countdown, Torch, Qr, News, Sonar, Rate, Stopwatch, History, Daily, Quake, Quiz, Hacker, Wifi, Sound, Motion, Podcast, Forecast, Noise, Alarm, Stock, Typhoon, Hot, Memo, Wheel, Translate, Guard, Todo, Ledger, Calc, Voice, Walkie, Count };
+enum class App : uint8_t { Home, Chat, Dictation, Codex, Focus, Monitor, Menu=7, RetiredOtp, Radio, Settings, Words, Slides, Alert, Status, Calendar, Countdown, Torch, Qr, News, Sonar, Rate, Stopwatch, History, Daily, Quake, Quiz, Hacker, Wifi, Sound, Motion, Podcast, Forecast, Noise, Alarm, Stock, Typhoon, Hot, Memo, Wheel, Translate, Guard, Todo, Ledger, Calc, Voice, Walkie, Macro, Count };
 enum class SettingsPage : uint8_t { List, Wifi, Bluetooth, Brightness, Volume, Idle, Wake, City };
 inline constexpr uint8_t kSettingsRows = 7;
 // Menu order: themed pages of up to nine (3 x 3), each row of three alike; kMenuPages names them and kMenuStarts
 // holds each page's first entry. The voice pages come first, 系统设置 ends the last page.
-inline constexpr std::array<App,42> kFunctions{
+inline constexpr std::array<App,43> kFunctions{
     App::Chat,App::Memo,App::Dictation, App::Translate,App::Ledger,App::Calc, App::Todo,App::Alarm,App::Focus,
     App::Codex,App::Monitor,App::Guard, App::Slides,App::Status,App::Qr, App::Stopwatch,App::Countdown,App::Calendar,
-    App::Forecast,App::Typhoon,App::Quake, App::News,App::Stock,App::Rate, App::Hot,App::Hacker,App::History,
-    App::Words,App::Daily,App::Quiz, App::Radio,App::Podcast,App::Noise, App::Sound,
+    App::Forecast,App::Typhoon,App::Quake, App::Stock,App::Macro,App::Rate, App::News,App::Hot,App::Hacker,
+    App::Words,App::Daily,App::Quiz, App::Radio,App::Podcast,App::Noise, App::Sound,App::History,
     App::Torch,App::Alert,App::Wheel, App::Motion,App::Wifi,App::Sonar, App::Walkie,App::Settings};
 inline constexpr const char* kMenuPages[]{"小智 · 语音","电脑 · 时间","天气 · 财经 · 资讯","学习 · 影音","工具 · 设置"};
-inline constexpr uint8_t kMenuStarts[]{0,9,18,27,34,kFunctions.size()};  // the last marks the end
+inline constexpr uint8_t kMenuStarts[]{0,9,18,27,35,kFunctions.size()};  // the last marks the end
 static_assert(std::size(kMenuStarts)==std::size(kMenuPages)+1);
 inline constexpr unsigned menuPageOf(unsigned index){unsigned p=0;while(index>=kMenuStarts[p+1])++p;return p;}
 // 百度热搜: the items kept, and the tag of the pinned one (Baidu's own tags: 1 新, 3 热).
@@ -69,7 +69,7 @@ constexpr bool keepsListening(App app){return app==App::Memo||app==App::Translat
 // 语音指令 (App::Voice, not in the menu): 你好小智 opens it; one phrase, heard through 语音笔记's own XiaoZhi identity so
 // nothing reaches 小智语音's history or memory, opens a badge page or a Mac program.
 constexpr bool needsComputer(App app){return app==App::Dictation||app==App::Codex||app==App::Monitor||app==App::Guard;}
-constexpr bool needsInternet(App app){return app==App::Home||app==App::Chat||app==App::Radio||app==App::Words||app==App::News||app==App::Rate||app==App::History||app==App::Daily||app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Podcast||app==App::Forecast||app==App::Stock||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Translate||app==App::Voice;}
+constexpr bool needsInternet(App app){return app==App::Home||app==App::Chat||app==App::Radio||app==App::Words||app==App::News||app==App::Rate||app==App::History||app==App::Daily||app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Podcast||app==App::Forecast||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Translate||app==App::Voice;}
 // 汇率: currencies offered on the phone setup page and by voice (ISO code, Chinese name).
 struct Currency { const char* code; const char* name; };
 inline constexpr Currency kCurrencies[]{{"CNY","人民币"},{"USD","美元"},{"EUR","欧元"},{"JPY","日元"},{"HKD","港币"},{"GBP","英镑"},{"KRW","韩元"},

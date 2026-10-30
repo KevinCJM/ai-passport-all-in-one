@@ -45,7 +45,7 @@ constexpr Profile kProfiles[] = {
     {"quake", "地震速报", 0, false, false},
     {"quiz", "知识问答", 0, false, false},
     {"hacker", "Hacker News", 0, false, false, "HN头条"},
-    {"wifi", "WiFi 工具箱", 0, false, false, "WiFi"},
+    {"wifi", "WiFi探测", 0, false, false},
     {"sound", "声音", 0, true, false},
     {"motion", "移动监控", 0, false, false},
     {"podcast", "播客", 0, true, false},
@@ -64,6 +64,7 @@ constexpr Profile kProfiles[] = {
     {"calc", "语音计算器", 0, false, false, "计算器"},
     {"voice", "语音指令", 0, true, false},
     {"walkie", "对讲机", 0, true, false},
+    {"macro", "宏观雷达", 0, false, false},
 };
 static_assert(std::size(kProfiles) == static_cast<unsigned>(App::Count));
 }
@@ -334,6 +335,10 @@ bool Runtime::longKey(bool up, uint64_t now) {
         if (m.walkieTalk) { strcpy(m.lastNotice, "说话时不能换频道"); return true; }
         m.walkieChannel = static_cast<uint8_t>((m.walkieChannel + (up ? 7 : 0)) % 9 + 1);
         if (!SettingsStore::saveByte("walkie_ch", m.walkieChannel)) strcpy(m.lastNotice, "保存失败");
+        return true;
+    }
+    if (active_ == App::Macro) {
+        if(!m.macroDetail){m.macroGroup=(m.macroGroup+(up?2:1))%3;m.macroIndex=0;m.macroLong=false;m.lastNotice[0]=0;m.page.macro=MacroView{};m.page.macro.group=m.macroGroup;}
         return true;
     }
     if (active_ == App::Wifi) { m.wifiTab = (m.wifiTab + (up ? 3 : 1)) % 4; m.wifiIndex = 0; return true; }
@@ -839,6 +844,7 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
     if (target == App::Rate) { model.rateIndex = 0; model.rateArmed = false; model.listenAt = 0; }
     if (target == App::Noise) { model.noisePlaying = false; model.noiseUntil = 0; model.noiseRow = model.noiseKind; }
     if (target == App::Stock) { auto& m = model; m.stockCount = m.stockIndex = m.chartCount = 0; m.chartFor = 255; m.stockDetail = m.stockDays = m.stockArmed = false; m.listenAt = 0; }
+    if (target == App::Macro) { auto& m=model; m.page.macro=MacroView{};m.macroIndex=m.macroGroup=0;m.macroDetail=m.macroLong=false;m.listenAt=0; }
     if (target == App::Forecast) { model.page.forecast.days = model.page.forecast.hours = model.page.forecast.airHours = model.page.forecast.warnings = 0; model.page.forecast.detailFor = 0xff; model.forecastView = model.forecastWarn = 0; }
     if (target == App::History) model.eventCount = model.eventIndex = 0;
     if (target == App::Daily) { model.page.daily.en[0] = model.page.daily.cn[0] = 0; model.dailyBack = model.dailyWant = 0; }
@@ -874,6 +880,7 @@ void Runtime::key(Key key, uint64_t now) {
         if (active_ == App::Podcast && model.podcastPlayer) { model.podcastPlayer = false; return; }
         // So does a stock's detail; a ringing alarm stops first.
         if (active_ == App::Stock && model.stockDetail) { model.stockDetail = false; return; }
+        if (active_ == App::Macro && model.macroDetail) { model.macroDetail = false; return; }
         if (active_ == App::Hot && model.hotDetail) { model.hotDetail = false; return; }
         if (active_ == App::Memo && model.memoDetail && !model.voiceBusy()) { model.memoDetail = model.memoArmed = false; return; }
         if (active_ == App::Alarm && model.alarmRinging) { model.alarmRinging = false; return; }
@@ -1129,6 +1136,11 @@ void Runtime::key(Key key, uint64_t now) {
         if (m.stockCount && (key == Key::Up || key == Key::Down)) m.stockIndex = (m.stockIndex + (key == Key::Up ? m.stockCount - 1 : 1)) % m.stockCount;
         if (key == Key::Confirm && m.stockDetail) m.stockDays = !m.stockDays;
         else if (key == Key::Confirm && m.stockCount) m.stockDetail = true;
+    } else if (active_ == App::Macro) {
+        auto& m=model;const unsigned count=m.page.macro.count;
+        m.lastNotice[0]=0;
+        if(count&&(key==Key::Up||key==Key::Down))m.macroIndex=(m.macroIndex+(key==Key::Up?count-1:1))%count;
+        if(key==Key::Confirm&&count){if(m.macroDetail)m.macroLong=!m.macroLong;else m.macroDetail=true;}
     } else if (active_ == App::Typhoon) {
         // Up/Down pick a typhoon (LiveServices fetches its track); Confirm refreshes (LiveServices).
         auto& t = model.page.typhoon;

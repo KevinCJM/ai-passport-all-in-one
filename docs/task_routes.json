@@ -124,6 +124,42 @@
         "subtree_only",
         "routing_memory_coverage_check"
       ]
+    },
+    {
+      "id": "R03",
+      "task_type": "macro_radar_firmware",
+      "match_keywords": [
+        "宏观",
+        "宏观雷达",
+        "macro_radar",
+        "macro.hpp",
+        "macro_services",
+        "FRED",
+        "MacroCsv",
+        "MacroView"
+      ],
+      "negative_keywords": [],
+      "route_priority": 80,
+      "first_read_modules": [
+        "macro_radar"
+      ],
+      "expand_to_modules": [],
+      "pitfall_ids": [
+        "P03"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_reference_map_first"
+      ],
+      "scope_flags": [
+        "subtree_only",
+        "host_and_build_evidence_only"
+      ]
     }
   ]
 }

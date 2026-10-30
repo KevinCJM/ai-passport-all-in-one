@@ -99,10 +99,10 @@ constexpr int kCells = 9;  // menu: a 3 x 3 page of icons
 constexpr unsigned kDrawRows = 20;
 struct Badge { const char* symbol; uint32_t color; };
 // Pages that draw their own title and body (no hero card, heading or notice line).
-constexpr bool ownPage(App app){return app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Voice||app==App::Walkie;}
+constexpr bool ownPage(App app){return app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Voice||app==App::Walkie;}
 // Once these pages show content, a refresh or the next item loads behind it instead of under the loading screen.
 bool keepsContent(App app,const Model& m){
-    return (app==App::Podcast&&m.podcastCount)||(app==App::Daily&&*m.page.daily.en)||(app==App::Quiz&&m.quizCount)||(app==App::Quake&&m.quakeCount)||(app==App::Hacker&&m.storyCount)||(app==App::Forecast&&m.page.forecast.days)||(app==App::Stock&&m.stockCount)||(app==App::Typhoon&&m.page.typhoon.count)||(app==App::Hot&&m.hotCount)||app==App::Memo||app==App::Translate||app==App::Guard;
+    return (app==App::Podcast&&m.podcastCount)||(app==App::Daily&&*m.page.daily.en)||(app==App::Quiz&&m.quizCount)||(app==App::Quake&&m.quakeCount)||(app==App::Hacker&&m.storyCount)||(app==App::Forecast&&m.page.forecast.days)||(app==App::Stock&&m.stockCount)||app==App::Macro||(app==App::Typhoon&&m.page.typhoon.count)||(app==App::Hot&&m.hotCount)||app==App::Memo||app==App::Translate||app==App::Guard;
 }
 // The footer: 0 the 录音 row, 1 a note in the list, 2 an open note, 3 its delete asked, 4 listening, 5 recognising.
 unsigned memoTab(const Model& m){return m.listening()?4:m.voiceBusy()?5:m.memoArmed?3:m.memoDetail?2:m.memoIndex?1:0;}
@@ -142,6 +142,7 @@ Badge appBadge(App app){
     case App::Alarm: return {ICON_CLOCK,0xffb454};
     case App::Noise: return {ICON_WIND,0x8fd3ff};
     case App::Stock: return {ICON_CHART,0xf04848};
+    case App::Macro: return {ICON_CHART,kAccent};
     case App::Typhoon: return {ICON_TYPHOON,0x4bd6ff};
     case App::Hot: return {ICON_FIRE,0xff6a3c};
     case App::Memo: return {ICON_MIC,0x5eead4};
@@ -253,9 +254,9 @@ void initChrome(lv_obj_t* screen){
 void renderChrome(const Runtime& runtime){
     statusBarRender(runtime);const auto& m=runtime.model;
     const auto app=runtime.active();
-    const bool alt=app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Stock?m.stockDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Walkie?m.walkieAuto:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
+    const bool alt=app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Stock?m.stockDetail:app==App::Macro?m.macroDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Walkie?m.walkieAuto:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
     const auto* hint=keyHint(app,m.settingsPage,m.focusRunning,*m.pairingCode,m.live&&m.livePhase==LivePhase::Loading,m.live&&m.livePhase==LivePhase::Error,alt,app==App::Wifi?m.wifiTab:app==App::Settings?(m.settingsPage==SettingsPage::City?dictationTab(m):m.settingsPage==SettingsPage::Idle?m.idleRow:m.wifiSetup?0u:m.wifiArmed?3u:m.wifiRow?2u:1u):
-        app==App::Rate?voiceTab(m,m.rateArmed):app==App::Stock?voiceTab(m,m.stockArmed):app==App::Countdown?voiceTab(m,m.countdownArmed):
+        app==App::Rate?voiceTab(m,m.rateArmed):app==App::Stock?voiceTab(m,m.stockArmed):app==App::Macro?0u:app==App::Countdown?voiceTab(m,m.countdownArmed):
         app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:m.soundView);
     char text[256];
     // 打开 Mac 程序: what the computer is doing takes the key hints' place for a few seconds, on any page.
@@ -1572,7 +1573,7 @@ void drawStockList(Painter& p,const Model& m){
     if(!m.stockArmed)p.text(text,4,0,223,*m.lastNotice?kWarn:kMuted);
     const unsigned first=m.stockIndex>5?m.stockIndex-5:0;
     for(unsigned i=first;i<m.stockCount&&i<first+6;++i){
-        const auto& r=m.page.stocks.rows[i];const int y=24+(i-first)*38;
+        const auto& r=m.page.stocks.rows[i];const int y=42+(i-first)*35;
         p.rect(0,y,223,y+35,i==m.stockIndex?kBorder:kPanel,8);
         p.text(r.name,10,y+1,96,kText);
         snprintf(text,sizeof(text),"%s %s",r.tag,r.code);p.text(text,10,y+19,96,kMuted,LV_TEXT_ALIGN_LEFT,&lv_font_montserrat_14);
@@ -1645,6 +1646,71 @@ void initStock(lv_obj_t* screen){
     stockView=lv_obj_create(stockRoot);box(stockView,8,2,224,255,kBg);lv_obj_add_event_cb(stockView,drawStock,LV_EVENT_DRAW_MAIN,nullptr);
 }
 void renderStock(const Model& m){drawModel=&m;lv_obj_invalidate(stockView);}
+lv_obj_t *macroRoot,*macroView;
+void macroValue(char* out,size_t size,float value,const char* unit,bool sign=false){
+    if(!std::isfinite(value)){snprintf(out,size,"--");return;}
+    const unsigned decimals=!strcmp(unit,"bp")||!strcmp(unit,"万桶/日")?1:2;
+    snprintf(out,size,sign?"%+.*f%s":"%.*f%s",int(decimals),double(value),unit);
+}
+void drawMacro(lv_event_t* e){
+    const auto& m=*drawModel;auto p=painter(e);const auto& view=m.page.macro;char text[160],date[16];
+    const unsigned group=m.macroGroup%3;const uint32_t color=kMacroColors[group],panel=kMacroPanels[group];
+    for(unsigned i=0;i<3;++i){const int x=i*75;
+        p.rect(x,0,x+72,21,i==group?panel:kPanel,5);
+        p.text(kMacroGroups[i],x,1,x+72,i==group?color:kMuted,LV_TEXT_ALIGN_CENTER);
+        if(i==group)p.rect(x+8,20,x+64,21,color);
+    }
+    if(!view.count){p.text(m.livePhase==LivePhase::Error?m.liveState:"正在读取宏观列表…",0,100,223,kMuted,LV_TEXT_ALIGN_CENTER);return;}
+    const auto& row=view.rows[m.macroIndex%view.count];const auto& spec=kMacroSeries[row.series];
+    if(!m.macroDetail){
+        if(*m.lastNotice)snprintf(text,sizeof(text),"%s",m.lastNotice);
+        else if(m.livePhase!=LivePhase::Ready)snprintf(text,sizeof(text),"%s",m.liveState);
+        else snprintf(text,sizeof(text),"6项指标 · 30分钟刷新");
+        p.text(text,4,24,223,m.livePhase==LivePhase::Error||*m.lastNotice?kWarn:kMuted);
+        const unsigned first=m.macroIndex>5?m.macroIndex-5:0;
+        for(unsigned i=first;i<view.count&&i<first+6;++i){
+            const auto& r=view.rows[i];const auto& s=kMacroSeries[r.series];const int y=24+(i-first)*38;
+            p.rect(0,y,223,y+33,i==m.macroIndex?panel:kPanel,8);p.text(s.name,8,y+1,135,kText);
+            macroValue(text,sizeof(text),r.value,strlen(s.unit)>3?"":s.unit);p.text(text,120,y+1,216,kText,LV_TEXT_ALIGN_RIGHT);
+            macroDate(date,sizeof(date),r.date);p.text(date,8,y+18,110,kMuted,LV_TEXT_ALIGN_LEFT,&lv_font_montserrat_14);
+            macroValue(text,sizeof(text),macroDelta(r),macroDeltaUnit(s),true);p.text(text,108,y+18,216,stockColor(macroDelta(r)),LV_TEXT_ALIGN_RIGHT);
+        }
+        return;
+    }
+    p.text(spec.name,4,26,223,color);
+    macroValue(text,sizeof(text),row.value,"");p.text(text,2,45,223,stockColor(macroDelta(row)),LV_TEXT_ALIGN_LEFT,strlen(text)>7||strlen(spec.unit)>3?&lv_font_montserrat_24:&lv_font_montserrat_48);
+    p.text(spec.unit,130,71,220,kMuted,LV_TEXT_ALIGN_RIGHT);
+    macroValue(text,sizeof(text),macroDelta(row),macroDeltaUnit(spec),true);p.text(text,4,96,219,stockColor(macroDelta(row)));
+    constexpr int top=121,bottom=189;p.rect(0,top,223,bottom,kPanel,8);
+    const bool ready=view.chartFor==m.macroIndex&&view.points;
+    if(!ready)p.text(m.livePhase==LivePhase::Error?"走势获取失败，长按上重试":"正在加载走势…",0,top+29,223,kMuted,LV_TEXT_ALIGN_CENTER);
+    else{
+        const unsigned first=m.macroLong||view.points<=12?0:view.points-12,count=view.points-first;
+        const auto bounds=std::minmax_element(view.chart.begin()+first,view.chart.begin()+view.points);const int low=*bounds.first,high=*bounds.second;
+        const auto x=[&](unsigned i){return 5+int(i*213/std::max(1u,count-1));};
+        const auto y=[&](int value){return high==low?(top+bottom)/2:bottom-5-(value-low)*(bottom-top-24)/(high-low);};
+        const auto value=[&](int v){return view.low+(view.high-view.low)*v/999;};
+        for(unsigned i=1;i<count;++i)p.line(x(i-1),y(view.chart[first+i-1]),x(i),y(view.chart[first+i]),color,2);
+        if(count==1)p.rect(x(0)-1,y(view.chart[first])-1,x(0)+1,y(view.chart[first])+1,color,2);
+        macroValue(text,sizeof(text),value(high),"");p.text(text,4,top+1,120,kMuted,LV_TEXT_ALIGN_LEFT,&lv_font_montserrat_14);
+        snprintf(text,sizeof(text),"近%u期 · %s",std::min<unsigned>(m.macroLong?60:12,view.points),spec.frequency);p.text(text,100,top+1,218,kMuted,LV_TEXT_ALIGN_RIGHT);
+        macroDate(date,sizeof(date),m.macroLong?view.from:view.zoomFrom);p.text(date,2,bottom+2,112,kMuted,LV_TEXT_ALIGN_LEFT,&lv_font_montserrat_14);
+        macroDate(date,sizeof(date),view.to);p.text(date,112,bottom+2,221,kMuted,LV_TEXT_ALIGN_RIGHT,&lv_font_montserrat_14);
+    }
+    macroDate(date,sizeof(date),row.date);snprintf(text,sizeof(text),"数据 %s · 较上次",date);p.text(text,4,212,223,kMuted);
+    if(*m.lastNotice)snprintf(text,sizeof(text),"%s",m.lastNotice);
+    else if(m.livePhase==LivePhase::Error)snprintf(text,sizeof(text),"%s",m.liveState);
+    else if(spec.source!=MacroSource::Fred)snprintf(text,sizeof(text),"%s",spec.note);
+    else if(!strcmp(spec.id,"A191RL1Q225SBEA"))snprintf(text,sizeof(text),"季调 · 环比折年率 · FRED");
+    else if(spec.transform==MacroTransform::YoY)snprintf(text,sizeof(text),"同比 · %s · FRED",row.series==4||row.series==6?"未季调":"季调");
+    else snprintf(text,sizeof(text),"%s · %s · FRED",spec.id,spec.frequency);
+    p.text(text,4,235,223,m.livePhase==LivePhase::Error?kWarn:kMuted);
+}
+void initMacro(lv_obj_t* screen){
+    macroRoot=lv_obj_create(screen);box(macroRoot,0,35,240,257,kBg);
+    macroView=lv_obj_create(macroRoot);box(macroView,8,2,224,255,kBg);lv_obj_add_event_cb(macroView,drawMacro,LV_EVENT_DRAW_MAIN,nullptr);
+}
+void renderMacro(const Model& m){drawModel=&m;lv_obj_invalidate(macroView);}
 // 台风路径: the picked typhoon's track on a map of the region (land filled, a grid every 5 or 10 degrees, the setup
 // page's city marked), the official forecast dashed ahead of it; under the map its grade, wind, pressure, motion and
 // distance, or for one that has ended its peak.
@@ -2551,6 +2617,7 @@ void uiInit() {
     else if(guiApp==App::Noise)initNoise(screen);
     else if(guiApp==App::Alarm)initAlarm(screen);
     else if(guiApp==App::Stock)initStock(screen);
+    else if(guiApp==App::Macro)initMacro(screen);
     else if(guiApp==App::Typhoon)initTyphoon(screen);
     else if(guiApp==App::Hot)initHot(screen);
     else if(guiApp==App::Memo)initMemo(screen);
@@ -2718,6 +2785,7 @@ void uiRender(const Runtime& runtime) {
     } else if(app==App::Noise){renderNoise(model);
     } else if(app==App::Alarm){renderAlarm(model);
     } else if(app==App::Stock){renderStock(model);
+    } else if(app==App::Macro){renderMacro(model);
     } else if(app==App::Typhoon){renderTyphoon(model);
     } else if(app==App::Hot){renderHot(model);
     } else if(app==App::Memo){renderMemo(model);
@@ -2824,6 +2892,19 @@ void uiRender(const Runtime& runtime) {
     if(app==App::Chat){char status[192];snprintf(status,sizeof(status),"%s音量 %u%%",model.live&&*model.liveLines[2]?model.liveLines[2]:"",model.volume);setLabel(lines[0],status);}
     if(showDashboard){visible(value,false);for(auto* line:lines)visible(line,false);}
     renderConnection(runtime);
+    lv_timer_handler();lv_refr_now(display);trackUiMemory();
+}
+void uiAnimate(const Runtime& runtime){
+    const auto& m=runtime.model;
+    // The main loop calls uiRender for keys, data and power changes. An idle Macro
+    // animation tick only advances LVGL's footer; invalidating macroView here
+    // repaints 57,120 pixels and holds up the next key for about 200 ms on the C3.
+    // Listening, pairing and the initial loading overlay still need their body frames.
+    if(runtime.active()!=App::Macro||!uiPreparedFor(App::Macro)||m.listening()||*m.pairingCode||
+       (m.live&&m.livePhase==LivePhase::Loading&&!keepsContent(App::Macro,m))){
+        uiRender(runtime);return;
+    }
+    renderChrome(runtime);
     lv_timer_handler();lv_refr_now(display);trackUiMemory();
 }
 unsigned uiTextLines(const char* s,int width){unsigned n=0;while(*s){s=lineEnd(s,width);++n;}return n;}

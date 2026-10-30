@@ -1,0 +1,903 @@
+{
+  "schema_version": 1,
+  "checked_on": "2026-10-30",
+  "source_commit": "62a56b2159add40f41b2c19129be3ac2af297d09",
+  "entries": [
+    {
+      "api": "macro_bank_usa_interest_rate",
+      "name": "美联储利率决议报告",
+      "status": "stale",
+      "latest_actual": "2025-07-31",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_bank_euro_interest_rate",
+      "name": "欧洲央行决议报告",
+      "status": "stale",
+      "latest_actual": "2025-07-24",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_bank_newzealand_interest_rate",
+      "name": "新西兰联储决议报告",
+      "status": "stale",
+      "latest_actual": "2025-08-20",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_bank_china_interest_rate",
+      "name": "中国央行决议报告",
+      "status": "stale",
+      "latest_actual": "2019-11-20",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_bank_switzerland_interest_rate",
+      "name": "瑞士央行利率决议报告",
+      "status": "stale",
+      "latest_actual": "2025-06-19",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_bank_english_interest_rate",
+      "name": "英国央行决议报告",
+      "status": "stale",
+      "latest_actual": "2025-08-07",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_bank_australia_interest_rate",
+      "name": "澳洲联储决议报告",
+      "status": "stale",
+      "latest_actual": "2025-08-12",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_bank_japan_interest_rate",
+      "name": "日本利率决议报告",
+      "status": "stale",
+      "latest_actual": "2025-07-31",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_bank_russia_interest_rate",
+      "name": "俄罗斯利率决议报告",
+      "status": "stale",
+      "latest_actual": "2025-07-25",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_bank_india_interest_rate",
+      "name": "印度利率决议报告",
+      "status": "stale",
+      "latest_actual": "2025-08-06",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_bank_brazil_interest_rate",
+      "name": "巴西利率决议报告",
+      "status": "stale",
+      "latest_actual": "2025-07-31",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_australia_retail_rate_monthly",
+      "name": "澳大利亚-零售销售月率",
+      "status": "stale",
+      "latest_actual": "2025-06-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_australia_trade",
+      "name": "澳大利亚-贸易帐",
+      "status": "stale",
+      "latest_actual": "2023-08-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_australia_bank_rate",
+      "name": "澳大利亚-央行公布利率决议",
+      "status": "stale",
+      "latest_actual": "2025-07-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_canada_retail_rate_monthly",
+      "name": "加拿大-零售销售月率",
+      "status": "stale",
+      "latest_actual": "2023-04-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_fdi",
+      "name": "中国-外商直接投资数据",
+      "status": "stale",
+      "latest_actual": "2023-07-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_shrzgm",
+      "name": "商务数据中心-国内贸易-社会融资规模增量统计",
+      "status": "stale",
+      "latest_actual": "2026-04-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_urban_unemployment",
+      "name": "国家统计局-月度数据-城镇调查失业率",
+      "status": "unverified",
+      "latest_actual": null,
+      "http_status": null,
+      "reason": "Statistics site source requires a warmed browser-compatible session; not admitted to anonymous firmware HTTP shortlist"
+    },
+    {
+      "api": "macro_china_gdp_yearly",
+      "name": "金十数据中心-中国 GDP 年率报告",
+      "status": "stale",
+      "latest_actual": "2025-07-15",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_cpi_yearly",
+      "name": "中国年度 CPI 数据",
+      "status": "stale",
+      "latest_actual": "2025-08-09",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_cpi_monthly",
+      "name": "中国月度 CPI 数据",
+      "status": "stale",
+      "latest_actual": "2025-08-09",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_ppi_yearly",
+      "name": "中国年度 PPI 数据",
+      "status": "stale",
+      "latest_actual": "2025-08-09",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_exports_yoy",
+      "name": "中国以美元计算出口年率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-07",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_imports_yoy",
+      "name": "中国以美元计算进口年率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-07",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_trade_balance",
+      "name": "中国以美元计算贸易帐报告",
+      "status": "stale",
+      "latest_actual": "2025-08-07",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_industrial_production_yoy",
+      "name": "中国规模以上工业增加值年率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-15",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_pmi_yearly",
+      "name": "中国年度 PMI 数据",
+      "status": "stale",
+      "latest_actual": "2025-08-31",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_cx_pmi_yearly",
+      "name": "中国年度财新 PMI 数据",
+      "status": "stale",
+      "latest_actual": "2025-09-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_cx_services_pmi_yearly",
+      "name": "中国财新服务业PMI报告",
+      "status": "stale",
+      "latest_actual": "2025-09-03",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_non_man_pmi",
+      "name": "中国官方非制造业 PMI",
+      "status": "stale",
+      "latest_actual": "2025-08-31",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_fx_reserves_yearly",
+      "name": "中国年度外汇储备数据",
+      "status": "stale",
+      "latest_actual": "2025-08-07",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_m2_yearly",
+      "name": "中国年度 M2 数据",
+      "status": "stale",
+      "latest_actual": "2025-08-13",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_daily_energy",
+      "name": "中国日度沿海六大电库存数据",
+      "status": "stale",
+      "latest_actual": "2019-06-21",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_rmb",
+      "name": "中国人民币汇率中间价报告",
+      "status": "stale",
+      "latest_actual": "2021-05-13",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_yw_electronic_index",
+      "name": "义乌小商品指数-电子元器件",
+      "status": "stale",
+      "latest_actual": "2024-05-31",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_construction_price_index",
+      "name": "建材价格指数",
+      "status": "stale",
+      "latest_actual": "2024-11-26",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_reserve_requirement_ratio",
+      "name": "存款准备金率",
+      "status": "stale",
+      "latest_actual": "2025-05-07",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_freight_index",
+      "name": "航贸运价指数",
+      "status": "unverified",
+      "latest_actual": null,
+      "http_status": null,
+      "reason": "Excel/HTML data scraper, outside JSON/CSV firmware API shortlist"
+    },
+    {
+      "api": "macro_china_retail_price_index",
+      "name": "商品零售价格指数",
+      "status": "stale",
+      "latest_actual": "2022-12-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_real_estate",
+      "name": "国房景气指数",
+      "status": "stale",
+      "latest_actual": "2025-12-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_hk_cpi",
+      "name": "中国香港-消费者物价指数",
+      "status": "stale",
+      "latest_actual": "2022-04-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_hk_cpi_ratio",
+      "name": "中国香港-消费者物价指数年率",
+      "status": "stale",
+      "latest_actual": "2022-04-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_china_swap_rate",
+      "name": "FR007 利率互换曲线历史数据；只能获取近一年的数据",
+      "status": "failed",
+      "latest_actual": null,
+      "http_status": 200,
+      "reason": "Upstream business error: InterestRateSwapCurveHistoryActi>on Exception"
+    },
+    {
+      "api": "macro_china_bond_public",
+      "name": "中国-债券信息披露-债券发行",
+      "status": "failed",
+      "latest_actual": null,
+      "http_status": 403,
+      "reason": "HTTP 403"
+    },
+    {
+      "api": "macro_china_nbs_nation",
+      "name": "国家统计局全国数据通用接口",
+      "status": "unverified",
+      "latest_actual": null,
+      "http_status": null,
+      "reason": "Statistics site source requires a warmed browser-compatible session; not admitted to anonymous firmware HTTP shortlist"
+    },
+    {
+      "api": "macro_china_nbs_region",
+      "name": "国家统计局地区数据通用接口",
+      "status": "unverified",
+      "latest_actual": null,
+      "http_status": null,
+      "reason": "Statistics site source requires a warmed browser-compatible session; not admitted to anonymous firmware HTTP shortlist"
+    },
+    {
+      "api": "macro_cnbs",
+      "name": "国家金融与发展实验室-中国宏观杠杆率数据",
+      "status": "unverified",
+      "latest_actual": null,
+      "http_status": null,
+      "reason": "Excel/HTML data scraper, outside JSON/CSV firmware API shortlist"
+    },
+    {
+      "api": "macro_cons_opec_month",
+      "name": "欧佩克报告-月度",
+      "status": "stale",
+      "latest_actual": "2023-05-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_gdp_yoy",
+      "name": "欧元区季度 GDP 年率报告",
+      "status": "stale",
+      "latest_actual": "2025-09-02",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_cpi_mom",
+      "name": "欧元区 CPI 月率报告",
+      "status": "stale",
+      "latest_actual": "2025-09-02",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_cpi_yoy",
+      "name": "欧元区CPI年率报告",
+      "status": "stale",
+      "latest_actual": "2025-09-02",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_ppi_mom",
+      "name": "欧元区PPI月率报告",
+      "status": "stale",
+      "latest_actual": "2025-09-03",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_retail_sales_mom",
+      "name": "欧元区零售销售月率报告",
+      "status": "stale",
+      "latest_actual": "2025-09-04",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_employment_change_qoq",
+      "name": "欧元区季调后就业人数季率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-14",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_unemployment_rate_mom",
+      "name": "欧元区失业率报告",
+      "status": "stale",
+      "latest_actual": "2025-09-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_trade_balance",
+      "name": "欧元区未季调贸易帐报告",
+      "status": "stale",
+      "latest_actual": "2025-08-18",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_current_account_mom",
+      "name": "欧元区经常帐报告",
+      "status": "stale",
+      "latest_actual": "2025-08-19",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_industrial_production_mom",
+      "name": "欧元区工业产出月率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-14",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_manufacturing_pmi",
+      "name": "欧元区制造业PMI初值报告",
+      "status": "stale",
+      "latest_actual": "2025-09-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_services_pmi",
+      "name": "欧元区服务业PMI终值报告",
+      "status": "stale",
+      "latest_actual": "2025-09-03",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_zew_economic_sentiment",
+      "name": "欧元区ZEW经济景气指数报告",
+      "status": "stale",
+      "latest_actual": "2025-08-12",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_sentix_investor_confidence",
+      "name": "欧元区Sentix投资者信心指数报告",
+      "status": "stale",
+      "latest_actual": "2025-08-04",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_lme_holding",
+      "name": "伦敦金属交易所(LME)-持仓报告",
+      "status": "stale",
+      "latest_actual": "2021-09-03",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_euro_lme_stock",
+      "name": "伦敦金属交易所(LME)-库存报告",
+      "status": "stale",
+      "latest_actual": "2026-07-17",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_stock_finance",
+      "name": "同花顺-数据中心-宏观数据-股票筹资",
+      "status": "unverified",
+      "latest_actual": null,
+      "http_status": null,
+      "reason": "Excel/HTML data scraper, outside JSON/CSV firmware API shortlist"
+    },
+    {
+      "api": "macro_rmb_loan",
+      "name": "同花顺-数据中心-宏观数据-新增人民币贷款",
+      "status": "unverified",
+      "latest_actual": null,
+      "http_status": null,
+      "reason": "Excel/HTML data scraper, outside JSON/CSV firmware API shortlist"
+    },
+    {
+      "api": "macro_rmb_deposit",
+      "name": "同花顺-数据中心-宏观数据-人民币存款余额",
+      "status": "unverified",
+      "latest_actual": null,
+      "http_status": null,
+      "reason": "Excel/HTML data scraper, outside JSON/CSV firmware API shortlist"
+    },
+    {
+      "api": "macro_germany_retail_sale_yearly",
+      "name": "德国-实际零售销售年率",
+      "status": "stale",
+      "latest_actual": "2025-12-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "news_economic_baidu",
+      "name": "百度股市通-经济数据",
+      "status": "unverified",
+      "latest_actual": null,
+      "http_status": null,
+      "reason": "External Baidu helper and optional cookie; no anonymous data probe completed"
+    },
+    {
+      "api": "macro_swiss_cpi_yearly",
+      "name": "瑞士-消费者物价指数年率",
+      "status": "stale",
+      "latest_actual": "2025-12-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_uk_gdp_yearly",
+      "name": "英国-GDP 年率初值",
+      "status": "stale",
+      "latest_actual": "2025-12-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_gdp_monthly",
+      "name": "金十数据-美国国内生产总值(GDP)报告",
+      "status": "stale",
+      "latest_actual": "2025-08-28",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_cpi_monthly",
+      "name": "美国 CPI 月率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-12",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_core_cpi_monthly",
+      "name": "美国核心 CPI 月率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-12",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_personal_spending",
+      "name": "美国个人支出月率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-29",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_retail_sales",
+      "name": "美国零售销售月率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-15",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_import_price",
+      "name": "美国进口物价指数报告",
+      "status": "stale",
+      "latest_actual": "2025-08-15",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_export_price",
+      "name": "美国出口价格指数报告",
+      "status": "stale",
+      "latest_actual": "2025-08-15",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_lmci",
+      "name": "美联储劳动力市场状况指数报告",
+      "status": "stale",
+      "latest_actual": "2017-07-10",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_unemployment_rate",
+      "name": "美国失业率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_job_cuts",
+      "name": "美国挑战者企业裁员人数报告",
+      "status": "stale",
+      "latest_actual": "2025-09-04",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_non_farm",
+      "name": "美国非农就业人数报告",
+      "status": "stale",
+      "latest_actual": "2025-08-01",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_adp_employment",
+      "name": "美国ADP就业人数报告",
+      "status": "stale",
+      "latest_actual": "2025-09-04",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_core_pce_price",
+      "name": "美国核心PCE物价指数年率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-29",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_real_consumer_spending",
+      "name": "美国实际个人消费支出季率初值报告",
+      "status": "stale",
+      "latest_actual": "2025-08-28",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_trade_balance",
+      "name": "美国贸易帐报告",
+      "status": "stale",
+      "latest_actual": "2025-09-04",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_current_account",
+      "name": "美国经常帐报告",
+      "status": "stale",
+      "latest_actual": "2025-06-24",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_rig_count",
+      "name": "贝克休斯钻井报告",
+      "status": "stale",
+      "latest_actual": "2024-02-23",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_ppi",
+      "name": "美国生产者物价指数(PPI)报告",
+      "status": "stale",
+      "latest_actual": "2025-08-14",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_core_ppi",
+      "name": "美国核心生产者物价指数(PPI)报告",
+      "status": "stale",
+      "latest_actual": "2025-08-14",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_api_crude_stock",
+      "name": "美国 API 原油库存报告",
+      "status": "stale",
+      "latest_actual": "2025-09-04",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_pmi",
+      "name": "美国 Markit 制造业 PMI 初值报告",
+      "status": "stale",
+      "latest_actual": "2025-09-02",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_ism_pmi",
+      "name": "美国 ISM 制造业 PMI 报告",
+      "status": "stale",
+      "latest_actual": "2025-09-02",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_industrial_production",
+      "name": "美国工业产出月率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-15",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_durable_goods_orders",
+      "name": "美国耐用品订单月率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-26",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_factory_orders",
+      "name": "美国工厂订单月率报告",
+      "status": "stale",
+      "latest_actual": "2025-09-03",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_services_pmi",
+      "name": "美国Markit服务业PMI初值报告",
+      "status": "stale",
+      "latest_actual": "2025-09-04",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_business_inventories",
+      "name": "美国商业库存月率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-15",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_ism_non_pmi",
+      "name": "美国ISM非制造业PMI报告",
+      "status": "stale",
+      "latest_actual": "2025-09-04",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_nahb_house_market_index",
+      "name": "美国NAHB房产市场指数报告",
+      "status": "stale",
+      "latest_actual": "2025-08-18",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_house_starts",
+      "name": "美国新屋开工总数年化报告",
+      "status": "stale",
+      "latest_actual": "2025-08-19",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_new_home_sales",
+      "name": "美国新屋销售总数年化报告",
+      "status": "stale",
+      "latest_actual": "2025-08-25",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_building_permits",
+      "name": "美国营建许可总数报告",
+      "status": "stale",
+      "latest_actual": "2025-08-25",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_exist_home_sales",
+      "name": "美国成屋销售总数年化报告",
+      "status": "stale",
+      "latest_actual": "2025-08-21",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_house_price_index",
+      "name": "美国FHFA房价指数月率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-26",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_spcs20",
+      "name": "美国S&P/CS20座大城市房价指数年率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-26",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_pending_home_sales",
+      "name": "美国成屋签约销售指数月率报告",
+      "status": "stale",
+      "latest_actual": "2025-08-28",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_cb_consumer_confidence",
+      "name": "金十数据中心-经济指标-美国-领先指标-美国谘商会消费者信心指数报告",
+      "status": "stale",
+      "latest_actual": "2025-08-26",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_nfib_small_business",
+      "name": "美国NFIB小型企业信心指数报告",
+      "status": "stale",
+      "latest_actual": "2025-08-12",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_michigan_consumer_sentiment",
+      "name": "美国密歇根大学消费者信心指数初值报告",
+      "status": "stale",
+      "latest_actual": "2025-08-29",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_eia_crude_rate",
+      "name": "美国 EIA 原油库存报告",
+      "status": "stale",
+      "latest_actual": "2025-09-05",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    },
+    {
+      "api": "macro_usa_initial_jobless",
+      "name": "美国初请失业金人数报告",
+      "status": "stale",
+      "latest_actual": "2025-09-04",
+      "http_status": 200,
+      "reason": "Last numeric actual exceeds freshness budget; removed from active shortlist"
+    }
+  ]
+}

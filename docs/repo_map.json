@@ -181,6 +181,122 @@
         ],
         "unsampled_paths": []
       }
+    },
+    {
+      "id": "macro_radar",
+      "name": "宏观雷达",
+      "path": "firmware/passport_suite/main/macro.hpp",
+      "kind": "firmware_feature",
+      "purpose": "ESP32原生免费宏观数据：中国、美国、商品三页各固定6项，分类颜色、12/60期走势与NVS缓存；不支持语音添加或删除。",
+      "module_tags": [
+        "macro",
+        "FRED",
+        "CSV",
+        "JSON",
+        "UI"
+      ],
+      "entry_files": [
+        "docs/macro-radar.md",
+        "firmware/passport_suite/main/macro.hpp",
+        "firmware/passport_device/main/macro_services.cpp"
+      ],
+      "key_symbols": [
+        "MacroBoard",
+        "MacroView",
+        "MacroCsv",
+        "NativeServices::macro",
+        "drawMacro",
+        "MacroJson",
+        "MacroPoints"
+      ],
+      "child_modules": [],
+      "first_read_files": [
+        "docs/macro-radar.md",
+        "firmware/passport_suite/main/macro.hpp",
+        "firmware/passport_device/main/macro_services.cpp"
+      ],
+      "then_check_files": [
+        "firmware/passport_suite/main/macro_json.hpp",
+        "firmware/passport_device/main/native_services.hpp",
+        "firmware/passport_device/main/native_services.cpp",
+        "firmware/passport_connectivity/main/live_services.hpp",
+        "firmware/passport_connectivity/main/live_services.cpp",
+        "firmware/passport_connectivity/main/main.cpp",
+        "firmware/passport_suite/main/apps.hpp",
+        "firmware/passport_suite/main/suite.hpp",
+        "firmware/passport_suite/main/suite.cpp",
+        "firmware/passport_suite/main/key_hints.hpp",
+        "firmware/passport_suite/main/voice_add.hpp",
+        "firmware/passport_suite/main/ui.cpp",
+        ".github/README.md",
+        "docs/research/akshare-macro-available.md",
+        "docs/research/akshare-macro-available.json",
+        "docs/research/akshare-macro-cn-us-commodities.md",
+        "docs/research/akshare-macro-cn-us-commodities.json",
+        "docs/research/akshare-macro-excluded.json",
+        "docs/research/akshare-macro-audit.json",
+        "scripts/audit_akshare_macro.py"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [
+        "FRED 网站可达性及下载规则",
+        "东方财富与金十公开端点的可达性和字段规则",
+        "实机 TLS、按键及 RAM 峰值"
+      ],
+      "related_tests": [
+        "tests/test_passport_macro.py",
+        "tests/test_passport_macro_json.py",
+        "firmware/passport_suite/main/sim_main.cpp",
+        "tests/fixtures/macro"
+      ],
+      "related_configs": [
+        "firmware/passport_device/CMakeLists.txt",
+        "firmware/passport_device/main/CMakeLists.txt",
+        "scripts/build_passport_suite.sh"
+      ],
+      "risk_flags": [
+        "observation_date_is_not_release_date",
+        "monthly_transform_exact_period",
+        "public_csv_contract",
+        "physical_validation_pending",
+        "category_scoped_cache",
+        "bounded_json_stream",
+        "fixed_six_per_page",
+        "macro_has_no_voice_capture"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "宏观三页及详情",
+        "共享菜单与App编号",
+        "原生任务消息和宏观长按分发"
+      ],
+      "pitfall_ids": [
+        "P03"
+      ],
+      "minimum_regression": [
+        "python3 tests/test_passport_macro.py -v",
+        "python3 tests/test_passport_macro_json.py -v",
+        "bash scripts/build_passport_suite.sh device",
+        "bash scripts/build_passport_suite.sh"
+      ],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "subtree_only",
+        "host_and_build_evidence_only"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "firmware/passport_suite/main/macro.hpp",
+          "firmware/passport_device/main/macro_services.cpp",
+          "firmware/passport_connectivity/main/live_services.cpp",
+          "firmware/passport_suite/main/ui.cpp",
+          "tests/test_passport_macro.py",
+          "firmware/passport_suite/main/sim_main.cpp"
+        ],
+        "unsampled_paths": []
+      }
     }
   ]
 }

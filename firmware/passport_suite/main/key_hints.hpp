@@ -65,6 +65,7 @@ inline const char* keyHint(App app,SettingsPage page,bool focusRunning,bool pair
     if(app==App::Memo&&!error){static const char* const hints[]{"上下：选择  |  确认：开始录音","上下：选择  |  确认：查看  |  长按下：删除","上下：翻页  |  确认：返回  |  长按下：删除","长按下：确认删除  |  其他键：取消","确认：结束并保存  |  长按确认：放弃","正在识别，请稍候"};return hints[tab%6];}
     // alt: a stock's detail is open.
     if(app==App::Stock&&(tab%4||!error))return alt?"上下：切换  |  确认：分时/日K  |  长按确认：列表":tab%4?spoken[tab%4]:"上下：选择 | 确认：详情 | 长按上：说话添加 | 长按下：删除";
+    if(app==App::Macro)return alt?"上下：切换 | 确认：12/60期 | 长按上：刷新 | 长按确认：列表":"上下：选择 | 确认：详情 | 长按上下：换页 | 长按确认：返回";
     // alt: the sleep timer row is selected (白噪音), the alarm is ringing (闹钟).
     if(app==App::Noise)return alt?"上下：选择  |  确认：切换定时  |  长按上下：音量":"上下：选择  |  确认：播放/停止  |  长按上下：音量";
     // 闹钟 tab: 0 the 录音 row, 1 an alarm, 2 its delete asked, 3 listening, 4 recognising, 5 an alarm's clock open.

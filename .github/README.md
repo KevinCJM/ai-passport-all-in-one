@@ -1,17 +1,17 @@
 # ai-passport-all-in-one
 
 AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个按键）的自制固件，C++20 + ESP-IDF 6.1 + LVGL 9.5。
-这里是当前版本 **0.5.16** 实际编进固件的全部源码。
+这里是当前版本 **0.5.21** 实际编进固件的全部源码。[下载固件](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/v0.5.21)。
 
-主页是时钟和天气，菜单五页、共 41 项功能：
+主页是时钟和天气，菜单五页、共 43 项功能：
 
 | 菜单页 | 功能 |
 | --- | --- |
 | 小智 · 语音 | 小智聊天、语音笔记、语音输入、中英翻译、语音记账、语音计算器、待办提醒、闹钟、番茄钟 |
 | 电脑 · 时间 | AI 额度、电脑监控、离座锁屏、PPT 翻页、状态牌、二维码、秒表、倒数日、万年历 |
-| 天气 · 财经 · 资讯 | 天气预报、台风路径、地震速报、财经新闻、自选股、汇率、百度热榜、Hacker News、历史上的今天 |
-| 学习 · 影音 | 背单词、每日一句、知识问答、收音机、播客、白噪音、声音（调音器 / 节拍器） |
-| 工具 · 设置 | 手电筒、警示灯、随机转盘、移动监控、WiFi 工具箱、蓝牙声纳、对讲机、系统设置 |
+| 天气 · 财经 · 资讯 | 天气预报、台风路径、地震速报、自选股、宏观雷达、汇率、财经新闻、百度热榜、Hacker News |
+| 学习 · 影音 | 背单词、每日一句、知识问答、收音机、播客、白噪音、声音（调音器 / 节拍器）、历史上的今天 |
+| 工具 · 设置 | 手电筒、警示灯、随机转盘、移动监控、WiFi探测、蓝牙声纳、对讲机、系统设置 |
 
 另外还有「你好小智」语音唤醒，可以说功能名直接跳转。
 
@@ -20,6 +20,23 @@ AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个�
 - 后台接收：在「设置 › 唤醒与对讲」打开后，胸牌在任何页面收到对讲都会自动跳到对讲机，讲完 5 秒回到原页面。代价是不再深度睡眠，待机时间变短。
 - 网络：手机热点、家用路由器都可以。开了客户端隔离的网络（很多公司和访客 WiFi）会挡掉广播，就收不到。
 - `scripts/walkie_mac.py` 可以让 Mac 充当一块胸牌来收发，需要 `brew install opus`。
+
+## 宏观雷达
+
+通过 WiFi / USB PPP 直接读取免费公开数据，无需个人 API Key，也不需要在电脑上安装 AKShare。进入后直接显示中国页；顶部始终显示三个标签，用不同颜色标识当前页。
+
+| 页面 | 颜色 | 固定六项指标 |
+| --- | --- | --- |
+| 中国 | 青绿 | GDP累计同比、CPI同比、PPI同比、制造业PMI、M2同比、一年期LPR |
+| 美国 | 蓝色 | 联邦基金有效利率、十年美债收益率、CPI同比、失业率、非农新增就业、实际GDP环比折年率 |
+| 商品 | 金色 | 大宗商品价格指数、BDI干散货指数、美国原油产量、黄金ETF持仓、白银ETF持仓、农产品批发价格总指数 |
+
+| 页面 | 上下短按 | 确认短按 | 长按上 | 长按下 | 长按确认 |
+| --- | --- | --- | --- | --- | --- |
+| 指标列表 | 选择指标 | 查看走势 | 上一页 | 下一页 | 返回功能列表 |
+| 指标详情 | 上一 / 下一指标 | 切换近12 / 60期 | 刷新当前指标 | 无操作 | 返回列表 |
+
+不支持语音添加、删除或编辑指标；仍可语音打开宏观雷达。每次只更新当前页，换页会取消旧请求。断网可查看各页上次成功的数据和各页最近缓存的一条走势。日期表示数据所属期，12/60期表示有效观测点数；黄金、白银ETF显示持仓吨数。美国数据来自 FRED，中国与商品使用东方财富、金十公开端点。详细口径与验证记录见 [宏观雷达](../docs/macro-radar.md)。
 
 > **平台说明：** 目前只在 macOS 上测试过（编译、刷机和 Mac 助手）。Windows 暂不支持电脑端助手，所以 USB 联网、蓝牙连电脑、语音输入、AI 额度这些要配合电脑的功能在 Windows 上都用不了。只靠 WiFi 的功能不受影响。
 
@@ -38,8 +55,16 @@ scripts/generate_passport_font.py  按用到的汉字重新生成字体（可选
 scripts/passport_*.py           Mac 助手（入口 passport_assistant.py）
 scripts/*.cpp                   Mac 助手的两个原生小工具：语音输入粘贴、USB PPP 网关
 scripts/build_passport_assistant.py  把 Mac 助手打包成 .app 和 .pkg
-tests/                          Mac 助手的单元测试
+tests/                          Mac 助手与固件数据解析的宿主测试
 ```
+
+## 下载固件
+
+- [0.5.21 完整固件包](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.21/ai-passport-0.5.21-esp32c3.zip)：应用、引导程序、分区表、唤醒词模型及刷机说明。
+- [仅应用 passport_device.bin](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.21/passport_device.bin)：已安装本项目固件时使用。
+- [SHA256SUMS](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.21/SHA256SUMS)：下载校验。
+
+适用于上述 ESP32-C3、8 MB Flash、无PSRAM的 AI Passport。升级保留原分区表和设置，只写应用；首次安装按下文「刷机」操作。下载包解压后的文件布局与编译产物一致。
 
 ## 编译
 
@@ -92,7 +117,14 @@ python -m esptool --chip esp32c3 -p PORT -b 921600 write-flash --flash-mode dio 
 python -m esptool --chip esp32c3 -p PORT erase-region 0x620000 0x10000   # 清空新的 nvs 分区
 ```
 
-以后升级只需要写 `0x10000 passport_device.bin`，还有 `0x670000 srmodels.bin`，这一项只有唤醒词模型变了才需要写。
+以后升级只需要写应用，保留分区表、设置和身份数据：
+
+```bash
+python -m esptool --chip esp32c3 -p PORT -b 921600 write-flash \
+  --flash-mode keep --flash-freq keep --flash-size keep 0x10000 passport_device.bin
+```
+
+`0x670000 srmodels.bin` 只有唤醒词模型变了才需要写。0.5.21 沿用原模型。
 
 开机后：
 - 按屏幕提示用手机连上胸牌的配网热点，在网页里选择 WiFi；
@@ -143,6 +175,8 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 **首次配对：** 用 USB 数据线连接胸牌，按助手的提示在胸牌上核对配对码，然后按确认键。配对信息、设置和日志都保存在 `~/Library/Application Support/AI Passport/`，不在仓库里。
 
 测试：`cd tests && ../.venv/bin/python -m unittest`
+
+宏观数据解析与缓存回归：`python3 -m unittest discover -s tests -p 'test_passport_macro*.py' -v`，需要本机 C++ 编译器；测试使用 ASan/UBSan。
 
 ## 许可证
 

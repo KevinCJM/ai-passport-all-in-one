@@ -92,6 +92,55 @@
         "python3 skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py --routing-only --changed-file <path> --json",
         "python3 skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py"
       ]
+    },
+    {
+      "id": "P03",
+      "title": "macro_observation_units_and_physical_proof",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "wrong_units",
+        "missing_period_transform",
+        "public_csv_contract",
+        "physical_validation_pending"
+      ],
+      "symptoms": [
+        "将月或季度所属日期当公布日",
+        "空值填零或跨缺月计算同比、非农新增",
+        "将 Mac HTTP 200 或交叉编译当作实机联网、语音验证"
+      ],
+      "trigger_actions": [
+        "修改宏观指标目录、CSV 解析及单位换算",
+        "修改宏观缓存、消息或换页按键"
+      ],
+      "related_paths": [
+        "docs/macro-radar.md",
+        "firmware/passport_suite/main/macro.hpp",
+        "firmware/passport_device/main/macro_services.cpp",
+        "firmware/passport_suite/main/apps.hpp",
+        "firmware/passport_suite/main/sim_main.cpp",
+        "tests/test_passport_macro.py",
+        "firmware/passport_suite/main/macro_json.hpp",
+        "tests/test_passport_macro_json.py"
+      ],
+      "affected_modules": [
+        "macro_radar"
+      ],
+      "blast_radius": [
+        "宏观数值和趋势",
+        "离线缓存",
+        "共享 App 协议编号"
+      ],
+      "check_before_edit": [
+        "同比要求去年同月，非农要求上一日历月；空值不作零",
+        "利率差用bp，百分比指标差用百分点；中国、美国、商品各固定6项，宏观不支持语音添加或删除",
+        "保持远端 main 的 App 编号；对讲机为 46，宏观顺延为 47",
+        "FRED 公共 CSV 与需 Key 的 REST API 不同，下载规则改变时重新适配"
+      ],
+      "safe_observation_methods": [
+        "运行宿主解析器 ASan/UBSan 测试及固件构建",
+        "实机网络、按键、缓存重启和 RAM 峰值需独立验证，构建不替代验收"
+      ]
     }
   ]
 }

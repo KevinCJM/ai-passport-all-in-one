@@ -95,6 +95,14 @@ void NativeServices::publish(const Job& job,const char* state,const char* phase,
     if(job.app==App::Quiz&&!strcmp(phase,"ready")&&page_.quiz.serial){const auto& q=page_.quiz;auto* o=cJSON_AddObjectToObject(j.value,"quiz");
         cJSON_AddNumberToObject(o,"n",q.serial);cJSON_AddStringToObject(o,"q",q.question);cJSON_AddStringToObject(o,"cat",q.category);cJSON_AddStringToObject(o,"lv",q.level);cJSON_AddNumberToObject(o,"c",q.correct);
         auto* answers=cJSON_AddArrayToObject(o,"a");for(auto& a:q.answers)cJSON_AddItemToArray(answers,cJSON_CreateString(a));}
+    if(job.app==App::Macro&&!spoken&&page_.macro.valid()){
+        const auto& m=page_.macro;auto* o=cJSON_AddObjectToObject(j.value,"macro");cJSON_AddNumberToObject(o,"at",m.updated);cJSON_AddNumberToObject(o,"g",m.group);
+        const auto value=[](float v){return std::isfinite(v)?cJSON_CreateNumber(std::round(double(v)*10000)/10000):cJSON_CreateNull();};
+        auto* rows=cJSON_AddArrayToObject(o,"r");
+        for(unsigned i=0;i<m.count;++i){const auto& r=m.rows[i];auto* a=cJSON_CreateArray();cJSON_AddItemToArray(a,cJSON_CreateNumber(r.series));cJSON_AddItemToArray(a,value(r.value));cJSON_AddItemToArray(a,value(r.previous));cJSON_AddItemToArray(a,cJSON_CreateNumber(r.date));cJSON_AddItemToArray(rows,a);}
+        if(m.points&&m.chartFor<m.count){auto* c=cJSON_AddObjectToObject(o,"c");cJSON_AddNumberToObject(c,"i",m.chartFor);cJSON_AddItemToObject(c,"lo",value(m.low));cJSON_AddItemToObject(c,"hi",value(m.high));cJSON_AddNumberToObject(c,"from",m.from);cJSON_AddNumberToObject(c,"zoom",m.zoomFrom);cJSON_AddNumberToObject(c,"to",m.to);
+            int points[60];for(unsigned i=0;i<m.points;++i)points[i]=m.chart[i];cJSON_AddItemToObject(c,"p",cJSON_CreateIntArray(points,m.points));}
+    }
     if(job.app==App::Stock&&!strcmp(phase,"ready")&&!spoken){
         // Values rounded to what the page shows keep cJSON from printing 17 digits of float noise.
         const auto& s=page_.stocks;auto* o=cJSON_AddObjectToObject(j.value,"stock");cJSON_AddNumberToObject(o,"t",s.updated);
@@ -164,8 +172,9 @@ void NativeServices::status(const char* state,const char* phase){
     const char* lines[]{stt_,answer_,"自动收音 · ","确认：打断 / 重试"};publish(current_,state,phase,"小智语音",lines);
 }
 bool NativeServices::request(App app,uint32_t generation,uint32_t request,const char* operation){
-    Job job{app,generation,request,{}};copy(job.operation,operation);desired_=generation;
-    if(!network_){const char* lines[]{"请先连接 WiFi，或使用 USB PPP","","",""};publish(job,"未联网",app==App::Home?"ready":"error","--",lines);return true;}
+    if(app==App::Macro&&strncmp(operation,"list:",5)&&strncmp(operation,"chart:",6))return false;
+    Job job{app,generation,request,{}};copy(job.operation,operation);desired_=generation;if(app==App::Macro)macroRequest_=request;
+    if(!network_&&app!=App::Macro){const char* lines[]{"请先连接 WiFi，或使用 USB PPP","","",""};publish(job,"未联网",app==App::Home?"ready":"error","--",lines);return true;}
     // Only these tasks keep running and read actions_; a one-shot fetch would drop the action, so the request
     // waits as the next job instead and its answer replaces the running fetch's (whose request is then stale).
     const bool reads=app==App::Chat||app==App::Radio||app==App::Podcast||app==App::Words||app==App::Daily||app==App::Quiz||app==App::Hot||app==App::News||keepsListening(app)||speaksOnce(app)||(speaksToo(app)&&!strcmp(operation,"toggle"));
@@ -188,7 +197,7 @@ void NativeServices::poll(){
     }
 }
 void NativeServices::run(void* context){auto& self=*static_cast<NativeServices*>(context);self.work();self.closeSocket();if((self.current_.app==App::Chat&&strcmp(self.current_.operation,"probe"))||self.transcribing()||self.current_.app==App::Radio||self.current_.app==App::Podcast||self.current_.app==App::Words||self.current_.app==App::Daily)self.audio_.stop();self.ready_=self.listening_=self.speaking_=self.playing_=false;self.finished_=true;vTaskSuspend(nullptr);}
-void NativeServices::work(){if(cancelled())return;if(!strcmp(current_.operation,"speak"))memo();else if(!strcmp(current_.operation,"locate"))locate();else if(current_.app==App::Home)home();else if(current_.app==App::Chat)chat();else if(current_.app==App::Radio)media();else if(current_.app==App::Podcast)podcast();else if(current_.app==App::Words)words();else if(current_.app==App::News)news();else if(current_.app==App::Rate)rates();else if(current_.app==App::History)history();else if(current_.app==App::Daily)daily();else if(current_.app==App::Quake)quake();else if(current_.app==App::Quiz)quiz();else if(current_.app==App::Hacker)hacker();else if(current_.app==App::Forecast)forecast();else if(current_.app==App::Stock)stock();else if(current_.app==App::Typhoon)typhoon();else if(current_.app==App::Hot)hot();else if(transcribing())memo();stackFree_=uxTaskGetStackHighWaterMark(nullptr);}
+void NativeServices::work(){if(cancelled())return;if(!strcmp(current_.operation,"speak"))memo();else if(!strcmp(current_.operation,"locate"))locate();else if(current_.app==App::Home)home();else if(current_.app==App::Chat)chat();else if(current_.app==App::Radio)media();else if(current_.app==App::Podcast)podcast();else if(current_.app==App::Words)words();else if(current_.app==App::News)news();else if(current_.app==App::Rate)rates();else if(current_.app==App::History)history();else if(current_.app==App::Daily)daily();else if(current_.app==App::Quake)quake();else if(current_.app==App::Quiz)quiz();else if(current_.app==App::Hacker)hacker();else if(current_.app==App::Forecast)forecast();else if(current_.app==App::Stock)stock();else if(current_.app==App::Macro)macro();else if(current_.app==App::Typhoon)typhoon();else if(current_.app==App::Hot)hot();else if(transcribing())memo();stackFree_=uxTaskGetStackHighWaterMark(nullptr);}
 bool NativeServices::syncClock(){
     // Once per boot even when the clock is set: it drifts in deep sleep (internal RC oscillator), and the alarm
     // wakes the device early to correct it before ringing.
@@ -206,16 +215,17 @@ bool NativeServices::retryPause(unsigned attempt){
     while(!cancelled()&&esp_timer_get_time()<until)vTaskDelay(pdMS_TO_TICKS(20));
     return !cancelled();
 }
-bool NativeServices::fetch(const char* url,char* output,size_t capacity,Sink sink,void* context,const char* post){
+bool NativeServices::fetch(const char* url,char* output,size_t capacity,Sink sink,void* context,const char* post,const char* userAgent,const char* const* headers){
     for(unsigned attempt=1;attempt<=networkAttempts&&!cancelled();++attempt){
     struct Body{NativeServices* self;char* bytes;size_t used,capacity;bool invalid,done;Sink sink;void* context;} body{this,output,0,capacity,false,false,sink,context};
     if(output){output[0]=0;}
     if(sink){sink(context,nullptr,0);}
-    esp_http_client_config_t config{};config.url=url;config.timeout_ms=12000;config.buffer_size=1024;config.buffer_size_tx=512;config.max_redirection_count=5;config.addr_type=HTTP_ADDR_TYPE_INET;config.crt_bundle_attach=esp_crt_bundle_attach;config.user_data=&body;
+    esp_http_client_config_t config{};config.url=url;config.timeout_ms=12000;config.buffer_size=1024;config.buffer_size_tx=512;config.max_redirection_count=5;config.addr_type=HTTP_ADDR_TYPE_INET;config.crt_bundle_attach=esp_crt_bundle_attach;config.user_data=&body;config.user_agent=userAgent;
     config.event_handler=[](esp_http_client_event_t* e)->esp_err_t{auto& b=*static_cast<Body*>(e->user_data);if(b.self->cancelled())return ESP_FAIL;if(e->event_id==HTTP_EVENT_ON_DATA&&e->data_len>0&&b.sink){if(esp_http_client_get_status_code(e->client)!=200)return ESP_OK;b.used+=e->data_len;if(!b.sink(b.context,static_cast<const char*>(e->data),e->data_len)){b.done=true;return ESP_FAIL;}return ESP_OK;}
         if(e->event_id==HTTP_EVENT_ON_DATA&&e->data_len>0){if(b.used+e->data_len>=b.capacity){b.invalid=true;return ESP_FAIL;}memcpy(b.bytes+b.used,e->data,e->data_len);b.used+=e->data_len;b.bytes[b.used]=0;}return ESP_OK;};
     if(post)config.method=HTTP_METHOD_POST;
     auto client=esp_http_client_init(&config);if(!client){error_=ESP_ERR_NO_MEM;return false;}
+    if(headers)for(unsigned i=0;headers[i]&&headers[i+1];i+=2)esp_http_client_set_header(client,headers[i],headers[i+1]);
     if(post){esp_http_client_set_header(client,"Content-Type","application/json");esp_http_client_set_post_field(client,post,strlen(post));}
     ++httpCount_;const auto result=esp_http_client_perform(client);const int code=esp_http_client_get_status_code(client);httpStatus_=code;error_=result;int tlsCode=0,tlsFlags=0;tlsResult_=esp_http_client_get_and_clear_last_tls_error(client,&tlsCode,&tlsFlags);tlsError_=tlsCode;tlsFlags_=tlsFlags;socketError_=esp_http_client_get_errno(client);esp_http_client_cleanup(client);
     if(!cancelled()&&(body.done||(!body.invalid&&result==ESP_OK&&code==200&&body.used>0)))return true;

@@ -115,7 +115,7 @@ void domainTests(Runtime& runtime) {
     puts("CASE_PASS foreground_only_timer_pause_notifications");
 }
 void settingsTests(Runtime& runtime){
-    CHECK(kFunctions.size()==42&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
+    CHECK(kFunctions.size()==43&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
     // Physical long-confirm emits Back: each step must follow the hierarchy.
     for(auto app:kFunctions){
         CHECK(runtime.switchTo(app)==Result::Ok);runtime.model.settingsPage=SettingsPage::List;
@@ -970,6 +970,29 @@ void toolPagesTests(Runtime& runtime){
     uiRender(runtime);uiCapture("stock_gold");
     m.stockIndex=3;runtime.key(Key::Down,703);CHECK(m.stockIndex==4&&m.stockDetail);
     runtime.key(Key::Back,704);CHECK(runtime.active()==App::Stock&&!m.stockDetail);m.stockCount=0;m.chartFor=255;
+    CHECK(runtime.switchTo(App::Macro)==Result::Ok&&!m.page.macro.count&&!m.macroDetail&&m.macroGroup==0);
+    uiRender(runtime);uiCapture("macro_loading");
+    auto& macro=m.page.macro;
+    const auto fillMacro=[&]{MacroBoard board(m.macroGroup);macro=MacroView{};macro.group=m.macroGroup;macro.count=6;macro.updated=1793232000;
+        for(unsigned i=0;i<6;++i)macro.rows[i]={board.items[i],4.2f+i/10.f,4.1f+i/10.f,20261027};};
+    fillMacro();runtime.key(Key::Up,705);CHECK(m.macroIndex==5);runtime.key(Key::Down,705);CHECK(m.macroIndex==0);
+    uiRender(runtime);uiCapture("macro_list");
+    const auto macroFooter=[&]{unsigned painted=0;for(unsigned i=0;i<40;++i){vTaskDelay(pdMS_TO_TICKS(50));const auto before=uiFlushPixels();uiAnimate(runtime);const auto pixels=uiFlushPixels()-before;CHECK(pixels<=240*(35+28));painted+=pixels;}CHECK(painted>0);};
+    macroFooter();uiCapture("macro_footer_scrolled");
+    runtime.key(Key::Down,705);auto macroPixels=uiFlushPixels();uiRender(runtime);CHECK(m.macroIndex==1&&uiFlushPixels()-macroPixels>=224*255);
+    runtime.key(Key::Up,705);macro.rows[0].value+=0.01f;macroPixels=uiFlushPixels();uiRender(runtime);CHECK(m.macroIndex==0&&uiFlushPixels()-macroPixels>=224*255);
+    runtime.key(Key::Confirm,707);CHECK(m.macroDetail&&!m.macroLong);
+    macro.chartFor=0;macro.points=60;macro.low=3.5;macro.high=5;macro.from=20260801;macro.zoomFrom=20261012;macro.to=20261027;
+    for(unsigned i=0;i<macro.points;++i)macro.chart[i]=int16_t(500+200*sinf(i/8.f));
+    uiRender(runtime);uiCapture("macro_detail_12");runtime.key(Key::Confirm,708);CHECK(m.macroLong);uiRender(runtime);uiCapture("macro_detail_60");
+    macroFooter();runtime.longKey(false,708);CHECK(m.macroGroup==0&&m.macroDetail);
+    runtime.key(Key::Down,709);CHECK(m.macroIndex==1&&m.macroDetail);runtime.key(Key::Back,710);CHECK(!m.macroDetail&&runtime.active()==App::Macro);
+    for(unsigned group=1;group<3;++group){runtime.longKey(false,711);CHECK(m.macroGroup==group&&m.macroIndex==0&&!macro.count);fillMacro();
+        if(group==2){macro.rows[2].value=1399.2f;macro.rows[2].previous=1326.9f;macro.rows[3].value=1041.083f;macro.rows[4].value=15541.85f;}
+        uiRender(runtime);uiCapture(group==1?"macro_us_list":"macro_commodity_list");}
+    runtime.longKey(false,711);CHECK(m.macroGroup==0&&!macro.count);runtime.longKey(true,711);CHECK(m.macroGroup==2&&!macro.count);
+    runtime.key(Key::Back,711);CHECK(runtime.active()==App::Menu&&kFunctions[runtime.selection()]==App::Macro);
+    CHECK(!speaksToo(App::Macro));puts("CASE_PASS macro_fixed_pages_color_detail_back_no_voice");
     // WiFi 工具箱: long Up/Down change tab; Confirm reruns the tab, except on 设备 where it saves the wake target and opens 唤醒.
     CHECK(runtime.switchTo(App::Wifi)==Result::Ok&&m.wifiTab==0);
     m.wifiApCount=4;m.page.wifi.aps[0]={"Kevin-Home",-42,6,false};m.page.wifi.aps[1]={"ChinaNet-Xa3F",-58,1,false};m.page.wifi.aps[2]={"Starbucks",-71,11,true};m.page.wifi.aps[3]={"",-80,7,false};
@@ -1320,7 +1343,7 @@ extern "C" void app_main() {
     const auto baseline = freeHeap();
     sample("warm_baseline", runtime);
     size_t activeMin = baseline, activeLargestMin = heap_caps_get_largest_free_block(kCaps);
-    // All 6 x 6 function pairs. Returning Home must recover the baseline.
+    // Every function pair. Returning Home must recover the baseline.
     for (const auto from : kFunctions) for (const auto to : kFunctions) {
         CHECK(runtime.switchTo(from) == Result::Ok);
         CHECK(runtime.switchTo(to) == Result::Ok);
@@ -1344,10 +1367,10 @@ extern "C" void app_main() {
         CHECK(heap_caps_check_integrity_all(true));
     }
     sample("switch_stress_done", runtime);
-    printf("STRESS {\"directed_pairs\":49,\"cycles\":30,\"baseline_free\":%u,\"recovered_free\":%u,\"active_min_free\":%u,\"active_min_largest\":%u,\"switches\":%lu}\n",
-        static_cast<unsigned>(baseline), static_cast<unsigned>(freeHeap()), static_cast<unsigned>(activeMin),
+    printf("STRESS {\"directed_pairs\":%u,\"cycles\":30,\"baseline_free\":%u,\"recovered_free\":%u,\"active_min_free\":%u,\"active_min_largest\":%u,\"switches\":%lu}\n",
+        unsigned(kFunctions.size()*kFunctions.size()), static_cast<unsigned>(baseline), static_cast<unsigned>(freeHeap()), static_cast<unsigned>(activeMin),
         static_cast<unsigned>(activeLargestMin), static_cast<unsigned long>(runtime.switches));
-    puts("CASE_PASS all_49_pairs_30_cycles_ui_and_heap_recovery");
+    puts("CASE_PASS all_function_pairs_30_cycles_ui_and_heap_recovery");
     CHECK(&runtime.settings() == &settings);
     CHECK(store.writes == configWrites && store.reads == configReads);
     wifi_ap_record_t ap{};
