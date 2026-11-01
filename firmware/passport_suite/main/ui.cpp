@@ -2848,7 +2848,7 @@ void uiRender(const Runtime& runtime) {
             }else if(page==SettingsPage::City){
                 // Two ways to set it: say the city, or look it up by the internet connection's IP.
                 setLabel(heading,"所在城市");
-                setLabel(value,model.listening()?"正在听…":model.voiceBusy()?"正在识别…":*model.cityName?model.cityName:"未设置");
+                setLabel(value,model.livePhase==LivePhase::Ready&&model.listening()?"正在听…":model.livePhase==LivePhase::Ready&&model.voiceBusy()?"正在识别…":*model.cityName?model.cityName:"未设置");
                 setLabel(lines[0],model.cityRow?"○  语音输入城市":"●  语音输入城市");setLabel(lines[1],model.cityRow?"●  按 IP 定位":"○  按 IP 定位");
                 setTextColor(lines[0],lv_color_hex(model.cityRow?kMuted:kAccent),0);setTextColor(lines[1],lv_color_hex(model.cityRow?kAccent:kMuted),0);
                 setLabel(lines[2],model.listening()?"说城市名，说完按确认":model.cityRow?"开了代理或 VPN 会不准":"如「美国纽约」「日本东京」");setLabel(lines[3],"天气城市 · 手机可搜索选择");
@@ -2889,6 +2889,7 @@ void uiRender(const Runtime& runtime) {
     static const char* const wakeNotes[]{"麦克风常开，待机明显变短","说「打开汇率」就进汇率","说「打开 Mac 的微信」","有对讲自动跳转，待机变短"};
     const bool wakeNote=app==App::Settings&&model.settingsPage==SettingsPage::Wake&&!*model.lastNotice;
     setLabel(notice, runtime.lastResult != Result::Ok ? "切换未完成，请重试"
+        : app==App::Settings&&model.settingsPage==SettingsPage::City ? model.cityStatus()
         : wakeNote ? wakeNotes[model.wakeRow%4] : model.lastNotice);
     if(app==App::Chat){char status[192];snprintf(status,sizeof(status),"%s音量 %u%%",model.live&&*model.liveLines[2]?model.liveLines[2]:"",model.volume);setLabel(lines[0],status);}
     if(showDashboard){visible(value,false);for(auto* line:lines)visible(line,false);}

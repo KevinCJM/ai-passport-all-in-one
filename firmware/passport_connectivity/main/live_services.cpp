@@ -131,7 +131,8 @@ bool LiveServices::snapshotJson(char* output,size_t size){
      json.append(values);
      // What the last spoken phrase or delete did, on the pages that take one.
      if(a==App::Rate||a==App::Stock||a==App::Countdown||a==App::Alarm||a==App::Settings){json.append(",\"notice\":");json.string(m.lastNotice);}
-     if(a==App::Settings){json.append(",\"city\":");json.string(m.cityName);}
+     if(a==App::Settings){json.append(",\"city\":");json.string(m.cityName);
+         if(m.settingsPage==SettingsPage::City){json.append(",\"city_status\":");json.string(m.cityStatus());}}
      // The start of the top note on show (the newest after a save), for tests.
      if(a==App::Memo){json.append(",\"memo_head\":");json.string(m.page.memo.rows[0].head);}
      // 状态牌: the label on show, its place, how many, lit, and the notice under it.
@@ -304,7 +305,10 @@ void LiveServices::action(Key key) {
 #ifdef PASSPORT_DEVICE
         if(!nativeIdle()){copy(m.lastNotice,"上一次还没完成，请稍候");return;}
 #endif
-        copy(m.lastNotice,m.cityRow?"正在按 IP 查询…":"正在连接小智…");request(m.cityRow?"locate":"speak");return;
+        m.lastNotice[0]=m.liveValue[0]=0;
+        copy(m.liveState,m.cityRow?"正在按 IP 查询…":"正在连接小智…");m.livePhase=LivePhase::Loading;
+        loadingAt_=requestedAt_=esp_timer_get_time()/1000000;
+        request(m.cityRow?"locate":"speak");return;
     }
     if(key==Key::Confirm&&runtime_.model.livePhase==LivePhase::Error&&active!=App::Macro) { request("enter");runtime_.model.livePhase=LivePhase::Loading;loadingAt_=requestedAt_=esp_timer_get_time()/1000000;return; }
     if(key==Key::Confirm&&active==App::Daily) { request("say"); return; }

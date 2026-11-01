@@ -1244,6 +1244,21 @@ void testInternationalCities(passport::Runtime& runtime){
     runtime.model.forecastView=0;uiRender(runtime);uiCapture("city_vancouver_local_days");
     runtime.model.forecastView=1;uiRender(runtime);uiCapture("city_vancouver_local_hours");
     runtime.model.forecastView=3;uiRender(runtime);uiCapture("city_foreign_warning_scope");
+    // Real Settings rendering through connect -> listen -> recognise -> result/error, with a stale hint present.
+    CHECK(runtime.switchTo(App::Settings)==Result::Ok);
+    auto& m=runtime.model;m.settingsPage=SettingsPage::City;m.cityRow=0;
+    strcpy(m.cityName,"杭州 · 浙江");strcpy(m.lastNotice,"正在连接小智…");
+    m.livePhase=LivePhase::Loading;strcpy(m.liveState,"云端连接中");m.liveValue[0]=0;
+    CHECK(!strcmp(m.cityStatus(),"云端连接中"));uiRender(runtime);uiCapture("city_voice_connecting");
+    m.livePhase=LivePhase::Ready;strcpy(m.liveState,"正在听");strcpy(m.liveValue,"rec");
+    CHECK(!strcmp(m.cityStatus(),"说城市名，说完按确认"));uiRender(runtime);uiCapture("city_voice_listening");
+    strcpy(m.liveState,"正在识别");strcpy(m.liveValue,"asr");
+    CHECK(!strcmp(m.cityStatus(),"正在识别…"));uiRender(runtime);uiCapture("city_voice_recognising");
+    m.livePhase=LivePhase::Error;strcpy(m.liveState,"识别超时，请重试");m.liveValue[0]=0;
+    CHECK(!strcmp(m.cityStatus(),"识别超时，请重试")&&!m.voiceBusy());uiRender(runtime);uiCapture("city_voice_error");
+    runtime.key(Key::Down,0);CHECK(m.cityRow==1);runtime.key(Key::Up,0);CHECK(m.cityRow==0);
+    m.livePhase=LivePhase::Ready;strcpy(m.cityName,"温哥华 · 加拿大");strcpy(m.lastNotice,"所在城市已改为温哥华");
+    CHECK(!strcmp(m.cityStatus(),m.lastNotice));uiRender(runtime);uiCapture("city_voice_saved");
     CHECK(runtime.switchTo(App::Home)==Result::Ok);runtime.model.weatherReading=original;uiRender(runtime);
     printf("CITY_CHECKS_DONE cities=%u heap=%u model=%u runtime=%u\n",count,unsigned(esp_get_free_heap_size()),unsigned(sizeof(Model)),unsigned(sizeof(Runtime)));
 }

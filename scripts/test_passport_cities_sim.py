@@ -52,7 +52,8 @@ def main():
             png(OUT / (active[0] + '.png'), active[1])
             frames.append(active[0])
             active = None
-    assert all(name in frames for name in ('city_new_york_home', 'city_vancouver_local_days', 'city_vancouver_local_hours', 'city_foreign_warning_scope'))
+    assert all(name in frames for name in ('city_new_york_home', 'city_vancouver_local_days', 'city_vancouver_local_hours', 'city_foreign_warning_scope',
+                                          'city_voice_connecting', 'city_voice_listening', 'city_voice_recognising', 'city_voice_error', 'city_voice_saved'))
     report = {'status': 'PASS', 'cities': int(done[1]), 'heap': int(done[2]), 'model_bytes': int(done[3]),
               'runtime_bytes': int(done[4]), 'frames': frames, 'catalog_glyphs_verified': True,
               'elapsed_seconds': round(time.monotonic() - started, 1), 'physical_device_accessed': False,

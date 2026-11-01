@@ -213,6 +213,13 @@ struct Model {
     bool confirmTaken{};
     bool listening() const { return !strcmp(liveValue,"rec"); }
     bool voiceBusy() const { return listening()||!strcmp(liveValue,"asr"); }
+    // City progress follows the service, so a connection hint cannot cover listening or an error.
+    const char* cityStatus() const {
+        if(livePhase!=LivePhase::Ready)return liveState;
+        if(listening())return "说城市名，说完按确认";
+        if(voiceBusy())return "正在识别…";
+        return lastNotice;
+    }
     // 随机转盘: page.wheel. A spin started at wheelSpunAt (microseconds, 0 = never) runs kWheelSpin while the highlight
     // steps wheelSteps times on from option wheelFrom, slowing down, and stops on wheelPick (255 = none yet).
     // wheelArmed: a long Down asked to delete the mode on show.

@@ -884,11 +884,12 @@ extern "C" void app_main() {
     xTaskCreate(consoleTask,"sim_console",3072,nullptr,3,nullptr);
     #endif
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.stack_size = 4096;
+    // /app_state builds a bounded 2 KiB JSON snapshot; simulator and badge need the same stack budget.
+    config.stack_size = 6144;
     config.max_uri_handlers = 22;
     config.uri_match_fn=httpd_uri_match_wildcard;
 #ifdef PASSPORT_DEVICE
-    config.stack_size=6144;config.lru_purge_enable=true;
+    config.lru_purge_enable=true;
 #endif
     httpd_handle_t server = nullptr;
     ESP_ERROR_CHECK(httpd_start(&server, &config));

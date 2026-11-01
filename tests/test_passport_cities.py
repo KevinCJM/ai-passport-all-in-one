@@ -30,6 +30,7 @@ class CityTests(unittest.TestCase):
         # Compile the actual production methods, stubbing only HTTP and persistence.
         native = (ROOT / 'firmware/passport_device/main/native_services.cpp').read_text()
         methods = native[native.index('namespace {\n// The city as Settings'):native.index('void NativeServices::closeSocket')]
+        status_method = native[native.index('void NativeServices::status('):native.index('bool NativeServices::request(')]
         portal = (ROOT / 'firmware/passport_device/main/wifi_portal.cpp').read_text()
         portal_method = portal[portal.index('esp_err_t WifiPortal::mediaSave'):portal.index('esp_err_t WifiPortal::ratePrefs')]
         source = r'''
@@ -52,12 +53,16 @@ const char* str(const cJSON* o,const char* key){const char* v=cJSON_GetStringVal
 double num(const cJSON* o,const char* key){const cJSON* v=cJSON_GetObjectItemCaseSensitive(o,key);return cJSON_IsNumber(v)?v->valuedouble:NAN;}
 class NativeServices {
 public:
-    char notice_[160]{},city_[80]{};std::string response,phase,state;bool network=true;
+    char notice_[160]{},city_[80]{},stt_[8]{},answer_[8]{};std::string response,phase,state,value;bool network=true;
+    bool failed_=false,listening_=false,asr_=false,transcript=false;int current_=0;
     void setCity(const char*);void locate();void cityName(char*,size_t)const;
-    void status(const char* text,const char* p="ready"){state=text;phase=p;}
+    void status(const char*,const char* p="ready");
+    bool transcribing()const{return transcript;}
+    void publish(int,const char* text,const char* p,const char* v,const char* const* =nullptr){state=text;phase=p;value=v;}
     bool fetch(const char* url,char* out,size_t size){assert(strstr(url,"ip-api.com/json/")&&strstr(url,"lang=zh-CN"));if(!network)return false;assert(response.size()<size);memcpy(out,response.c_str(),response.size()+1);return true;}
 };
 @METHODS@
+@STATUS@
 using esp_err_t=int;
 constexpr int ESP_FAIL=-1;
 struct httpd_req_t {std::string body;int content_len=0,status=0,read=0;bool allowed=true,origin=true;};
@@ -80,6 +85,12 @@ int main(){
         {"三藩市","US"},{"雪梨","AU"},{"汉城","KR"},{"New York","US"},{"TOKYO","JP"},
         {"中国香港","HK"},{"中国澳门","MO"},{"中国台湾台北","TW"}};
     NativeServices service;
+    // A timeout must finish capture before publishing the error, otherwise Settings still blocks Up/Down.
+    service.transcript=true;service.listening_=true;service.status("正在听");assert(service.value=="rec");
+    service.listening_=false;service.asr_=true;service.status("正在识别");assert(service.value=="asr");
+    service.status("识别超时，请重试","error");assert(service.failed_&&!service.listening_&&!service.asr_&&service.value.empty());
+    service.listening_=true;service.status("录音失败","error");assert(!service.listening_&&service.value.empty());
+    service.transcript=false;
     for(const auto& [phrase,code]:samples){auto* c=spokenCity(phrase);assert(c&&!strcmp(c->country,code));unsigned before=writes;service.setCity(phrase);assert(writes==before+1&&!strcmp(persisted.country,code)&&persisted.latitude==c->latitude);}
     assert(!spokenCity("未收录的城市"));assert(!spokenCity("我在美国温哥华"));
     assert(!cityNamed("London","US"));assert(!strcmp(cityNamed("London","CA")->country,"CA"));
@@ -133,7 +144,7 @@ int main(){
     setenv("TZ","EST5EDT",1);tzset();assert(forecastWeekday("2026-11-01")==0);
     static_assert(sizeof(MediaPrefs)==140); // Existing NVS preferences remain readable.
 }
-'''.replace('@METHODS@', methods).replace('@PORTAL@', portal_method)
+'''.replace('@METHODS@', methods).replace('@STATUS@', status_method).replace('@PORTAL@', portal_method)
         compiler = shutil.which('clang++') or shutil.which('g++')
         ccompiler = shutil.which('clang') or shutil.which('gcc')
         with tempfile.TemporaryDirectory(prefix='passport-cities-') as directory:

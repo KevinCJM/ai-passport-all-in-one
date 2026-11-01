@@ -459,7 +459,9 @@
         "firmware/passport_connectivity/main/live_services.cpp",
         "scripts/generate_passport_cities.py",
         "scripts/generate_passport_font.py",
-        ".github/README.md"
+        ".github/README.md",
+        "firmware/passport_suite/main/suite.hpp",
+        "firmware/passport_connectivity/main/main.cpp"
       ],
       "upstream_dependencies": [],
       "downstream_dependencies": [],
@@ -484,7 +486,8 @@
         "prefs_v2_layout_frozen",
         "local_forecast_weekday",
         "offline_catalog_generation",
-        "const_flash_catalog"
+        "const_flash_catalog",
+        "city_voice_progress_and_error_must_clear_capture"
       ],
       "edit_risk": "medium",
       "blast_radius": [

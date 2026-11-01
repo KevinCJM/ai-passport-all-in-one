@@ -167,6 +167,7 @@ void NativeServices::publish(const Job& job,const char* state,const char* phase,
 }
 void NativeServices::status(const char* state,const char* phase){
     failed_=!strcmp(phase,"error");
+    if(failed_)listening_=asr_=false;
     // 语音笔记: value tells the page whether the device is listening (rec) or waiting for the text (asr).
     if(transcribing()){publish(current_,state,phase,listening_?"rec":asr_?"asr":"");return;}
     const char* lines[]{stt_,answer_,"自动收音 · ","确认：打断 / 重试"};publish(current_,state,phase,"小智语音",lines);
