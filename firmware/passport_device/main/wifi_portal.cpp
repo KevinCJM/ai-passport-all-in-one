@@ -119,12 +119,8 @@ esp_err_t WifiPortal::mediaSave(httpd_req_t* request){
     const auto* city=cJSON_GetObjectItemCaseSensitive(json,"city");const auto* country=cJSON_GetObjectItemCaseSensitive(json,"country");
     const auto* latitude=cJSON_GetObjectItemCaseSensitive(json,"latitude");const auto* longitude=cJSON_GetObjectItemCaseSensitive(json,"longitude");
     const auto* province=cJSON_GetObjectItemCaseSensitive(json,"province");
-    MediaPrefs prefs{};bool valid=cJSON_IsString(city)&&cJSON_IsString(country)&&cJSON_IsNumber(latitude)&&cJSON_IsNumber(longitude)&&cJSON_IsString(province)&&strlen(province->valuestring)<sizeof(prefs.province)
-        &&*city->valuestring&&strlen(city->valuestring)<sizeof(prefs.city)&&std::isfinite(latitude->valuedouble)&&std::isfinite(longitude->valuedouble)
-        &&std::fabs(latitude->valuedouble)<=90&&std::fabs(longitude->valuedouble)<=180;
-    // Cities in China only (the page lists them with coordinates).
-    if(valid){const char* c=country->valuestring;valid=!strcmp(c,"CN")||!strcmp(c,"HK")||!strcmp(c,"MO")||!strcmp(c,"TW");}
-    if(valid){strcpy(prefs.city,city->valuestring);strcpy(prefs.country,country->valuestring);prefs.latitude=latitude->valuedouble;prefs.longitude=longitude->valuedouble;strcpy(prefs.province,province->valuestring);}
+    MediaPrefs prefs{};const bool valid=cJSON_IsString(city)&&cJSON_IsString(country)&&cJSON_IsNumber(latitude)&&cJSON_IsNumber(longitude)&&cJSON_IsString(province)
+        &&setMediaCity(prefs,city->valuestring,country->valuestring,province->valuestring,latitude->valuedouble,longitude->valuedouble);
     cJSON_Delete(json);
     if(!valid)return reply(request,"400 Bad Request","{\"message\":\"城市不正确，请刷新页面后重试\"}");
     if(!passport::mediaSave("prefs",prefs))return reply(request,"500 Internal Server Error","{\"message\":\"保存失败，请重试\"}");

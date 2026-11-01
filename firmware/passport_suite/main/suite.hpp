@@ -1,4 +1,5 @@
 #pragma once
+#include "menu_layout.hpp"
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -316,12 +317,24 @@ class Runtime {
     bool screenOff_{};  // long Confirm on the home page: screen off until the next key, on USB too
     bool quarantined_{};
     uint8_t selection_{};
+    MenuLayout menuLayout_{};
+    MenuView menuView_{};
+    uint8_t menuTopRow_{};
+    void ensureMenuSelection();
+    void moveMenu(int delta);
     SystemSettings* settings_{};
 public:
     Model model;
     uint32_t switches{}, rejectedEvents{}, queueDrops{};
     Result lastResult{Result::Ok};
     bool init(SystemSettings& settings);
+    // Main-loop only. Store first, then replace the complete view; voice/reminders keep their App IDs.
+    bool configureMenu(const MenuLayout& layout,bool persist=true);
+    const MenuLayout& menuLayout()const{return menuLayout_;}
+    const MenuView& menuView()const{return menuView_;}
+    unsigned menuPosition()const{return menuView_.position(selection_);}
+    unsigned menuWindowStart()const{return menuLayout_.mode==MenuLayout::Continuous?menuTopRow_*3:menuView_.starts[menuView_.page(menuPosition())];}
+    App selectedApp()const{return kFunctions[selection_];}
     bool setIdleMinutes(uint32_t minutes);
     bool settingsKey(Key key);
     // 已保存的 WiFi: rereads the names; rememberWifi puts a joined network first and makes it the one tried at boot;

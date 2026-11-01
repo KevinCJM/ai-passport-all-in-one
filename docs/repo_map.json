@@ -297,6 +297,227 @@
         ],
         "unsampled_paths": []
       }
+    },
+    {
+      "id": "menu_customization",
+      "name": "菜单自定义",
+      "path": "firmware/passport_suite/main/menu_layout.hpp",
+      "kind": "firmware_feature",
+      "purpose": "按功能选择、排序与原分类／连续滚动／自定义分页布局；手机配置页和Mac助手共用设备NVS配置。",
+      "module_tags": [
+        "menu",
+        "layout",
+        "NVS",
+        "UI",
+        "portal",
+        "assistant"
+      ],
+      "entry_files": [
+        "docs/menu-customization.md",
+        "firmware/passport_suite/main/menu_layout.hpp",
+        "firmware/passport_connectivity/main/menu_service.hpp",
+        "scripts/passport_menu.js"
+      ],
+      "key_symbols": [
+        "MenuLayout",
+        "MenuView",
+        "Runtime::configureMenu",
+        "Runtime::selectedApp",
+        "MenuService::request",
+        "MenuService::poll",
+        "renderMenu"
+      ],
+      "child_modules": [],
+      "first_read_files": [
+        "docs/menu-customization.md",
+        "firmware/passport_suite/main/menu_layout.hpp",
+        "firmware/passport_suite/main/suite.hpp",
+        "firmware/passport_suite/main/suite.cpp"
+      ],
+      "then_check_files": [
+        "firmware/passport_suite/main/apps.hpp",
+        "firmware/passport_suite/main/ui.cpp",
+        "firmware/passport_suite/main/settings.hpp",
+        "firmware/passport_suite/main/settings.cpp",
+        "firmware/passport_connectivity/main/menu_service.hpp",
+        "firmware/passport_connectivity/main/menu_service.cpp",
+        "firmware/passport_connectivity/main/main.cpp",
+        "firmware/passport_device/main/wifi_portal_page.hpp",
+        "scripts/passport_menu.js",
+        "scripts/passport_assistant.py",
+        "scripts/passport_device.py",
+        "scripts/passport_computer_link.py",
+        "scripts/build_passport_assistant.py",
+        ".github/README.md"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [
+        "真实USB/BLE链路、射频及物理按键手感"
+      ],
+      "related_tests": [
+        "tests/test_passport_menu.py",
+        "firmware/passport_suite/main/sim_main.cpp",
+        "scripts/test_passport_menu_sim.py",
+        "scripts/test_passport_menu_http.py",
+        "tests/test_passport_assistant.py",
+        "tests/test_passport_macro.py"
+      ],
+      "related_configs": [
+        "firmware/passport_device/CMakeLists.txt",
+        "firmware/passport_device/main/CMakeLists.txt",
+        "firmware/passport_connectivity/CMakeLists.txt",
+        "firmware/passport_connectivity/main/CMakeLists.txt"
+      ],
+      "risk_flags": [
+        "stable_app_ids",
+        "catalog_selection_not_display_position",
+        "config_v1_layout_frozen",
+        "single_pending_config",
+        "menu_only_visibility",
+        "ble_bounded_payload",
+        "host_simulation_not_physical_proof"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "菜单绘制和按键",
+        "音频进入预处理",
+        "手机及Mac后台配置",
+        "独立NVS布局记录"
+      ],
+      "pitfall_ids": [
+        "P04"
+      ],
+      "minimum_regression": [
+        "python3 tests/test_passport_menu.py -v",
+        "bash scripts/build_passport_suite.sh",
+        "python3 scripts/test_passport_menu_sim.py",
+        "bash scripts/build_passport_suite.sh connectivity",
+        "python3 scripts/test_passport_menu_http.py",
+        "bash scripts/build_passport_suite.sh device"
+      ],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "subtree_only",
+        "host_and_emulator_evidence"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "firmware/passport_suite/main/menu_layout.hpp",
+          "firmware/passport_suite/main/suite.cpp",
+          "firmware/passport_connectivity/main/menu_service.cpp",
+          "scripts/passport_menu.js",
+          "tests/test_passport_menu.py",
+          "firmware/passport_suite/main/sim_main.cpp"
+        ],
+        "unsampled_paths": []
+      }
+    },
+    {
+      "id": "city_location",
+      "name": "海外城市与定位",
+      "path": "firmware/passport_suite/main/city_location.hpp",
+      "kind": "firmware_feature",
+      "purpose": "中外城市语音选择、离线手机搜索、全球IP定位及预报当地日期；共用有界校验并保留现有NVS布局。",
+      "module_tags": [
+        "city",
+        "location",
+        "weather",
+        "voice",
+        "portal"
+      ],
+      "entry_files": [
+        "docs/international-cities.md",
+        "firmware/passport_suite/main/city_location.hpp",
+        "data/international-cities.json"
+      ],
+      "key_symbols": [
+        "spokenCity",
+        "cityNamed",
+        "setMediaCity",
+        "NativeServices::locate",
+        "forecastWeekday"
+      ],
+      "child_modules": [],
+      "first_read_files": [
+        "docs/international-cities.md",
+        "firmware/passport_suite/main/city_location.hpp",
+        "firmware/passport_device/main/media_catalog.hpp",
+        "firmware/passport_device/main/native_services.cpp"
+      ],
+      "then_check_files": [
+        "data/international-cities.json",
+        "firmware/passport_suite/main/city_list.hpp",
+        "firmware/passport_suite/main/city_countries.inc",
+        "firmware/passport_suite/main/international_city_entries.inc",
+        "firmware/passport_suite/main/voice_add.hpp",
+        "firmware/passport_suite/main/weather.hpp",
+        "firmware/passport_suite/main/ui.cpp",
+        "firmware/passport_device/main/wifi_portal.cpp",
+        "firmware/passport_device/main/wifi_portal_page.hpp",
+        "firmware/passport_connectivity/main/live_services.cpp",
+        "scripts/generate_passport_cities.py",
+        "scripts/generate_passport_font.py",
+        ".github/README.md"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [
+        "ip-api出口IP定位准确度",
+        "Open-Meteo覆盖与接口可达性",
+        "实际语音识别、物理按键及跨境网络表现"
+      ],
+      "related_tests": [
+        "tests/test_passport_cities.py",
+        "scripts/test_passport_cities_sim.py",
+        "scripts/test_passport_cities_browser.mjs",
+        "firmware/passport_suite/main/sim_main.cpp"
+      ],
+      "related_configs": [
+        "firmware/passport_device/CMakeLists.txt",
+        "scripts/build_passport_suite.sh"
+      ],
+      "risk_flags": [
+        "country_scoped_city_match",
+        "ip_coordinates_are_authoritative",
+        "prefs_v2_layout_frozen",
+        "local_forecast_weekday",
+        "offline_catalog_generation",
+        "const_flash_catalog"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "城市设置与天气、国内电台选择",
+        "手机城市列表、预报日期和字形"
+      ],
+      "pitfall_ids": [
+        "P05"
+      ],
+      "minimum_regression": [
+        "python3 scripts/generate_passport_cities.py --check",
+        "python3 tests/test_passport_cities.py -v",
+        "node scripts/test_passport_cities_browser.mjs",
+        "bash scripts/build_passport_suite.sh",
+        "python3 scripts/test_passport_cities_sim.py",
+        "bash scripts/build_passport_suite.sh device"
+      ],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "subtree_only",
+        "host_and_emulator_evidence"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "firmware/passport_suite/main/city_location.hpp",
+          "firmware/passport_device/main/native_services.cpp",
+          "firmware/passport_device/main/wifi_portal.cpp",
+          "tests/test_passport_cities.py",
+          "firmware/passport_suite/main/sim_main.cpp"
+        ],
+        "unsampled_paths": []
+      }
     }
   ]
 }

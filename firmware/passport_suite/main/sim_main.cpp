@@ -1174,6 +1174,80 @@ void failureTests(Runtime& runtime) {
 }
 }
 
+namespace passport {
+static MenuLayout sampleCustomMenu(){
+    auto layout=defaultMenuLayout();layout.mode=MenuLayout::Custom;layout.pageCount=2;layout.pages[0]=1;layout.pages[1]=0;
+    strcpy(layout.names[0],"常用");strcpy(layout.names[1],"财经工具");
+    for(auto app:kFunctions){layout.show(app,false);layout.assignment[static_cast<unsigned>(app)]=0;}
+    for(auto app:{App::Chat,App::Memo,App::Focus,App::Stock,App::Macro,App::Settings})layout.show(app,true);
+    for(auto app:{App::Stock,App::Macro,App::Settings})layout.assignment[static_cast<unsigned>(app)]=1;
+    return layout;
+}
+static void menuLayoutTests(Runtime& runtime){
+    auto layout=defaultMenuLayout();CHECK(layout.valid());CHECK(runtime.configureMenu(layout));
+    CHECK(runtime.menuView().count==43&&runtime.menuView().pages==5);
+    for(auto app:kFunctions)if(menuCategory(app)==0)layout.show(app,false);
+    CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==4&&runtime.menuView().count==34);
+    runtime.switchTo(App::Menu);runtime.key(Key::Confirm,0);CHECK(runtime.active()!=App::Chat);
+    // Continuous grid reuses nine cells and scrolls a row, retaining stable catalog selection semantics.
+    layout=defaultMenuLayout();layout.mode=MenuLayout::Continuous;std::reverse(layout.order[1],layout.order[1]+layout.catalogCount);
+    CHECK(runtime.configureMenu(layout));runtime.switchTo(App::Settings);runtime.switchTo(App::Menu);
+    CHECK(runtime.menuPosition()==0&&runtime.menuWindowStart()==0);uiRender(runtime);uiCapture("menu_continuous_top");
+    for(unsigned i=0;i<10;++i)runtime.key(Key::Down,0);
+    CHECK(runtime.menuPosition()==10&&runtime.menuWindowStart()==3);uiRender(runtime);uiCapture("menu_continuous_scroll");
+    for(unsigned i=0;i<43;++i){const auto before=runtime.menuPosition();runtime.key(Key::Down,0);CHECK(runtime.menuPosition()==(before+1)%43);CHECK(runtime.menuPosition()>=runtime.menuWindowStart()&&runtime.menuPosition()<runtime.menuWindowStart()+9);}
+    const auto before=runtime.menuPosition();CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==(before+9)%43);
+    layout.show(App::Macro,false);CHECK(runtime.configureMenu(layout));const auto selection=runtime.selection();
+    CHECK(runtime.switchTo(App::Macro)==Result::Ok);runtime.key(Key::Back,0);CHECK(runtime.active()==App::Menu&&runtime.selection()==selection);
+    // Save and reload the complete record; the standard system settings stay separate.
+    layout=sampleCustomMenu();CHECK(layout.valid()&&runtime.configureMenu(layout));
+    MenuLayout reloaded;CHECK(SettingsStore::loadMenu(reloaded)&&!memcmp(&layout,&reloaded,sizeof(layout)));
+    runtime.switchTo(App::Stock);runtime.switchTo(App::Menu);uiRender(runtime);uiCapture("menu_custom_finance");
+    CHECK(runtime.menuView().count==6&&runtime.menuView().pages==2&&runtime.menuView().groups[0]==1);
+    CHECK(runtime.longKey(false,0));CHECK(runtime.selectedApp()==App::Chat);uiRender(runtime);uiCapture("menu_custom_daily");
+    runtime.key(Key::Confirm,0);CHECK(runtime.active()==App::Chat);runtime.key(Key::Back,0);CHECK(runtime.selectedApp()==App::Chat);
+    for(auto app:kFunctions)layout.show(app,app==App::Settings);
+    CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().count==1&&runtime.menuView().pages==1&&runtime.selectedApp()==App::Settings);
+    runtime.switchTo(App::Menu);runtime.key(Key::Up,0);runtime.longKey(false,0);CHECK(runtime.selectedApp()==App::Settings);uiRender(runtime);uiCapture("menu_settings_only");
+    auto invalid=layout;invalid.show(App::Settings,false);CHECK(!runtime.configureMenu(invalid));CHECK(runtime.menuView().count==1);
+    CHECK(runtime.configureMenu(defaultMenuLayout()));runtime.switchTo(App::Home);
+    printf("MENU_MEMORY layout=%u view=%u no_extra_lvgl_cells=1\n",unsigned(sizeof(MenuLayout)),unsigned(sizeof(MenuView)));
+    puts("CASE_PASS menu_layout_categories_continuous_custom_order_hidden_voice_nvs_and_recovery");
+}
+}
+namespace {
+void testInternationalCities(passport::Runtime& runtime){
+    using namespace passport;
+    for(const char* heard:{"美国纽约","加拿大温哥华","日本东京","韩国首尔","澳洲悉尼","英国伦敦","法国巴黎","德国柏林"})CHECK(spokenCity(heard));
+    CHECK(!strcmp(spokenCity("加拿大伦敦")->country,"CA"));CHECK(!strcmp(spokenCity("英国伦敦")->country,"GB"));
+    CHECK(!strcmp(spokenCity("New York")->country,"US"));CHECK(!strcmp(spokenCity("京都")->country,"JP"));
+    CHECK(forecastWeekday("2026-10-31")==6&&forecastWeekday("2026-11-01")==0);
+    unsigned count=0;
+    for(const auto& city:kCities){
+        CHECK(validCityCoordinates(city.latitude,city.longitude));
+        for(const auto* s=reinterpret_cast<const unsigned char*>(city.name);*s;){
+            uint32_t c=*s++;
+            if(c>=0xe0){c=(c&15)<<12|uint32_t(s[0]&63)<<6|(s[1]&63);s+=2;}
+            else if(c>=0xc0){c=(c&31)<<6|(s[0]&63);++s;}
+            lv_font_glyph_dsc_t glyph{};CHECK(lv_font_get_glyph_dsc(LV_FONT_DEFAULT,&glyph,c,0));
+        }
+        ++count;
+    }
+    CHECK(count==519);
+    const auto original=runtime.model.weatherReading;
+    runtime.model.weatherReading.update("纽约","晴",13,8,17,55,0,25);uiRender(runtime);uiCapture("city_new_york_home");
+    CHECK(runtime.switchTo(App::Forecast)==Result::Ok);
+    auto& f=runtime.model.page.forecast;f={};snprintf(f.city,sizeof(f.city),"温哥华");f.days=7;f.weekday=6;f.hours=24;f.hour0=23;f.warnings=0xff;
+    runtime.model.livePhase=LivePhase::Ready;
+    for(auto& d:f.day)d={6,13,3,40};
+    for(auto& h:f.hour)h={9,3,40};
+    runtime.model.forecastView=0;uiRender(runtime);uiCapture("city_vancouver_local_days");
+    runtime.model.forecastView=1;uiRender(runtime);uiCapture("city_vancouver_local_hours");
+    runtime.model.forecastView=3;uiRender(runtime);uiCapture("city_foreign_warning_scope");
+    CHECK(runtime.switchTo(App::Home)==Result::Ok);runtime.model.weatherReading=original;uiRender(runtime);
+    printf("CITY_CHECKS_DONE cities=%u heap=%u model=%u runtime=%u\n",count,unsigned(esp_get_free_heap_size()),unsigned(sizeof(Model)),unsigned(sizeof(Runtime)));
+}
+}
 extern "C" void app_main() {
     using namespace passport;
     puts("SIM_BOOT_OK suite cpp=20 chip=esp32c3 flash=8MB psram=0 physical_device=0");
@@ -1195,12 +1269,14 @@ extern "C" void app_main() {
     sample("wifi_connected", runtime);
     uiInit();
     CHECK(runtime.init(settings));
+    printf("MENU_BOOT mode=%u visible=%u pages=%u\n",runtime.menuLayout().mode,runtime.menuView().count,runtime.menuView().pages);
     // Screenshot fixture from the supplied reference; production uses native IP weather.
     runtime.model.weatherReading.update("杭州","小毛毛雨",24.7,21,31,85,51,161);
     runtime.model.wifiConnected=true;runtime.model.wifiSignalKnown=true;runtime.model.wifiRssi=-50;
     runtime.model.batteryKnown=true;runtime.model.batteryPercent=85;
     setenv("TZ","CST-8",1);tzset();
     timeval homeTime{1792490743,0};settimeofday(&homeTime,nullptr);
+    testInternationalCities(runtime);
     uiRender(runtime);
     sample("core_ready", runtime);
     uiResourcesReady(false);CHECK(runtime.switchTo(App::Chat)==Result::Ok);uiRender(runtime);
@@ -1377,6 +1453,7 @@ extern "C" void app_main() {
     ESP_ERROR_CHECK(esp_wifi_sta_get_ap_info(&ap));
     CHECK(strcmp(reinterpret_cast<const char*>(ap.ssid), settings.wifiSsid) == 0);
     puts("CASE_PASS one_shared_config_no_reconfigure_during_switches_wifi_still_associated");
+    menuLayoutTests(runtime);
     domainTests(runtime);
     settingsTests(runtime);
     powerTests(runtime);
@@ -1390,6 +1467,7 @@ extern "C" void app_main() {
     printf("SUITE_PASS checks=%u switches=%lu rejected_events=%lu queue_drops=%lu\n", checks,
            static_cast<unsigned long>(runtime.switches), static_cast<unsigned long>(runtime.rejectedEvents),
            static_cast<unsigned long>(runtime.queueDrops));
+    CHECK(runtime.configureMenu(sampleCustomMenu())); // Host cold-boots this virtual flash and verifies this layout.
     CHECK(runtime.shutdown()); uiShutdown();
     puts("SUITE_DONE");
     for (;;) vTaskDelay(pdMS_TO_TICKS(1000));

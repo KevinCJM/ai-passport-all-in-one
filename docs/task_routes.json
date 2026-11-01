@@ -160,6 +160,78 @@
         "subtree_only",
         "host_and_build_evidence_only"
       ]
+    },
+    {
+      "id": "R04",
+      "task_type": "menu_customization",
+      "match_keywords": [
+        "菜单",
+        "菜单自定义",
+        "显示模式",
+        "自定义分页",
+        "功能排序",
+        "menu_layout",
+        "menu_service",
+        "passport_menu"
+      ],
+      "negative_keywords": [],
+      "route_priority": 90,
+      "first_read_modules": [
+        "menu_customization"
+      ],
+      "expand_to_modules": [],
+      "pitfall_ids": [
+        "P04"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_reference_map_first"
+      ],
+      "scope_flags": [
+        "subtree_only",
+        "host_and_emulator_evidence"
+      ]
+    },
+    {
+      "id": "R05",
+      "task_type": "international_city_location",
+      "match_keywords": [
+        "海外城市",
+        "国外城市",
+        "城市定位",
+        "所在城市",
+        "城市搜索",
+        "city_location",
+        "city_list",
+        "international_cities"
+      ],
+      "negative_keywords": [],
+      "route_priority": 85,
+      "first_read_modules": [
+        "city_location"
+      ],
+      "expand_to_modules": [],
+      "pitfall_ids": [
+        "P05"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_reference_map_first"
+      ],
+      "scope_flags": [
+        "subtree_only",
+        "host_and_emulator_evidence"
+      ]
     }
   ]
 }

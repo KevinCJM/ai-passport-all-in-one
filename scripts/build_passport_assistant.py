@@ -16,7 +16,9 @@ from passport_signing import identity,sign,requirement
 ROOT=Path(__file__).resolve().parents[1]
 WORK=ROOT/'experiments/passport-assistant-build'
 SOURCES=WORK/'sources'
-DIST=ROOT/'releases/ai-passport-assistant-0.1.1-preview'
+VERSION='0.1.2'
+BUILD_NUMBER='5'
+DIST=ROOT/f'releases/ai-passport-assistant-{VERSION}-preview'
 TOOLS=ROOT/'experiments/passport-connectivity-tools/bin'
 OPUS=Path('/opt/homebrew/opt/opus/lib/libopus.0.dylib').resolve()  # 语音输入's encoder, loaded with ctypes
 
@@ -100,7 +102,7 @@ def main():
     encoder=media();licenses=notices()
     opus=WORK/OPUS.name;shutil.copy2(OPUS,opus);opus.chmod(0o755)
     run(['/usr/bin/install_name_tool','-id','@loader_path/'+OPUS.name,opus])
-    hashes={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT/'scripts').glob('*') if p.suffix in ('.py','.cpp')}
+    hashes={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT/'scripts').glob('*') if p.suffix in ('.py','.cpp','.js')}
     (WORK/'source-hashes.json').write_text(json.dumps(hashes,indent=2)+'\n')
     command=[sys.executable,'-m','PyInstaller','--noconfirm','--windowed','--onedir','--name','AI Passport Assistant',
              '--osx-bundle-identifier','local.ai-passport.assistant','--target-arch','arm64',
@@ -109,11 +111,11 @@ def main():
              '--hidden-import','bleak.backends.corebluetooth.client','--hidden-import','bleak.backends.corebluetooth.scanner',
              '--hidden-import','sounddevice','--hidden-import','websockets.sync.client',
              '--collect-all','_sounddevice_data', '--add-data',str(WORK/'source-hashes.json')+':.',
-             '--add-data',str(licenses)+':licenses']
+             '--add-data',str(licenses)+':licenses','--add-data',str(ROOT/'scripts/passport_menu.js')+':.']
     for file in [TOOLS/'passport-dictation',TOOLS/'passport-ppp',encoder,opus]:command.extend(['--add-binary',str(file)+':helpers'])
     command.append(ROOT/'scripts/passport_assistant.py');run(command,ROOT,dict(os.environ,PYINSTALLER_CONFIG_DIR=str(WORK/'cache'),PYTHONNOUSERSITE='1'))
     app=DIST/'AI Passport Assistant.app';info=app/'Contents/Info.plist'
-    config=plistlib.loads(info.read_bytes());config.update(CFBundleShortVersionString='0.1.1',CFBundleVersion='4',LSUIElement=True,LSMinimumSystemVersion='15.0',
+    config=plistlib.loads(info.read_bytes());config.update(CFBundleShortVersionString=VERSION,CFBundleVersion=BUILD_NUMBER,LSUIElement=True,LSMinimumSystemVersion='15.0',
         NSBluetoothAlwaysUsageDescription='连接已配对的 AI Passport，接收设备麦克风语音和按键事件。')
     info.write_bytes(plistlib.dumps(config));sign(app,signer)
     signing_requirement=requirement(app)
@@ -127,18 +129,19 @@ def main():
     components=plistlib.loads(component_list.read_bytes())
     for component in components:component.update(BundleIsRelocatable=False,BundleOverwriteAction='upgrade')
     component_list.write_bytes(plistlib.dumps(components))
-    run(['/usr/bin/pkgbuild','--root',payload,'--component-plist',component_list,'--install-location','/','--identifier','local.ai-passport.preview.components','--version','0.1.1',WORK/'components.pkg'])
+    run(['/usr/bin/pkgbuild','--root',payload,'--component-plist',component_list,'--install-location','/','--identifier','local.ai-passport.preview.components','--version',VERSION,WORK/'components.pkg'])
     resources=WORK/'installer-resources';resources.mkdir(exist_ok=True)
     (resources/'welcome.txt').write_text('AI Passport 助手 · macOS Apple Silicon 预览版\n\n安装桌面助手、PPP 与蓝牙适配组件。\n语音输入用小智识别，无需安装输入法；Codex 由用户自行安装、登录。\n\nUSB 优先；进入电脑功能后拔线可切换蓝牙。首次配对请使用 USB 数据线。预览版请参阅实机验收记录。\n')
     distribution=WORK/'distribution.xml'
-    distribution.write_text('''<?xml version="1.0"?><installer-gui-script minSpecVersion="2"><title>AI Passport 助手</title><welcome file="welcome.txt"/><options customize="never" require-scripts="false" hostArchitectures="arm64"/><volume-check><allowed-os-versions><os-version min="15.0"/></allowed-os-versions></volume-check><domains enable_localSystem="true" enable_currentUserHome="false"/><choices-outline><line choice="default"/></choices-outline><choice id="default" title="AI Passport 助手"><pkg-ref id="local.ai-passport.preview.components"/></choice><pkg-ref id="local.ai-passport.preview.components" version="0.1.1" auth="Root">components.pkg</pkg-ref></installer-gui-script>''')
-    run(['/usr/bin/productbuild','--distribution',distribution,'--package-path',WORK,'--resources',resources,DIST/'AI-Passport-Assistant-0.1.1-preview-arm64.pkg'])
+    distribution.write_text('''<?xml version="1.0"?><installer-gui-script minSpecVersion="2"><title>AI Passport 助手</title><welcome file="welcome.txt"/><options customize="never" require-scripts="false" hostArchitectures="arm64"/><volume-check><allowed-os-versions><os-version min="15.0"/></allowed-os-versions></volume-check><domains enable_localSystem="true" enable_currentUserHome="false"/><choices-outline><line choice="default"/></choices-outline><choice id="default" title="AI Passport 助手"><pkg-ref id="local.ai-passport.preview.components"/></choice><pkg-ref id="local.ai-passport.preview.components" version="%s" auth="Root">components.pkg</pkg-ref></installer-gui-script>'''%VERSION)
+    run(['/usr/bin/productbuild','--distribution',distribution,'--package-path',WORK,'--resources',resources,DIST/f'AI-Passport-Assistant-{VERSION}-preview-arm64.pkg'])
     with tarfile.open(DIST/'component-sources.tar.gz','w:gz') as archive:
         for path in SOURCES.iterdir():archive.add(path,arcname=path.name)
         archive.add(Path(__file__),arcname='build_passport_assistant.py')
         for path in (ROOT/'scripts').glob('passport*.py'):archive.add(path,arcname='assistant-source/'+path.name)
+        archive.add(ROOT/'scripts/passport_menu.js',arcname='assistant-source/passport_menu.js')
         for name in ['mac_dictation_bridge.cpp','passport_ppp_gateway.cpp']:archive.add(ROOT/'scripts'/name,arcname='assistant-source/'+name)
-    manifest={'version':'0.1.1-preview','platform':'macOS arm64','minimum_macos':'15.0','official_apps_bundled':False,'private_config_bundled':False,
+    manifest={'version':VERSION+'-preview','build':BUILD_NUMBER,'platform':'macOS arm64','minimum_macos':'15.0','official_apps_bundled':False,'private_config_bundled':False,
               'signed_with_developer_id':False,'notarized':False,'firmware_flashed_by_build':False,
               'signature':'persistent local development certificate','designated_requirement':signing_requirement,
               'source_hashes':hashes,'files':{p.name:{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in DIST.iterdir() if p.is_file()}}

@@ -5,6 +5,7 @@
 
 namespace passport {
 struct WordDeck;
+struct MenuLayout;
 // One system record shared by every app. Values here are simulator fixtures.
 struct SystemSettings {
     uint32_t version{1};
@@ -133,6 +134,8 @@ public:
     // One-byte system choices kept beside config_v1: "home_screen", "wake_word".
     static uint8_t loadByte(const char* key);
     static bool saveByte(const char* key, uint8_t value);
+    static bool loadMenu(MenuLayout& layout);
+    static bool saveMenu(const MenuLayout& layout);
     static bool loadWords(WordDeck& deck);
     static bool saveWords(const WordDeck& deck);
     static bool loadStatus(StatusBoard& board);

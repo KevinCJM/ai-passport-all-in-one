@@ -160,6 +160,7 @@ class Device:
    try:
     connection.request('GET' if raw is None else 'POST',path,body=raw,headers=headers);response=connection.getresponse();body=response.read()
     if response.status==503 or (response.status==500 and b'queue full' in body):raise LinkBusy('device service queue busy')
+    if path=='/menu' and response.status==409:raise ValueError('配置已变化或正在保存，请重新读取胸牌')
     if response.status!=200:raise RuntimeError('physical HTTP '+str(response.status))
     return json.loads(body)
    except Exception:
@@ -187,6 +188,8 @@ class Device:
    if len(title.encode())>=40 or len(text.encode())>=301:raise ValueError('qr entry too long')
    with self.command_lock:result=self.send_command('qr_code',index=index,title=title or ('二维码 %d'%(index+1)),text=text)
   return result
+ def menu(self,data):
+  with self.command_lock:return self.request('/menu',data)
  def send_command(self,name,**extra):
   allowed={'up','down','ok','back','settings','wake','wifi_connect','wifi_disconnect','ap_on','ap_off','ble_on','ble_off','scan','ppp_probe','configure_wifi','refresh_service','status_labels','countdowns','qr_code'}
   if name not in allowed:raise ValueError('unsupported physical command')
@@ -275,11 +278,13 @@ class Device:
    except subprocess.TimeoutExpired:self.gateway.kill();self.gateway.wait()
   self.gateway_log.close()
 PAGE='''<!doctype html><html lang=zh-CN><meta charset=utf-8><title>AI Passport 实机</title><style>body{font:16px system-ui;background:#10191f;color:#e4ecee;margin:32px}button{padding:12px;margin:6px}pre{white-space:pre-wrap;max-width:1000px}</style><h1>AI Passport 实机</h1><p>USB / 蓝牙自动切换；设备麦克风、扬声器、屏幕与按键。确认进入功能，长按确认返回。</p><button onclick="act('up')">上</button><button onclick="act('down')">下</button><button onclick="act('ok')">确认</button><button onclick="act('back')">返回</button><button onclick="act('settings')">设置</button><h2>豆包输入结果</h2><p>在设备上按确认开始说话，再按确认结束。</p><textarea rows=5 cols=60 aria-label=豆包输入结果></textarea><h2 id=status>设备内容</h2><style>.row input,.row textarea{font-size:16px;padding:6px;margin:3px}.row{margin:4px 0}section{border-top:1px solid #2a3a44;padding:8px 0}</style>
+<section id=menu><h3>菜单自定义</h3><p>选择功能、分页方式和显示顺序，保存到已连接的胸牌。</p><div id=menu-editor></div></section>
 <section><h3>状态牌文字</h3><p>显示在「状态牌」页面，排在预设标签前面。最多 5 条，每条不超过 8 个字，留空表示不用。在胸牌状态牌页按确认说话也能添加，发送会替换胸牌上的全部自定义文字。</p><div id=labels class=row></div><button onclick="saveLabels()">发送到设备</button> <span id=labelResult></span></section>
 <section><h3>倒数日</h3><p>下班时间（留空表示不显示下班倒计时）：<input id=offwork type=time value="18:00"></p><p>自己的日子，最多 6 个；名称不超过 8 个字。勾「每年」按周年倒数，勾「农历」按农历月日。没勾「每年」且已过去的，显示「已经 N 天」。</p><div id=events></div><button onclick="saveEvents()">发送到设备</button> <span id=eventResult></span></section>
 <section><h3>二维码</h3><p>最多 4 个，内容可以是网址、微信 / 支付宝收款码里的链接、任意文字，不超过 300 个字节。WiFi 二维码由设备按已连接的 WiFi 自动生成。</p><div id=codes></div><button onclick="saveCodes()">发送到设备</button> <span id=codeResult></span></section>
 <section id=mac><h3>打开 Mac 程序</h3><p>对胸牌说「你好小智」，等它开始听，再说「打开 Mac 的 xxx」。下面自己设的口令优先，没设的按程序名自动找。胸牌上已有的功能名（计算器、日历、天气…）仍打开胸牌的，要开电脑上的请说「打开 Mac 的计算器」。最多 40 条，口令不超过 12 个字。</p><div id=macRows></div><datalist id=macApps></datalist><button onclick="macRow()">添加一条</button> <button onclick="saveMac()">保存</button> <span id=macResult></span><h4>胸牌最近听到的</h4><p>没打开对的，可以把听到的词设为口令。</p><div id=macHeard></div></section>
-<details><summary>连接诊断</summary><pre id=state></pre></details><script>
+<details><summary>连接诊断</summary><pre id=state></pre></details><script src="/menu-editor.js"></script><script>
+PassportMenu.mount(document.querySelector("#menu-editor"),"/api");
 function load(key){try{return JSON.parse(localStorage[key]||'null')}catch(e){return null}}
 function keep(key,value){try{localStorage[key]=JSON.stringify(value)}catch(e){}}
 async function send(path,body,out){out.textContent='发送中…';try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error((await r.json()).error);out.textContent='已发送';return true}catch(e){out.textContent='发送失败：'+e.message+'（请确认设备已连接）';return false}}
@@ -316,6 +321,8 @@ class Handler(BaseHTTPRequestHandler):
   try:
    if self.headers.get('Host')!='127.0.0.1:'+str(DEVICE.config['ui_port']):return self.send(403,{'error':'host'})
    if self.path=='/':return self.send(200,PAGE,'text/html;charset=utf-8')
+   if self.path=='/menu-editor.js':return self.send(200,(pathlib.Path(__file__).parent/'passport_menu.js').read_text(), 'application/javascript;charset=utf-8')
+   if self.path=='/api/menu' or self.path in {f'/api/menu/catalog?group={i}' for i in range(5)}:return self.send(200,DEVICE.request(self.path[4:]))
    if self.path=='/api/state':return self.send(200,DEVICE.snapshot())
    if self.path=='/api/services':return self.send(200,DEVICE.services.snapshot())
    if self.path=='/api/assistant-permissions':
@@ -329,7 +336,7 @@ class Handler(BaseHTTPRequestHandler):
    if self.path=='/api/device-info':return self.send(200,DEVICE.request('/wifi/status'))
    if self.path=='/api/mac-apps':return self.send(200,DEVICE.services.mac_config())
    return self.send(404,{'error':'not found'})
-  except Exception as error:return self.send(500,{'error':type(error).__name__})
+  except Exception as error:return self.send(500,{'error':str(error) if self.path.startswith('/api/menu') else type(error).__name__})
  def do_POST(self):
   try:
    if self.headers.get('Host')!='127.0.0.1:'+str(DEVICE.config['ui_port']):return self.send(403,{'error':'host'})
@@ -340,6 +347,7 @@ class Handler(BaseHTTPRequestHandler):
    if size<=0 or size>16384:raise ValueError('invalid size')
    data=json.loads(self.rfile.read(size))
    if self.path=='/api/action':result=DEVICE.command(data['command'])
+   elif self.path=='/api/menu':result=DEVICE.menu(data)
    elif self.path=='/api/native':result=DEVICE.native(data)
    elif self.path=='/api/status-labels':result=DEVICE.status_labels(data['labels'])
    elif self.path=='/api/countdowns':result=DEVICE.countdowns(data['events'],data['offwork'])
@@ -348,7 +356,7 @@ class Handler(BaseHTTPRequestHandler):
    elif self.path=='/api/mac-open':result={'note':DEVICE.services.mac.open_path(data['path'])}
    else:return self.send(404,{'error':'not found'})
    return self.send(200,result)
-  except Exception as error:return self.send(500,{'error':type(error).__name__})
+  except Exception as error:return self.send(500,{'error':str(error) if self.path=='/api/menu' else type(error).__name__})
 if __name__=='__main__':
  DEVICE=Device();SERVER=ThreadingHTTPServer(('127.0.0.1',DEVICE.config['ui_port']),Handler)
  print('PHYSICAL_PASSPORT_READY http://127.0.0.1:'+str(DEVICE.config['ui_port']),flush=True)

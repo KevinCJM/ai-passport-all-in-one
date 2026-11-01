@@ -141,6 +141,97 @@
         "运行宿主解析器 ASan/UBSan 测试及固件构建",
         "实机网络、按键、缓存重启和 RAM 峰值需独立验证，构建不替代验收"
       ]
+    },
+    {
+      "id": "P04",
+      "title": "menu_layout_stable_identity_and_atomic_apply",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "display_position_is_not_app_id",
+        "lost_configuration",
+        "heap_growth",
+        "hidden_feature_side_effects"
+      ],
+      "symptoms": [
+        "排序后图标、进入目标和音频预处理不一致",
+        "仅USB可配置而BLE接口遗漏",
+        "请求已排队却误报已保存",
+        "隐藏入口导致闹钟、语音跳转失效"
+      ],
+      "trigger_actions": [
+        "修改菜单显示、排序、分页及后台布局配置"
+      ],
+      "related_paths": [
+        "firmware/passport_suite/main/menu_layout.hpp",
+        "firmware/passport_suite/main/suite.cpp",
+        "firmware/passport_suite/main/ui.cpp",
+        "firmware/passport_connectivity/main/menu_service.cpp",
+        "firmware/passport_connectivity/main/main.cpp",
+        "scripts/passport_menu.js"
+      ],
+      "affected_modules": [
+        "menu_customization"
+      ],
+      "blast_radius": [
+        "全部功能入口与返回定位",
+        "共享音频与设备配置"
+      ],
+      "check_before_edit": [
+        "App ID和selection完整目录索引保持稳定，目标统一经selectedApp获取",
+        "menu_v1独立481字节记录，不能改变config_v1；系统设置不可隐藏",
+        "UI主循环一次应用单份待提交布局，写入成功后才确认；不能将完整布局复制进16项命令队列",
+        "隐藏仅影响菜单，保留语音、提醒和对讲监听；BLE载荷不超过现有2304字节缓冲"
+      ],
+      "safe_observation_methods": [
+        "运行宿主随机布局及编码往返测试、C3完整回归和实际HTTP/NVS冷启动测试",
+        "查看仿真内实际LVGL截图，并将实机链路和按键体验单独验收"
+      ]
+    },
+    {
+      "id": "P05",
+      "title": "international_city_country_coordinates_and_local_dates",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "same_name_different_country",
+        "ip_coordinates_overwritten",
+        "forecast_date_off_by_one",
+        "nvs_layout_migration",
+        "catalog_drift"
+      ],
+      "symptoms": [
+        "海外IP被当作代理拒绝或加拿大伦敦匹配到英国",
+        "天气星期由胸牌时区推算而错一天",
+        "语音表、手机表和字体不同步"
+      ],
+      "trigger_actions": [
+        "修改城市目录、语音匹配、IP定位或天气当地日期"
+      ],
+      "related_paths": [
+        "data/international-cities.json",
+        "firmware/passport_suite/main/city_location.hpp",
+        "firmware/passport_device/main/native_services.cpp",
+        "firmware/passport_device/main/media_catalog.hpp",
+        "firmware/passport_suite/main/weather.hpp"
+      ],
+      "affected_modules": [
+        "city_location"
+      ],
+      "blast_radius": [
+        "天气与城市配置",
+        "本地电台排序及旧城市持久化"
+      ],
+      "check_before_edit": [
+        "MediaPrefs保持v2及140字节，不改旧NVS；城市与坐标全部校验后再保存",
+        "IP名称查找必须按国家过滤，坐标用服务值；手机页同名条目读取、搜索及再次保存保留当前坐标；库外城市允许保存，失败保留旧值",
+        "预报星期从服务当地日期计算，不改主时钟、闹钟时区；预警只限中国内地，AQI仍为中国国标",
+        "海外JSON为唯一维护源；生成器同步两份inc和手机页，字体生成需扫描inc；城市表放Flash"
+      ],
+      "safe_observation_methods": [
+        "宿主实际原生和HTTP保存方法的ASan/UBSan测试",
+        "隔离浏览器手机页及C3模拟器519个城市字形检查；实机语音、网络另验"
+      ]
     }
   ]
 }

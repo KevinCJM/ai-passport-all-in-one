@@ -2,6 +2,7 @@
 #include "startup_object.hpp"
 #include "suite.hpp"
 #include "identity.hpp"
+#include "menu_service.hpp"
 #ifdef PASSPORT_DEVICE
 #include "board.hpp"
 #include "tool_tasks.hpp"
@@ -53,6 +54,7 @@ void ble_store_config_init(void);
 namespace {
 using namespace passport;
 Runtime& runtime=startupObject<Runtime>();
+MenuService& menuService=startupObject<MenuService>();
 LiveServices live(runtime);
 SystemSettings settings;
 std::atomic<bool> station{}, ap{}, bt{}, linked{}, encrypted{}, hostStopped{}, notify{}, bleReady{};
@@ -583,6 +585,15 @@ int companionRequest(const char* raw,char* output,size_t size){
     if(difference)return 401;
     const auto* path=cJSON_GetObjectItemCaseSensitive(object,"path");if(!cJSON_IsString(path))return 400;
     live.hostSeen();
+    if(!strcmp(path->valuestring,"/menu")){
+        auto* data=cJSON_GetObjectItemCaseSensitive(object,"data");
+        return data&&!cJSON_IsObject(data)?400:menuService.request(data,output,size);
+    }
+    constexpr char menuCatalogPrefix[]="/menu/catalog?group=";
+    if(!strncmp(path->valuestring,menuCatalogPrefix,sizeof(menuCatalogPrefix)-1)){
+        const char* group=path->valuestring+sizeof(menuCatalogPrefix)-1;
+        return group[0]>='0'&&group[0]<='4'&&!group[1]?MenuService::catalog(group[0]-'0',output,size):400;
+    }
     if(!strcmp(path->valuestring,"/status")){state(output,size);return 200;}
     if(!strcmp(path->valuestring,"/events")){board::nextEvent(output,size);return 200;}
     if(!strcmp(path->valuestring,"/app_state"))return live.snapshotJson(output,size)?200:500;
@@ -670,7 +681,7 @@ int execute(const char* name) {
 #endif
     // Long Confirm in the podcast player only goes back to its list; the page and its task stay.
     const bool leavingAudio=!strcmp(name,"back") && profile(previous).audio && !(previous==App::Podcast&&runtime.model.podcastPlayer);
-    const bool enteringAudio=!strcmp(name,"ok") && previous==App::Menu && profile(kFunctions[runtime.selection()]).audio && kFunctions[runtime.selection()]!=App::Dictation;
+    const bool enteringAudio=!strcmp(name,"ok") && previous==App::Menu && profile(runtime.selectedApp()).audio && runtime.selectedApp()!=App::Dictation;
     // 语音输入: Confirm starts and ends speaking; on the error screen it reconnects instead (LiveServices).
     if(previous==App::Dictation && !strcmp(name,"ok") && runtime.model.livePhase!=LivePhase::Error) return dictationBle.toggle(runtime.generation());
     if(previous==App::Dictation && !strcmp(name,"back")) dictationBle.cancel();
@@ -803,6 +814,42 @@ int execute(const char* name) {
     }
     return static_cast<int>(runtime.lastResult);
 }
+char menuHttpBuffer[1025]; // Only the single httpd task uses this shared request/response scratch space.
+void initMenuHttp(httpd_handle_t server){
+    httpd_uri_t route{};route.uri="/menu*";route.method=HTTP_GET;
+    route.handler=[](httpd_req_t* request)->esp_err_t{
+#ifdef PASSPORT_DEVICE
+        if(!board::authorized(request)&&!wifiPortal.acceptsSetup(request))return httpd_resp_send_err(request,HTTPD_401_UNAUTHORIZED,"unauthorized");
+#endif
+        httpd_resp_set_hdr(request,"Cache-Control","no-store");
+        if(!strcmp(request->uri,"/menu-editor.js")){
+            extern const char menuJsStart[] asm("_binary_passport_menu_js_start");
+            extern const char menuJsEnd[] asm("_binary_passport_menu_js_end");
+            httpd_resp_set_type(request,"application/javascript;charset=utf-8");return httpd_resp_send(request,menuJsStart,menuJsEnd-menuJsStart-1);
+        }
+        auto& out=menuHttpBuffer;int status=404;
+        if(!strcmp(request->uri,"/menu"))status=menuService.request(nullptr,out,sizeof(out));
+        constexpr char prefix[]="/menu/catalog?group=";
+        if(!strncmp(request->uri,prefix,sizeof(prefix)-1)){const char* group=request->uri+sizeof(prefix)-1;status=group[0]>='0'&&group[0]<='4'&&!group[1]?MenuService::catalog(group[0]-'0',out,sizeof(out)):400;}
+        if(status!=200)return httpd_resp_send_err(request,status==404?HTTPD_404_NOT_FOUND:HTTPD_400_BAD_REQUEST,"menu");
+        httpd_resp_set_type(request,"application/json");return httpd_resp_sendstr(request,out);
+    };
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server,&route));
+    route.uri="/menu";route.method=HTTP_POST;
+    route.handler=[](httpd_req_t* request)->esp_err_t{
+#ifdef PASSPORT_DEVICE
+        if((!board::authorized(request)&&!wifiPortal.acceptsSetup(request))||!WifiPortal::sameOrigin(request))return httpd_resp_send_err(request,HTTPD_403_FORBIDDEN,"unauthorized");
+#endif
+        if(request->content_len<=0||request->content_len>1024)return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"size");
+        auto& raw=menuHttpBuffer;memset(raw,0,sizeof(raw));
+        for(int used=0;used<request->content_len;){const int n=httpd_req_recv(request,raw+used,request->content_len-used);if(n<=0)return ESP_FAIL;used+=n;}
+        auto* data=cJSON_Parse(raw);const int status=cJSON_IsObject(data)?menuService.request(data,raw,sizeof(raw)):400;cJSON_Delete(data);
+        if(status==400)return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"invalid menu layout");
+        httpd_resp_set_status(request,status==200?"200 OK":status==409?"409 Conflict":"500 Internal Server Error");
+        httpd_resp_set_type(request,"application/json");httpd_resp_set_hdr(request,"Cache-Control","no-store");return httpd_resp_sendstr(request,raw);
+    };
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server,&route));
+}
 }
 extern "C" void app_main() {
     #ifdef PASSPORT_DEVICE
@@ -820,6 +867,7 @@ extern "C" void app_main() {
     #endif
     identity(); // Registers the identity flash region before HTTP handlers can write it.
     uiInit(); configASSERT(runtime.init(settings));
+    menuService.init(runtime);
     // 已保存的 WiFi: a board set up before 0.4.9 starts its list with the network it already has.
     if(*settings.wifiSsid)runtime.rememberWifi(settings.wifiSsid,settings.wifiPassword);else runtime.reloadWifi();
 #ifdef PASSPORT_DEVICE
@@ -850,6 +898,7 @@ extern "C" void app_main() {
     status.handler = statusGet;
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &status));
     live.init(server);
+    initMenuHttp(server);
 #ifdef PASSPORT_DEVICE
     httpd_uri_t pair{};pair.uri="/pair";pair.method=HTTP_POST;pair.handler=board::pair;ESP_ERROR_CHECK(httpd_register_uri_handler(server,&pair));pair.method=HTTP_GET;ESP_ERROR_CHECK(httpd_register_uri_handler(server,&pair));
     httpd_uri_t ledger{};ledger.uri="/ledger";ledger.method=HTTP_POST;
@@ -979,6 +1028,7 @@ extern "C" void app_main() {
     int64_t loopAt=0;
     for (;;) {
         // Longest gap between loop passes: key handling and redraws wait on it.
+        if(menuService.poll()){dirty=true;selection=runtime.selection();}
         {const auto at=esp_timer_get_time();if(loopAt)loopMaxUs=std::max<unsigned>(loopMaxUs.load(),static_cast<unsigned>(at-loopAt));loopAt=at;}
 #ifdef PASSPORT_DEVICE
         const auto nowBoard = esp_timer_get_time() / 1000000;
@@ -996,7 +1046,7 @@ extern "C" void app_main() {
             nextPppStart = esp_timer_get_time() + 3000000;
         }
         char inputPairCode[7]{};uint32_t inputPairEpoch{};const bool inputPairing=board::pairCode(inputPairCode,&inputPairEpoch);
-        board::keyMode(runtime.active()==App::Chat,runtime.generation()*8+static_cast<unsigned>(runtime.model.settingsPage),runtime.power(nowBoard)==Power::Awake||runtime.active()==App::Slides,inputPairEpoch,runtime.active()==App::Home&&!inputPairing);
+        board::keyMode(runtime.active()==App::Chat,runtime.generation()*8+static_cast<unsigned>(runtime.model.settingsPage)+(runtime.active()==App::Menu?menuService.revision()*64:0),runtime.power(nowBoard)==Power::Awake||runtime.active()==App::Slides,inputPairEpoch,runtime.active()==App::Home&&!inputPairing);
         if (const char *name = board::key()) {
             char currentPairCode[7]{};uint32_t currentPairEpoch{};const bool currentPairing=board::pairCode(currentPairCode,&currentPairEpoch);
             if(inputPairing||currentPairing) {
@@ -1126,7 +1176,7 @@ extern "C" void app_main() {
         runtime.tick(esp_timer_get_time() / 1000000);
 #ifdef PASSPORT_DEVICE
         char nextPairCode[7]{};uint32_t nextPairEpoch{};board::pairCode(nextPairCode,&nextPairEpoch);
-        board::keyMode(runtime.active()==App::Chat,runtime.generation()*8+static_cast<unsigned>(runtime.model.settingsPage),runtime.power(esp_timer_get_time()/1000000)==Power::Awake||runtime.active()==App::Slides,nextPairEpoch,runtime.active()==App::Home&&!*nextPairCode);
+        board::keyMode(runtime.active()==App::Chat,runtime.generation()*8+static_cast<unsigned>(runtime.model.settingsPage)+(runtime.active()==App::Menu?menuService.revision()*64:0),runtime.power(esp_timer_get_time()/1000000)==Power::Awake||runtime.active()==App::Slides,nextPairEpoch,runtime.active()==App::Home&&!*nextPairCode);
         uiResourcesReady(live.nativeIdle());
         // Uploads arrive on the HTTP task; redraw the card and stay awake while flash is written.
         static uint32_t identityShown=identityRevision();

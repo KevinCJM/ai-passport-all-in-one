@@ -124,7 +124,7 @@ void NativeServices::publish(const Job& job,const char* state,const char* phase,
         }
     }
     if(job.app==App::Forecast&&!strcmp(phase,"ready")){const auto& f=page_.forecast;auto* o=cJSON_AddObjectToObject(j.value,"forecast");
-        cJSON_AddStringToObject(o,"city",f.city);cJSON_AddNumberToObject(o,"h0",f.hour0);
+        cJSON_AddStringToObject(o,"city",f.city);cJSON_AddNumberToObject(o,"h0",f.hour0);cJSON_AddNumberToObject(o,"wd",f.weekday);
         auto* days=cJSON_AddArrayToObject(o,"d");for(unsigned i=0;i<f.days;++i){const auto& d=f.day[i];const int v[]{d.low,d.high,d.code,d.rain};cJSON_AddItemToArray(days,cJSON_CreateIntArray(v,4));}
         auto* hours=cJSON_AddArrayToObject(o,"h");for(unsigned i=0;i<f.hours;++i){const auto& h=f.hour[i];const int v[]{h.temp,h.code,h.rain};cJSON_AddItemToArray(hours,cJSON_CreateIntArray(v,3));}
         int air[24];for(unsigned i=0;i<f.airHours;++i)air[i]=f.aqi[i];cJSON_AddItemToObject(o,"air",cJSON_CreateIntArray(air,f.airHours));
@@ -375,6 +375,7 @@ void NativeServices::forecast(){
     const auto rain=[](double v){return std::isfinite(v)?static_cast<uint8_t>(std::clamp(v,0.0,100.0)):uint8_t{255};};
     auto& f=page_.forecast;f={};f.detailFor=0xff;copy(f.city,prefs.city);simplifyText(f.city);
     const auto* daily=item(json.value,"daily");
+    f.weekday=forecastWeekday(cJSON_GetStringValue(cJSON_GetArrayItem(item(daily,"time"),0)));
     for(unsigned i=0;i<std::size(f.day);++i){
         const double low=at(daily,"temperature_2m_min",i),high=at(daily,"temperature_2m_max",i),wmo=at(daily,"weather_code",i);
         if(!std::isfinite(low)||!std::isfinite(high)||!std::isfinite(wmo))break;
@@ -576,35 +577,34 @@ namespace {
 // The city as Settings shows it: "杭州 · 浙江".
 void cityLabel(char (&out)[80],const MediaPrefs& p){if(*p.province)snprintf(out,sizeof(out),"%s · %s",p.city,p.province);else snprintf(out,sizeof(out),"%s",p.city);}
 }
-// 所在城市 by voice: a city in the built-in list (the setup page's, and every prefecture-level one).
+// 所在城市 by voice: Chinese cities and the offline international catalog, with English/common aliases.
 void NativeServices::setCity(const char* heard){
     const auto* c=spokenCity(heard);
-    if(!c){char said[64];copy(said,heard);snprintf(notice_,sizeof(notice_),"没找到城市「%s」，请说地级市名",said);status("已识别");return;}
-    MediaPrefs prefs{};copy(prefs.city,c->name);copy(prefs.province,c->province);copy(prefs.country,c->country);prefs.latitude=c->latitude;prefs.longitude=c->longitude;
+    if(!c){copy(notice_,"没找到城市，请说国家和城市名，或用手机配置、IP 定位");status("已识别");return;}
+    MediaPrefs prefs{};
+    if(!setMediaCity(prefs,c->name,c->country,c->province,c->latitude,c->longitude)){copy(notice_,"城市信息无效，请用手机配置");status("已识别");return;}
     if(!mediaSave("prefs",prefs)){copy(notice_,"保存失败");status("已识别");return;}
     ++mediaPrefsRevision;snprintf(notice_,sizeof(notice_),"所在城市已改为%s",c->name);cityLabel(city_,prefs);status("已识别");
 }
-// 所在城市 by IP: ip-api.com (plain HTTP, no key) names the city of the badge's internet connection, in Chinese. A city
-// outside China (a VPN, a proxy) is refused, as the setup page only offers Chinese ones.
+// The connection's public egress IP can locate any country. Keep service coordinates, even for catalog
+// names: e.g. Portland, Maine and Portland, Oregon share a name but not a location.
 void NativeServices::locate(){
     status("正在按 IP 查询","loading");
-    char data[512]{};
+    char data[768]{};
     if(!fetch("http://ip-api.com/json/?lang=zh-CN&fields=status,country,countryCode,regionName,city,lat,lon",data,sizeof(data))){copy(notice_,"IP 查询失败，请检查网络");status("查询失败","error");return;}
     Json json(cJSON_Parse(data));const char* country=str(json.value,"countryCode");
     if(strcmp(str(json.value,"status"),"success")){copy(notice_,"IP 查询失败，请稍后重试");status("查询失败","error");return;}
-    if(strcmp(country,"CN")&&strcmp(country,"HK")&&strcmp(country,"MO")&&strcmp(country,"TW")){
-        char where[40];copy(where,str(json.value,"country"));snprintf(notice_,sizeof(notice_),"IP 显示在%s（可能开了代理），请用语音输入",where);status("已查询");return;}
+    if(!validCityCountry(country)){copy(notice_,"IP 没有给出国家，请用语音或手机选择城市");status("查询失败","error");return;}
+    char city[sizeof(MediaPrefs::city)]{},province[sizeof(MediaPrefs::province)]{};
+    const char* name=str(json.value,"city");fitText(city,sizeof(city),name,strlen(name));simplifyText(city);
+    const CityEntry* c=!strcmp(country,"HK")?cityNamed("香港","HK"):!strcmp(country,"MO")?cityNamed("澳门","MO"):cityNamed(city,country);
+    if(c)copy(city,c->name);
+    else if(!strcmp(country,"CN")){const size_t n=strlen(city);if(n>3&&!strcmp(city+n-3,"市"))city[n-3]=0;}
+    const std::string region=!strcmp(country,"CN")?provinceName(str(json.value,"regionName")):
+        (!strcmp(country,"HK")||!strcmp(country,"MO")||!strcmp(country,"TW"))?"":cityCountryName(country);
+    fitText(province,sizeof(province),region.c_str(),region.size());simplifyText(province);
     MediaPrefs prefs{};
-    const CityEntry* c=!strcmp(country,"HK")?cityNamed("香港"):!strcmp(country,"MO")?cityNamed("澳门"):cityNamed(str(json.value,"city"));
-    if(c){copy(prefs.city,c->name);copy(prefs.province,c->province);copy(prefs.country,c->country);prefs.latitude=c->latitude;prefs.longitude=c->longitude;}
-    else{
-        // A city the list lacks: the service's own name and coordinates.
-        std::string city=str(json.value,"city");if(city.size()>3&&!city.compare(city.size()-3,3,"市"))city.resize(city.size()-3);
-        const double lat=num(json.value,"lat"),lon=num(json.value,"lon");
-        if(city.empty()||!std::isfinite(lat)||!std::isfinite(lon)){copy(notice_,"IP 没有给出城市，请用语音输入");status("已查询");return;}
-        copy(prefs.city,city.c_str());copy(prefs.province,strcmp(country,"CN")?"":provinceName(str(json.value,"regionName")).c_str());copy(prefs.country,country);
-        prefs.latitude=lat;prefs.longitude=lon;
-    }
+    if(!setMediaCity(prefs,city,country,province,num(json.value,"lat"),num(json.value,"lon"))){copy(notice_,"IP 城市或坐标无效，请用语音或手机选择");status("查询失败","error");return;}
     if(!mediaSave("prefs",prefs)){copy(notice_,"保存失败");status("保存失败","error");return;}
     ++mediaPrefsRevision;snprintf(notice_,sizeof(notice_),"按 IP 定位到%s",prefs.city);cityLabel(city_,prefs);status("已定位");
 }

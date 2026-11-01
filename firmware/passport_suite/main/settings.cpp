@@ -1,4 +1,5 @@
 #include "settings.hpp"
+#include "menu_layout.hpp"
 #include "word_study.hpp"
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -49,6 +50,18 @@ uint8_t SettingsStore::loadByte(const char* key) {
     Handle handle; uint8_t value = 0;
     if (nvs_open("suite_system", NVS_READONLY, &handle.value) == ESP_OK) nvs_get_u8(handle.value, key, &value);
     return value;
+}
+bool SettingsStore::loadMenu(MenuLayout& layout) {
+    Handle handle;MenuLayout candidate;size_t size=sizeof(candidate);
+    if(nvs_open("suite_system",NVS_READONLY,&handle.value)!=ESP_OK||nvs_get_blob(handle.value,"menu_v1",&candidate,&size)!=ESP_OK||size!=sizeof(candidate)||!candidate.upgrade()){
+        layout=defaultMenuLayout();return false;
+    }
+    layout=candidate;return true;
+}
+bool SettingsStore::saveMenu(const MenuLayout& layout) {
+    Handle handle;
+    return layout.valid()&&nvs_open("suite_system",NVS_READWRITE,&handle.value)==ESP_OK
+        &&nvs_set_blob(handle.value,"menu_v1",&layout,sizeof(layout))==ESP_OK&&nvs_commit(handle.value)==ESP_OK;
 }
 bool SettingsStore::saveByte(const char* key, uint8_t value) {
     Handle handle;

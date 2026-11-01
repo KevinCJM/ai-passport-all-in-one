@@ -258,6 +258,7 @@ void renderChrome(const Runtime& runtime){
     const auto* hint=keyHint(app,m.settingsPage,m.focusRunning,*m.pairingCode,m.live&&m.livePhase==LivePhase::Loading,m.live&&m.livePhase==LivePhase::Error,alt,app==App::Wifi?m.wifiTab:app==App::Settings?(m.settingsPage==SettingsPage::City?dictationTab(m):m.settingsPage==SettingsPage::Idle?m.idleRow:m.wifiSetup?0u:m.wifiArmed?3u:m.wifiRow?2u:1u):
         app==App::Rate?voiceTab(m,m.rateArmed):app==App::Stock?voiceTab(m,m.stockArmed):app==App::Macro?0u:app==App::Countdown?voiceTab(m,m.countdownArmed):
         app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:m.soundView);
+    if(app==App::Menu&&runtime.menuLayout().mode==MenuLayout::Continuous)hint="上下：选择 | 长按上下：快移 | 确认：进入";
     char text[256];
     // 打开 Mac 程序: what the computer is doing takes the key hints' place for a few seconds, on any page.
     if(*m.macNote)snprintf(text,sizeof(text),"%s",m.macNote);
@@ -635,10 +636,11 @@ void initMenu(lv_obj_t* screen){
     }
 }
 void renderMenu(const Runtime& runtime){
-    const unsigned selected=runtime.selection(),page=menuPageOf(selected),pages=std::size(kMenuPages);
+    const auto& view=runtime.menuView();const auto& layout=runtime.menuLayout();
+    const unsigned selected=runtime.menuPosition(),page=view.page(selected),start=runtime.menuWindowStart();
     for(unsigned i=0;i<kCells;++i){
-        const unsigned index=kMenuStarts[page]+i;visible(cells[i],index<kMenuStarts[page+1]);if(index>=kMenuStarts[page+1])continue;
-        const auto app=kFunctions[index];const bool on=index==selected;auto badge=appBadge(app);
+        const unsigned index=start+i;visible(cells[i],index<view.starts[page+1]);if(index>=view.starts[page+1])continue;
+        const auto app=kFunctions[view.items[index]];const bool on=index==selected;auto badge=appBadge(app);
         // The calendar icon shows today's date.
         char day[4];const time_t now=time(nullptr);tm t{};localtime_r(&now,&t);
         if(app==App::Calendar&&runtime.model.clockValid){snprintf(day,sizeof(day),"%d",t.tm_mday);badge.symbol=day;}
@@ -646,8 +648,8 @@ void renderMenu(const Runtime& runtime){
         setBgColor(cells[i],lv_color_hex(on?kAccent:kPanel),0);
         setLabel(cellNames[i],menuLabel(app));setTextColor(cellNames[i],lv_color_hex(on?kBg:kText),0);
     }
-    setLabel(menuTitle,kMenuPages[page]);
-    char text[8];snprintf(text,sizeof(text),"%u/%u",page+1,pages);setLabel(menuPage,text);
+    setLabel(menuTitle,layout.mode==MenuLayout::Continuous?"全部功能":layout.mode==MenuLayout::Categories?kMenuPages[view.groups[page]]:layout.names[view.groups[page]]);
+    char text[16];snprintf(text,sizeof(text),"%u/%u",layout.mode==MenuLayout::Continuous?selected+1:page+1,layout.mode==MenuLayout::Continuous?view.count:view.pages);setLabel(menuPage,text);
 }
 // Torch: the whole screen in one colour; main.cpp drives the backlight from the level.
 void initTorch(lv_obj_t* screen){
@@ -1396,12 +1398,11 @@ void drawForecast(lv_event_t* e){
     }
     if(m.forecastView==2){drawAir(p,f);return;}
     if(!m.forecastView){
-        const time_t now=time(nullptr);tm today{};localtime_r(&now,&today);
         static const char* const week[]{"周日","周一","周二","周三","周四","周五","周六"};
         for(unsigned i=0;i<f.days;++i){
             const auto& d=f.day[i];const int y=i*27;
             p.rect(0,y,223,y+24,i?kPanel:kBorder,6);
-            if(i<2)snprintf(text,sizeof(text),"%s",i?"明天":"今天");else if(m.clockValid)snprintf(text,sizeof(text),"%s",week[(today.tm_wday+i)%7]);else snprintf(text,sizeof(text),"第%u天",i+1);
+            if(i<2)snprintf(text,sizeof(text),"%s",i?"明天":"今天");else if(f.weekday<7)snprintf(text,sizeof(text),"%s",week[(f.weekday+i)%7]);else snprintf(text,sizeof(text),"第%u天",i+1);
             p.text(text,6,y+3,48,i?kMuted:kText);
             const uint32_t sky=skyColor(d.code);p.rect(50,y+8,59,y+17,sky,5);p.text(weatherName(d.code),64,y+3,130,sky);
             if(d.rain<=100){snprintf(text,sizeof(text),"%u%%",d.rain);p.text(text,124,y+3,158,d.rain>=50?0x00baf2:kMuted,LV_TEXT_ALIGN_RIGHT);}
@@ -1447,7 +1448,7 @@ void renderForecast(const Model& m){
         // Which warning and who issued it.
         snprintf(text,sizeof(text),"%u/%u  ·  %s",m.forecastWarn,f.warnings,f.warning[m.forecastWarn-1].where);
     }
-    else snprintf(text,sizeof(text),"%s  ·  %s",f.city,m.livePhase==LivePhase::Error?m.liveState:m.livePhase==LivePhase::Loading?"正在刷新":m.forecastView==3?"气象预警":m.forecastView==2?"空气质量 · 国标":m.forecastView?"未来 24 小时":"未来 7 天");
+    else snprintf(text,sizeof(text),"%s  ·  %s",f.city,m.livePhase==LivePhase::Error?m.liveState:m.livePhase==LivePhase::Loading?"正在刷新":m.forecastView==3?"气象预警":m.forecastView==2?"空气质量 · 国标":m.forecastView?"24 小时 · 当地":"7 天 · 当地");
     setLabel(fcMeta,text);lv_obj_invalidate(fcView);
 }
 // 白噪音: a row per sound and the sleep-timer row; the playing sound shows moving bars.
@@ -2850,7 +2851,7 @@ void uiRender(const Runtime& runtime) {
                 setLabel(value,model.listening()?"正在听…":model.voiceBusy()?"正在识别…":*model.cityName?model.cityName:"未设置");
                 setLabel(lines[0],model.cityRow?"○  语音输入城市":"●  语音输入城市");setLabel(lines[1],model.cityRow?"●  按 IP 定位":"○  按 IP 定位");
                 setTextColor(lines[0],lv_color_hex(model.cityRow?kMuted:kAccent),0);setTextColor(lines[1],lv_color_hex(model.cityRow?kAccent:kMuted),0);
-                setLabel(lines[2],model.listening()?"说城市名，说完按确认":model.cityRow?"开了代理或 VPN 会不准":"说城市名，如「苏州」");setLabel(lines[3],"天气和收音机按这个城市");
+                setLabel(lines[2],model.listening()?"说城市名，说完按确认":model.cityRow?"开了代理或 VPN 会不准":"如「美国纽约」「日本东京」");setLabel(lines[3],"天气城市 · 手机可搜索选择");
             }else if(page==SettingsPage::Wake){
                 // Four switches, the one picked in the accent colour: the wake word (it keeps the microphone, codec and
                 // CPU running and rules out deep sleep on the home page and the menu), 说功能名跳转, 打开 Mac 程序 and

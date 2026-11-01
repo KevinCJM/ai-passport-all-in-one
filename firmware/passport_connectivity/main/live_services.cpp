@@ -527,7 +527,7 @@ bool LiveServices::tick(uint64_t now) {
             }
             if(active==App::Forecast&&cJSON_IsObject(field(json,"forecast"))){
                 // Days: [low, high, code, rain]; hours: [temperature, code, rain], from hour h0.
-                auto& f=model.page.forecast;const auto* o=field(json,"forecast");f.days=f.hours=0;copy(f.city,string(o,"city"));f.hour0=std::clamp(number(o,"h0",0),0.0,23.0);
+                auto& f=model.page.forecast;const auto* o=field(json,"forecast");f.days=f.hours=0;copy(f.city,string(o,"city"));f.hour0=std::clamp(number(o,"h0",0),0.0,23.0);f.weekday=std::clamp(number(o,"wd",255),0.0,255.0);if(f.weekday>6)f.weekday=0xff;
                 const auto value=[](const cJSON* a,int i,double low,double high){const auto* v=cJSON_GetArrayItem(a,i);return cJSON_IsNumber(v)?std::clamp(v->valuedouble,low,high):low;};
                 const cJSON* item;
                 cJSON_ArrayForEach(item,field(o,"d"))if(f.days<std::size(f.day))f.day[f.days++]={int8_t(value(item,0,-99,99)),int8_t(value(item,1,-99,99)),uint8_t(value(item,2,0,99)),uint8_t(value(item,3,0,255))};

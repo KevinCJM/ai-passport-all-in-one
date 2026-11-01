@@ -19,7 +19,7 @@ import certifi
 from passport_identity import paired_port
 from passport_paths import helper, user_data, codex_command, PACKAGED
 
-VERSION='0.1.1-preview'
+VERSION='0.1.2-preview'
 LABEL='local.ai-passport.assistant'
 
 

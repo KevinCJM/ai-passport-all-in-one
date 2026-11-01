@@ -6,14 +6,20 @@
 #include <cstring>
 #include <iterator>
 #include "../../passport_suite/main/radio_stations.hpp"
+#include "../../passport_suite/main/city_location.hpp"
 #ifdef ESP_PLATFORM
 #include "nvs.h"
 #endif
 
 namespace passport {
-// City in China, chosen by hand on the setup page (never located by IP), for weather and local stations.
+// City chosen on the setup page, by voice or by IP, for weather and local stations.
 // topics and keyword are unused; they keep the layout of preferences saved by older firmware.
 struct MediaPrefs{static constexpr uint32_t kVersion=2;uint32_t version{kVersion};char city[48]{};float latitude{},longitude{};char country[4]{};uint32_t topics{};char keyword[48]{};char province[24]{};};
+// Keep the persisted v2 layout unchanged; validate every entry path with the same bounds.
+inline bool setMediaCity(MediaPrefs& prefs,const char* city,const char* country,const char* province,double lat,double lon){
+    if(!validCityText(city,sizeof(prefs.city))||!validCityCountry(country)||!validCityText(province,sizeof(prefs.province),true)||!validCityCoordinates(lat,lon))return false;
+    strcpy(prefs.city,city);strcpy(prefs.country,country);strcpy(prefs.province,province);prefs.latitude=lat;prefs.longitude=lon;return true;
+}
 
 // Stations for a city: those named after it, then the rest of its province, then national ones.
 // Municipalities and Hong Kong have no province and are a region of their own.

@@ -113,12 +113,24 @@ inline const char* warningBody(const char* text){const char* colon=strstr(text,"
 // Warnings highest first; warnings 0xff when they could not be read. detail: warning detailFor's text (0xff none).
 struct WeatherForecast {
     char city[64];uint8_t days,hours,hour0;
+    uint8_t weekday{0xff}; // First forecast day's weekday in the queried city's time, not the badge clock's.
     struct Day{int8_t low,high;uint8_t code,rain;} day[7];
     struct Hour{int8_t temp;uint8_t code,rain;} hour[24];
     uint8_t airHours,primary;int16_t aqi[24];uint16_t pm25,pm10,sunrise,sunset;uint8_t uv;
     uint8_t warnings;WeatherWarning warning[4];
     uint8_t detailFor;char detail[512];
 };
+// ISO date to Sunday=0, independent of the process timezone (including DST and date-line crossings).
+inline uint8_t forecastWeekday(const char* date){
+    if(!date||strlen(date)<10||date[4]!='-'||date[7]!='-')return 0xff;
+    for(unsigned i:{0u,1u,2u,3u,5u,6u,8u,9u})if(date[i]<'0'||date[i]>'9')return 0xff;
+    int y=(date[0]-'0')*1000+(date[1]-'0')*100+(date[2]-'0')*10+date[3]-'0';
+    const unsigned m=(date[5]-'0')*10+date[6]-'0',d=(date[8]-'0')*10+date[9]-'0';
+    constexpr unsigned days[]{31,28,31,30,31,30,31,31,30,31,30,31};
+    if(y<1900||y>9999||m<1||m>12||!d||d>days[m-1]+unsigned(m==2&&y%4==0&&(y%100!=0||y%400==0)))return 0xff;
+    constexpr unsigned offset[]{0,3,2,5,0,3,5,1,4,6,2,4};if(m<3)--y;
+    return uint8_t((y+y/4-y/100+y/400+offset[m-1]+d)%7);
+}
 // warningLevel -1: none in force (or unknown).
 struct WeatherReading {
     bool known{},airKnown{};

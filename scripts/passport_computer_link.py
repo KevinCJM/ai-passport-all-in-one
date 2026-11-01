@@ -42,6 +42,7 @@ async def ble_request(client,identity,token,path,data=None):
             if len(result)==total:break
     reply=json.loads(result)
     if reply.get('status')==503:raise LinkBusy('device service queue busy')
+    if path=='/menu' and reply.get('status')==409:raise ValueError('配置已变化或正在保存，请重新读取胸牌')
     if reply.get('status')!=200:raise ConnectionError('BLE API status '+str(reply.get('status')))
     return reply['body']
 

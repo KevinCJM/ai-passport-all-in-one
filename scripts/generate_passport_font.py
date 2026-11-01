@@ -189,7 +189,7 @@ def lvgl_fonts() -> None:
 
 def main() -> None:
     text = ''.join(p.read_text() for p in (PROJECT / 'main').glob('*')
-                   if p.suffix in ('.cpp', '.hpp') and p.name not in ('ui_font.cpp', 'status_font.cpp'))
+                   if p.suffix in ('.cpp', '.hpp', '.inc') and p.name not in ('ui_font.cpp', 'status_font.cpp'))
     # 背单词 shows Youdao's IPA at run time; these are all the symbols it uses (checked on 300 words).
     ipa = 'æðŋɑɒɔəɜɡɪʃʊʌʒˈˌːθ'
     codes = sorted(set(range(32, 127)) | {ord(c) for c in text + ipa if 127 < ord(c) < 65536})

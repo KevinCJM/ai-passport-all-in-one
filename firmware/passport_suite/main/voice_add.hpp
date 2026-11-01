@@ -1,6 +1,6 @@
 #pragma once
 #include "apps.hpp"
-#include "city_list.hpp"
+#include "city_location.hpp"
 #include "voice_sounds.hpp"
 #include "lunar.hpp"
 #include "settings.hpp"
@@ -220,17 +220,6 @@ inline CountdownParse parseCountdown(const char* heard, Date today) {
     return out;
 }
 
-// 系统设置 > 所在城市: the city named in the sentence (the longest name found: 呼和浩特 before 和田), or nullptr.
-inline const CityEntry* spokenCity(const char* heard) {
-    const CityEntry* found = nullptr; size_t length = 0;
-    for (const auto& c : kCities) { const size_t n = strlen(c.name); if (n > length && strstr(heard, c.name)) { found = &c; length = n; } }
-    return found;
-}
-// A city by its name as a lookup service gives it ("杭州市", "杭州"), or nullptr.
-inline const CityEntry* cityNamed(const char* name) {
-    for (const auto& c : kCities) { const size_t n = strlen(c.name); if (!strncmp(name, c.name, n) && (!name[n] || !strcmp(name + n, "市"))) return &c; }
-    return nullptr;
-}
 // A province as a lookup service gives it, the way the setup page keeps it: 浙江省 -> 浙江, 广西壮族自治区 -> 广西,
 // and "" for the municipalities.
 inline std::string provinceName(const char* name) {

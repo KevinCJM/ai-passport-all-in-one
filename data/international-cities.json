@@ -1,0 +1,1945 @@
+{
+  "source": "https://download.geonames.org/export/dump/cities15000.zip",
+  "license": "CC BY 4.0",
+  "attribution": "GeoNames (https://www.geonames.org/)",
+  "countries": [
+    {
+      "code": "US",
+      "name": "美国",
+      "aliases": [
+        "United States",
+        "USA"
+      ],
+      "group": "美国",
+      "cities": [
+        {
+          "name": "纽约",
+          "latitude": 40.71427,
+          "longitude": -74.00597,
+          "geoname_id": 5128581,
+          "aliases": [
+            "New York City",
+            "New York",
+            "NYC"
+          ]
+        },
+        {
+          "name": "洛杉矶",
+          "latitude": 34.05223,
+          "longitude": -118.24368,
+          "geoname_id": 5368361,
+          "aliases": [
+            "Los Angeles",
+            "洛杉机"
+          ]
+        },
+        {
+          "name": "旧金山",
+          "latitude": 37.77493,
+          "longitude": -122.41942,
+          "geoname_id": 5391959,
+          "aliases": [
+            "San Francisco",
+            "三藩市"
+          ]
+        },
+        {
+          "name": "西雅图",
+          "latitude": 47.60621,
+          "longitude": -122.33207,
+          "geoname_id": 5809844,
+          "aliases": [
+            "Seattle"
+          ]
+        },
+        {
+          "name": "华盛顿",
+          "latitude": 38.89511,
+          "longitude": -77.03637,
+          "geoname_id": 4140963,
+          "aliases": [
+            "Washington",
+            "Washington DC",
+            "Washington D.C."
+          ]
+        },
+        {
+          "name": "芝加哥",
+          "latitude": 41.85003,
+          "longitude": -87.65005,
+          "geoname_id": 4887398,
+          "aliases": [
+            "Chicago"
+          ]
+        },
+        {
+          "name": "波士顿",
+          "latitude": 42.35843,
+          "longitude": -71.05977,
+          "geoname_id": 4930956,
+          "aliases": [
+            "Boston"
+          ]
+        },
+        {
+          "name": "圣迭戈",
+          "latitude": 32.71571,
+          "longitude": -117.16472,
+          "geoname_id": 5391811,
+          "aliases": [
+            "San Diego",
+            "圣地亚哥"
+          ]
+        },
+        {
+          "name": "拉斯维加斯",
+          "latitude": 36.17497,
+          "longitude": -115.13722,
+          "geoname_id": 5506956,
+          "aliases": [
+            "Las Vegas"
+          ]
+        },
+        {
+          "name": "休斯顿",
+          "latitude": 29.76328,
+          "longitude": -95.36327,
+          "geoname_id": 4699066,
+          "aliases": [
+            "Houston"
+          ]
+        },
+        {
+          "name": "达拉斯",
+          "latitude": 32.78306,
+          "longitude": -96.80667,
+          "geoname_id": 4684888,
+          "aliases": [
+            "Dallas"
+          ]
+        },
+        {
+          "name": "奥斯汀",
+          "latitude": 30.26715,
+          "longitude": -97.74306,
+          "geoname_id": 4671654,
+          "aliases": [
+            "Austin"
+          ]
+        },
+        {
+          "name": "迈阿密",
+          "latitude": 25.77427,
+          "longitude": -80.19366,
+          "geoname_id": 4164138,
+          "aliases": [
+            "Miami"
+          ]
+        },
+        {
+          "name": "亚特兰大",
+          "latitude": 33.749,
+          "longitude": -84.38798,
+          "geoname_id": 4180439,
+          "aliases": [
+            "Atlanta"
+          ]
+        },
+        {
+          "name": "费城",
+          "latitude": 39.95238,
+          "longitude": -75.16362,
+          "geoname_id": 4560349,
+          "aliases": [
+            "Philadelphia"
+          ]
+        },
+        {
+          "name": "菲尼克斯",
+          "latitude": 33.44838,
+          "longitude": -112.07404,
+          "geoname_id": 5308655,
+          "aliases": [
+            "Phoenix",
+            "凤凰城"
+          ]
+        },
+        {
+          "name": "丹佛",
+          "latitude": 39.73915,
+          "longitude": -104.9847,
+          "geoname_id": 5419384,
+          "aliases": [
+            "Denver"
+          ]
+        },
+        {
+          "name": "圣何塞",
+          "latitude": 37.33939,
+          "longitude": -121.89496,
+          "geoname_id": 5392171,
+          "aliases": [
+            "San Jose"
+          ]
+        },
+        {
+          "name": "波特兰",
+          "latitude": 45.52345,
+          "longitude": -122.67621,
+          "geoname_id": 5746545,
+          "aliases": [
+            "Portland"
+          ]
+        },
+        {
+          "name": "底特律",
+          "latitude": 42.33143,
+          "longitude": -83.04575,
+          "geoname_id": 4990729,
+          "aliases": [
+            "Detroit"
+          ]
+        },
+        {
+          "name": "明尼阿波利斯",
+          "latitude": 44.97997,
+          "longitude": -93.26384,
+          "geoname_id": 5037649,
+          "aliases": [
+            "Minneapolis"
+          ]
+        },
+        {
+          "name": "奥兰多",
+          "latitude": 28.53834,
+          "longitude": -81.37924,
+          "geoname_id": 4167147,
+          "aliases": [
+            "Orlando"
+          ]
+        },
+        {
+          "name": "檀香山",
+          "latitude": 21.30694,
+          "longitude": -157.85833,
+          "geoname_id": 5856195,
+          "aliases": [
+            "Honolulu",
+            "火奴鲁鲁"
+          ]
+        },
+        {
+          "name": "安克雷奇",
+          "latitude": 61.21806,
+          "longitude": -149.90028,
+          "geoname_id": 5879400,
+          "aliases": [
+            "Anchorage"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "CA",
+      "name": "加拿大",
+      "aliases": [
+        "Canada"
+      ],
+      "group": "加拿大",
+      "cities": [
+        {
+          "name": "多伦多",
+          "latitude": 43.70643,
+          "longitude": -79.39864,
+          "geoname_id": 6167865,
+          "aliases": [
+            "Toronto"
+          ]
+        },
+        {
+          "name": "温哥华",
+          "latitude": 49.24966,
+          "longitude": -123.11934,
+          "geoname_id": 6173331,
+          "aliases": [
+            "Vancouver",
+            "温哥华市"
+          ]
+        },
+        {
+          "name": "蒙特利尔",
+          "latitude": 45.50884,
+          "longitude": -73.58781,
+          "geoname_id": 6077243,
+          "aliases": [
+            "Montreal",
+            "蒙特里尔"
+          ]
+        },
+        {
+          "name": "渥太华",
+          "latitude": 45.41117,
+          "longitude": -75.69812,
+          "geoname_id": 6094817,
+          "aliases": [
+            "Ottawa"
+          ]
+        },
+        {
+          "name": "卡尔加里",
+          "latitude": 51.05011,
+          "longitude": -114.08529,
+          "geoname_id": 5913490,
+          "aliases": [
+            "Calgary",
+            "卡加利"
+          ]
+        },
+        {
+          "name": "埃德蒙顿",
+          "latitude": 53.55014,
+          "longitude": -113.46871,
+          "geoname_id": 5946768,
+          "aliases": [
+            "Edmonton"
+          ]
+        },
+        {
+          "name": "魁北克",
+          "latitude": 46.81228,
+          "longitude": -71.21454,
+          "geoname_id": 6325494,
+          "aliases": [
+            "Quebec",
+            "Quebec City"
+          ]
+        },
+        {
+          "name": "温尼伯",
+          "latitude": 49.8844,
+          "longitude": -97.14704,
+          "geoname_id": 6183235,
+          "aliases": [
+            "Winnipeg"
+          ]
+        },
+        {
+          "name": "哈利法克斯",
+          "latitude": 44.64269,
+          "longitude": -63.57688,
+          "geoname_id": 6324729,
+          "aliases": [
+            "Halifax"
+          ]
+        },
+        {
+          "name": "维多利亚",
+          "latitude": 48.4359,
+          "longitude": -123.35155,
+          "geoname_id": 6174041,
+          "aliases": [
+            "Victoria"
+          ]
+        },
+        {
+          "name": "伦敦",
+          "latitude": 42.98339,
+          "longitude": -81.23304,
+          "geoname_id": 6058560,
+          "aliases": [
+            "London"
+          ]
+        },
+        {
+          "name": "萨斯卡通",
+          "latitude": 52.13238,
+          "longitude": -106.66892,
+          "geoname_id": 6141256,
+          "aliases": [
+            "Saskatoon"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "JP",
+      "name": "日本",
+      "aliases": [
+        "Japan"
+      ],
+      "group": "日本",
+      "cities": [
+        {
+          "name": "东京",
+          "latitude": 35.6895,
+          "longitude": 139.69171,
+          "geoname_id": 1850147,
+          "aliases": [
+            "Tokyo"
+          ]
+        },
+        {
+          "name": "大阪",
+          "latitude": 34.69379,
+          "longitude": 135.50107,
+          "geoname_id": 1853909,
+          "aliases": [
+            "Osaka"
+          ]
+        },
+        {
+          "name": "京都",
+          "latitude": 35.02107,
+          "longitude": 135.75385,
+          "geoname_id": 1857910,
+          "aliases": [
+            "Kyoto"
+          ]
+        },
+        {
+          "name": "横滨",
+          "latitude": 35.43333,
+          "longitude": 139.65,
+          "geoname_id": 1848354,
+          "aliases": [
+            "Yokohama"
+          ]
+        },
+        {
+          "name": "名古屋",
+          "latitude": 35.18147,
+          "longitude": 136.90641,
+          "geoname_id": 1856057,
+          "aliases": [
+            "Nagoya"
+          ]
+        },
+        {
+          "name": "札幌",
+          "latitude": 43.06667,
+          "longitude": 141.35,
+          "geoname_id": 2128295,
+          "aliases": [
+            "Sapporo"
+          ]
+        },
+        {
+          "name": "神户",
+          "latitude": 34.6913,
+          "longitude": 135.183,
+          "geoname_id": 1859171,
+          "aliases": [
+            "Kobe"
+          ]
+        },
+        {
+          "name": "福冈",
+          "latitude": 33.6,
+          "longitude": 130.41667,
+          "geoname_id": 1863967,
+          "aliases": [
+            "Fukuoka"
+          ]
+        },
+        {
+          "name": "广岛",
+          "latitude": 34.4,
+          "longitude": 132.45,
+          "geoname_id": 1862415,
+          "aliases": [
+            "Hiroshima"
+          ]
+        },
+        {
+          "name": "仙台",
+          "latitude": 38.26667,
+          "longitude": 140.86667,
+          "geoname_id": 2111149,
+          "aliases": [
+            "Sendai"
+          ]
+        },
+        {
+          "name": "奈良",
+          "latitude": 34.68505,
+          "longitude": 135.80485,
+          "geoname_id": 1855612,
+          "aliases": [
+            "Nara"
+          ]
+        },
+        {
+          "name": "那霸",
+          "latitude": 26.213,
+          "longitude": 127.67851,
+          "geoname_id": 1856035,
+          "aliases": [
+            "Naha",
+            "冲绳"
+          ]
+        },
+        {
+          "name": "长崎",
+          "latitude": 32.75,
+          "longitude": 129.88333,
+          "geoname_id": 1856177,
+          "aliases": [
+            "Nagasaki"
+          ]
+        },
+        {
+          "name": "金泽",
+          "latitude": 36.6,
+          "longitude": 136.61667,
+          "geoname_id": 1860243,
+          "aliases": [
+            "Kanazawa"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "KR",
+      "name": "韩国",
+      "aliases": [
+        "South Korea",
+        "Korea"
+      ],
+      "group": "韩国",
+      "cities": [
+        {
+          "name": "首尔",
+          "latitude": 37.566,
+          "longitude": 126.9784,
+          "geoname_id": 1835848,
+          "aliases": [
+            "Seoul",
+            "汉城"
+          ]
+        },
+        {
+          "name": "釜山",
+          "latitude": 35.10168,
+          "longitude": 129.03004,
+          "geoname_id": 1838524,
+          "aliases": [
+            "Busan",
+            "Pusan"
+          ]
+        },
+        {
+          "name": "仁川",
+          "latitude": 37.45646,
+          "longitude": 126.70515,
+          "geoname_id": 1843564,
+          "aliases": [
+            "Incheon"
+          ]
+        },
+        {
+          "name": "大邱",
+          "latitude": 35.87102,
+          "longitude": 128.60121,
+          "geoname_id": 1835329,
+          "aliases": [
+            "Daegu"
+          ]
+        },
+        {
+          "name": "大田",
+          "latitude": 36.35022,
+          "longitude": 127.3848,
+          "geoname_id": 1835235,
+          "aliases": [
+            "Daejeon"
+          ]
+        },
+        {
+          "name": "光州",
+          "latitude": 35.15472,
+          "longitude": 126.91556,
+          "geoname_id": 1841811,
+          "aliases": [
+            "Gwangju"
+          ]
+        },
+        {
+          "name": "蔚山",
+          "latitude": 35.53917,
+          "longitude": 129.31239,
+          "geoname_id": 1833747,
+          "aliases": [
+            "Ulsan"
+          ]
+        },
+        {
+          "name": "水原",
+          "latitude": 37.27818,
+          "longitude": 127.03164,
+          "geoname_id": 1835553,
+          "aliases": [
+            "Suwon"
+          ]
+        },
+        {
+          "name": "济州",
+          "latitude": 33.50972,
+          "longitude": 126.52194,
+          "geoname_id": 1846266,
+          "aliases": [
+            "Jeju City",
+            "Jeju",
+            "济州市"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "AU",
+      "name": "澳大利亚",
+      "aliases": [
+        "Australia",
+        "澳洲"
+      ],
+      "group": "澳大利亚",
+      "cities": [
+        {
+          "name": "悉尼",
+          "latitude": -33.86785,
+          "longitude": 151.20732,
+          "geoname_id": 2147714,
+          "aliases": [
+            "Sydney",
+            "雪梨"
+          ]
+        },
+        {
+          "name": "墨尔本",
+          "latitude": -37.814,
+          "longitude": 144.96332,
+          "geoname_id": 2158177,
+          "aliases": [
+            "Melbourne"
+          ]
+        },
+        {
+          "name": "布里斯班",
+          "latitude": -27.46794,
+          "longitude": 153.02809,
+          "geoname_id": 2174003,
+          "aliases": [
+            "Brisbane"
+          ]
+        },
+        {
+          "name": "珀斯",
+          "latitude": -31.95224,
+          "longitude": 115.8614,
+          "geoname_id": 2063523,
+          "aliases": [
+            "Perth",
+            "柏斯"
+          ]
+        },
+        {
+          "name": "阿德莱德",
+          "latitude": -34.92866,
+          "longitude": 138.59863,
+          "geoname_id": 2078025,
+          "aliases": [
+            "Adelaide",
+            "阿德雷德"
+          ]
+        },
+        {
+          "name": "堪培拉",
+          "latitude": -35.28346,
+          "longitude": 149.12807,
+          "geoname_id": 2172517,
+          "aliases": [
+            "Canberra"
+          ]
+        },
+        {
+          "name": "霍巴特",
+          "latitude": -42.87936,
+          "longitude": 147.32941,
+          "geoname_id": 2163355,
+          "aliases": [
+            "Hobart"
+          ]
+        },
+        {
+          "name": "达尔文",
+          "latitude": -12.46113,
+          "longitude": 130.84185,
+          "geoname_id": 2073124,
+          "aliases": [
+            "Darwin"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "GB",
+      "name": "英国",
+      "aliases": [
+        "United Kingdom",
+        "Britain",
+        "UK"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "伦敦",
+          "latitude": 51.50853,
+          "longitude": -0.12574,
+          "geoname_id": 2643743,
+          "aliases": [
+            "London"
+          ]
+        },
+        {
+          "name": "曼彻斯特",
+          "latitude": 53.48095,
+          "longitude": -2.23743,
+          "geoname_id": 2643123,
+          "aliases": [
+            "Manchester"
+          ]
+        },
+        {
+          "name": "伯明翰",
+          "latitude": 52.48142,
+          "longitude": -1.89983,
+          "geoname_id": 2655603,
+          "aliases": [
+            "Birmingham"
+          ]
+        },
+        {
+          "name": "爱丁堡",
+          "latitude": 55.95206,
+          "longitude": -3.19648,
+          "geoname_id": 2650225,
+          "aliases": [
+            "Edinburgh"
+          ]
+        },
+        {
+          "name": "格拉斯哥",
+          "latitude": 55.86515,
+          "longitude": -4.25763,
+          "geoname_id": 2648579,
+          "aliases": [
+            "Glasgow"
+          ]
+        },
+        {
+          "name": "利物浦",
+          "latitude": 53.41058,
+          "longitude": -2.97794,
+          "geoname_id": 2644210,
+          "aliases": [
+            "Liverpool"
+          ]
+        },
+        {
+          "name": "剑桥",
+          "latitude": 52.2,
+          "longitude": 0.11667,
+          "geoname_id": 2653941,
+          "aliases": [
+            "Cambridge"
+          ]
+        },
+        {
+          "name": "牛津",
+          "latitude": 51.75222,
+          "longitude": -1.25596,
+          "geoname_id": 2640729,
+          "aliases": [
+            "Oxford"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FR",
+      "name": "法国",
+      "aliases": [
+        "France"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "巴黎",
+          "latitude": 48.85341,
+          "longitude": 2.3488,
+          "geoname_id": 2988507,
+          "aliases": [
+            "Paris"
+          ]
+        },
+        {
+          "name": "里昂",
+          "latitude": 45.74906,
+          "longitude": 4.84789,
+          "geoname_id": 2996944,
+          "aliases": [
+            "Lyon"
+          ]
+        },
+        {
+          "name": "马赛",
+          "latitude": 43.29695,
+          "longitude": 5.38107,
+          "geoname_id": 2995469,
+          "aliases": [
+            "Marseille"
+          ]
+        },
+        {
+          "name": "尼斯",
+          "latitude": 43.70313,
+          "longitude": 7.26608,
+          "geoname_id": 2990440,
+          "aliases": [
+            "Nice"
+          ]
+        },
+        {
+          "name": "图卢兹",
+          "latitude": 43.60426,
+          "longitude": 1.44367,
+          "geoname_id": 2972315,
+          "aliases": [
+            "Toulouse"
+          ]
+        },
+        {
+          "name": "波尔多",
+          "latitude": 44.84124,
+          "longitude": -0.58046,
+          "geoname_id": 3031582,
+          "aliases": [
+            "Bordeaux"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "DE",
+      "name": "德国",
+      "aliases": [
+        "Germany"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "柏林",
+          "latitude": 52.52437,
+          "longitude": 13.41053,
+          "geoname_id": 2950159,
+          "aliases": [
+            "Berlin"
+          ]
+        },
+        {
+          "name": "慕尼黑",
+          "latitude": 48.13743,
+          "longitude": 11.57549,
+          "geoname_id": 2867714,
+          "aliases": [
+            "Munich"
+          ]
+        },
+        {
+          "name": "法兰克福",
+          "latitude": 50.11552,
+          "longitude": 8.68417,
+          "geoname_id": 2925533,
+          "aliases": [
+            "Frankfurt am Main",
+            "Frankfurt"
+          ]
+        },
+        {
+          "name": "汉堡",
+          "latitude": 53.55073,
+          "longitude": 9.99302,
+          "geoname_id": 2911298,
+          "aliases": [
+            "Hamburg"
+          ]
+        },
+        {
+          "name": "科隆",
+          "latitude": 50.93333,
+          "longitude": 6.95,
+          "geoname_id": 2886242,
+          "aliases": [
+            "Cologne"
+          ]
+        },
+        {
+          "name": "斯图加特",
+          "latitude": 48.78232,
+          "longitude": 9.17702,
+          "geoname_id": 2825297,
+          "aliases": [
+            "Stuttgart"
+          ]
+        },
+        {
+          "name": "杜塞尔多夫",
+          "latitude": 51.22319,
+          "longitude": 6.77927,
+          "geoname_id": 2934246,
+          "aliases": [
+            "Dusseldorf"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "IT",
+      "name": "意大利",
+      "aliases": [
+        "Italy"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "罗马",
+          "latitude": 41.89193,
+          "longitude": 12.51133,
+          "geoname_id": 3169070,
+          "aliases": [
+            "Rome"
+          ]
+        },
+        {
+          "name": "米兰",
+          "latitude": 45.46427,
+          "longitude": 9.18951,
+          "geoname_id": 3173435,
+          "aliases": [
+            "Milan"
+          ]
+        },
+        {
+          "name": "威尼斯",
+          "latitude": 45.43713,
+          "longitude": 12.33265,
+          "geoname_id": 3164603,
+          "aliases": [
+            "Venice"
+          ]
+        },
+        {
+          "name": "佛罗伦萨",
+          "latitude": 43.77925,
+          "longitude": 11.24626,
+          "geoname_id": 3176959,
+          "aliases": [
+            "Florence"
+          ]
+        },
+        {
+          "name": "那不勒斯",
+          "latitude": 40.85216,
+          "longitude": 14.26811,
+          "geoname_id": 3172394,
+          "aliases": [
+            "Naples"
+          ]
+        },
+        {
+          "name": "都灵",
+          "latitude": 45.07049,
+          "longitude": 7.68682,
+          "geoname_id": 3165524,
+          "aliases": [
+            "Turin"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ES",
+      "name": "西班牙",
+      "aliases": [
+        "Spain"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "马德里",
+          "latitude": 40.4165,
+          "longitude": -3.70256,
+          "geoname_id": 3117735,
+          "aliases": [
+            "Madrid"
+          ]
+        },
+        {
+          "name": "巴塞罗那",
+          "latitude": 41.38879,
+          "longitude": 2.15899,
+          "geoname_id": 3128760,
+          "aliases": [
+            "Barcelona"
+          ]
+        },
+        {
+          "name": "瓦伦西亚",
+          "latitude": 39.47391,
+          "longitude": -0.37966,
+          "geoname_id": 2509954,
+          "aliases": [
+            "Valencia"
+          ]
+        },
+        {
+          "name": "塞维利亚",
+          "latitude": 37.38283,
+          "longitude": -5.97317,
+          "geoname_id": 2510911,
+          "aliases": [
+            "Seville"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PT",
+      "name": "葡萄牙",
+      "aliases": [
+        "Portugal"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "里斯本",
+          "latitude": 38.72509,
+          "longitude": -9.1498,
+          "geoname_id": 2267057,
+          "aliases": [
+            "Lisbon"
+          ]
+        },
+        {
+          "name": "波尔图",
+          "latitude": 41.1485,
+          "longitude": -8.61097,
+          "geoname_id": 2735943,
+          "aliases": [
+            "Porto"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "NL",
+      "name": "荷兰",
+      "aliases": [
+        "Netherlands"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "阿姆斯特丹",
+          "latitude": 52.37403,
+          "longitude": 4.88969,
+          "geoname_id": 2759794,
+          "aliases": [
+            "Amsterdam"
+          ]
+        },
+        {
+          "name": "鹿特丹",
+          "latitude": 51.9225,
+          "longitude": 4.47917,
+          "geoname_id": 2747891,
+          "aliases": [
+            "Rotterdam"
+          ]
+        },
+        {
+          "name": "海牙",
+          "latitude": 52.07667,
+          "longitude": 4.29861,
+          "geoname_id": 2747373,
+          "aliases": [
+            "The Hague",
+            "Hague"
+          ]
+        },
+        {
+          "name": "乌得勒支",
+          "latitude": 52.09083,
+          "longitude": 5.12222,
+          "geoname_id": 2745912,
+          "aliases": [
+            "Utrecht"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "BE",
+      "name": "比利时",
+      "aliases": [
+        "Belgium"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "布鲁塞尔",
+          "latitude": 50.85045,
+          "longitude": 4.34878,
+          "geoname_id": 2800866,
+          "aliases": [
+            "Brussels"
+          ]
+        },
+        {
+          "name": "安特卫普",
+          "latitude": 51.22047,
+          "longitude": 4.40026,
+          "geoname_id": 2803138,
+          "aliases": [
+            "Antwerp"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "CH",
+      "name": "瑞士",
+      "aliases": [
+        "Switzerland"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "苏黎世",
+          "latitude": 47.36667,
+          "longitude": 8.55,
+          "geoname_id": 2657896,
+          "aliases": [
+            "Zurich"
+          ]
+        },
+        {
+          "name": "日内瓦",
+          "latitude": 46.20222,
+          "longitude": 6.14569,
+          "geoname_id": 2660646,
+          "aliases": [
+            "Geneva"
+          ]
+        },
+        {
+          "name": "伯尔尼",
+          "latitude": 46.94809,
+          "longitude": 7.44744,
+          "geoname_id": 2661552,
+          "aliases": [
+            "Bern"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "AT",
+      "name": "奥地利",
+      "aliases": [
+        "Austria"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "维也纳",
+          "latitude": 48.20849,
+          "longitude": 16.37208,
+          "geoname_id": 2761369,
+          "aliases": [
+            "Vienna"
+          ]
+        },
+        {
+          "name": "萨尔茨堡",
+          "latitude": 47.79941,
+          "longitude": 13.04399,
+          "geoname_id": 2766824,
+          "aliases": [
+            "Salzburg"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "IE",
+      "name": "爱尔兰",
+      "aliases": [
+        "Ireland"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "都柏林",
+          "latitude": 53.33306,
+          "longitude": -6.24889,
+          "geoname_id": 2964574,
+          "aliases": [
+            "Dublin"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "DK",
+      "name": "丹麦",
+      "aliases": [
+        "Denmark"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "哥本哈根",
+          "latitude": 55.67594,
+          "longitude": 12.56553,
+          "geoname_id": 2618425,
+          "aliases": [
+            "Copenhagen"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "SE",
+      "name": "瑞典",
+      "aliases": [
+        "Sweden"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "斯德哥尔摩",
+          "latitude": 59.32938,
+          "longitude": 18.06871,
+          "geoname_id": 2673730,
+          "aliases": [
+            "Stockholm"
+          ]
+        },
+        {
+          "name": "哥德堡",
+          "latitude": 57.70716,
+          "longitude": 11.96679,
+          "geoname_id": 2711537,
+          "aliases": [
+            "Gothenburg"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "NO",
+      "name": "挪威",
+      "aliases": [
+        "Norway"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "奥斯陆",
+          "latitude": 59.91273,
+          "longitude": 10.74609,
+          "geoname_id": 3143244,
+          "aliases": [
+            "Oslo"
+          ]
+        },
+        {
+          "name": "卑尔根",
+          "latitude": 60.39299,
+          "longitude": 5.32415,
+          "geoname_id": 3161732,
+          "aliases": [
+            "Bergen"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FI",
+      "name": "芬兰",
+      "aliases": [
+        "Finland"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "赫尔辛基",
+          "latitude": 60.16952,
+          "longitude": 24.93545,
+          "geoname_id": 658225,
+          "aliases": [
+            "Helsinki"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "IS",
+      "name": "冰岛",
+      "aliases": [
+        "Iceland"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "雷克雅未克",
+          "latitude": 64.13548,
+          "longitude": -21.89541,
+          "geoname_id": 3413829,
+          "aliases": [
+            "Reykjavik"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PL",
+      "name": "波兰",
+      "aliases": [
+        "Poland"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "华沙",
+          "latitude": 52.22977,
+          "longitude": 21.01178,
+          "geoname_id": 756135,
+          "aliases": [
+            "Warsaw"
+          ]
+        },
+        {
+          "name": "克拉科夫",
+          "latitude": 50.06143,
+          "longitude": 19.93658,
+          "geoname_id": 3094802,
+          "aliases": [
+            "Krakow"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "CZ",
+      "name": "捷克",
+      "aliases": [
+        "Czechia",
+        "Czech Republic"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "布拉格",
+          "latitude": 50.08804,
+          "longitude": 14.42076,
+          "geoname_id": 3067696,
+          "aliases": [
+            "Prague"
+          ]
+        },
+        {
+          "name": "布尔诺",
+          "latitude": 49.19522,
+          "longitude": 16.60796,
+          "geoname_id": 3078610,
+          "aliases": [
+            "Brno"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "HU",
+      "name": "匈牙利",
+      "aliases": [
+        "Hungary"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "布达佩斯",
+          "latitude": 47.49835,
+          "longitude": 19.04045,
+          "geoname_id": 3054643,
+          "aliases": [
+            "Budapest"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "GR",
+      "name": "希腊",
+      "aliases": [
+        "Greece"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "雅典",
+          "latitude": 37.98376,
+          "longitude": 23.72784,
+          "geoname_id": 264371,
+          "aliases": [
+            "Athens"
+          ]
+        },
+        {
+          "name": "塞萨洛尼基",
+          "latitude": 40.64072,
+          "longitude": 22.93493,
+          "geoname_id": 734077,
+          "aliases": [
+            "Thessaloniki"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "RO",
+      "name": "罗马尼亚",
+      "aliases": [
+        "Romania"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "布加勒斯特",
+          "latitude": 44.43225,
+          "longitude": 26.10626,
+          "geoname_id": 683506,
+          "aliases": [
+            "Bucharest"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "BG",
+      "name": "保加利亚",
+      "aliases": [
+        "Bulgaria"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "索非亚",
+          "latitude": 42.69751,
+          "longitude": 23.32415,
+          "geoname_id": 727011,
+          "aliases": [
+            "Sofia",
+            "索菲亚"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "HR",
+      "name": "克罗地亚",
+      "aliases": [
+        "Croatia"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "萨格勒布",
+          "latitude": 45.81444,
+          "longitude": 15.97798,
+          "geoname_id": 3186886,
+          "aliases": [
+            "Zagreb"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "SI",
+      "name": "斯洛文尼亚",
+      "aliases": [
+        "Slovenia"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "卢布尔雅那",
+          "latitude": 46.05108,
+          "longitude": 14.50513,
+          "geoname_id": 3196359,
+          "aliases": [
+            "Ljubljana"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "SK",
+      "name": "斯洛伐克",
+      "aliases": [
+        "Slovakia"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "布拉迪斯拉发",
+          "latitude": 48.14816,
+          "longitude": 17.10674,
+          "geoname_id": 3060972,
+          "aliases": [
+            "Bratislava"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "EE",
+      "name": "爱沙尼亚",
+      "aliases": [
+        "Estonia"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "塔林",
+          "latitude": 59.43696,
+          "longitude": 24.75353,
+          "geoname_id": 588409,
+          "aliases": [
+            "Tallinn"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "LV",
+      "name": "拉脱维亚",
+      "aliases": [
+        "Latvia"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "里加",
+          "latitude": 56.946,
+          "longitude": 24.10589,
+          "geoname_id": 456172,
+          "aliases": [
+            "Riga"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "LT",
+      "name": "立陶宛",
+      "aliases": [
+        "Lithuania"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "维尔纽斯",
+          "latitude": 54.68916,
+          "longitude": 25.2798,
+          "geoname_id": 593116,
+          "aliases": [
+            "Vilnius"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "LU",
+      "name": "卢森堡",
+      "aliases": [
+        "Luxembourg"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "卢森堡",
+          "latitude": 49.60982,
+          "longitude": 6.13268,
+          "geoname_id": 2960316,
+          "aliases": [
+            "Luxembourg"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MT",
+      "name": "马耳他",
+      "aliases": [
+        "Malta"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "瓦莱塔",
+          "latitude": 35.89968,
+          "longitude": 14.5148,
+          "geoname_id": 2562305,
+          "aliases": [
+            "Valletta"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "CY",
+      "name": "塞浦路斯",
+      "aliases": [
+        "Cyprus"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "尼科西亚",
+          "latitude": 35.17284,
+          "longitude": 33.35397,
+          "geoname_id": 146268,
+          "aliases": [
+            "Nicosia"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "RS",
+      "name": "塞尔维亚",
+      "aliases": [
+        "Serbia"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "贝尔格莱德",
+          "latitude": 44.80401,
+          "longitude": 20.46513,
+          "geoname_id": 792680,
+          "aliases": [
+            "Belgrade"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "BA",
+      "name": "波黑",
+      "aliases": [
+        "Bosnia and Herzegovina"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "萨拉热窝",
+          "latitude": 43.84864,
+          "longitude": 18.35644,
+          "geoname_id": 3191281,
+          "aliases": [
+            "Sarajevo"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ME",
+      "name": "黑山",
+      "aliases": [
+        "Montenegro"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "波德戈里察",
+          "latitude": 42.44124,
+          "longitude": 19.26309,
+          "geoname_id": 3193044,
+          "aliases": [
+            "Podgorica"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "AL",
+      "name": "阿尔巴尼亚",
+      "aliases": [
+        "Albania"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "地拉那",
+          "latitude": 41.32744,
+          "longitude": 19.81866,
+          "geoname_id": 3183875,
+          "aliases": [
+            "Tirana"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MK",
+      "name": "北马其顿",
+      "aliases": [
+        "North Macedonia"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "斯科普里",
+          "latitude": 41.99646,
+          "longitude": 21.43141,
+          "geoname_id": 785842,
+          "aliases": [
+            "Skopje"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MD",
+      "name": "摩尔多瓦",
+      "aliases": [
+        "Moldova"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "基希讷乌",
+          "latitude": 47.00902,
+          "longitude": 28.85938,
+          "geoname_id": 618426,
+          "aliases": [
+            "Chisinau"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "UA",
+      "name": "乌克兰",
+      "aliases": [
+        "Ukraine"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "基辅",
+          "latitude": 50.45466,
+          "longitude": 30.5238,
+          "geoname_id": 703448,
+          "aliases": [
+            "Kyiv",
+            "Kiev"
+          ]
+        },
+        {
+          "name": "利沃夫",
+          "latitude": 49.83826,
+          "longitude": 24.02324,
+          "geoname_id": 702550,
+          "aliases": [
+            "Lviv"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "BY",
+      "name": "白俄罗斯",
+      "aliases": [
+        "Belarus"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "明斯克",
+          "latitude": 53.90019,
+          "longitude": 27.56653,
+          "geoname_id": 625144,
+          "aliases": [
+            "Minsk"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "RU",
+      "name": "俄罗斯",
+      "aliases": [
+        "Russia"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "莫斯科",
+          "latitude": 55.75204,
+          "longitude": 37.61781,
+          "geoname_id": 524901,
+          "aliases": [
+            "Moscow"
+          ]
+        },
+        {
+          "name": "圣彼得堡",
+          "latitude": 59.93863,
+          "longitude": 30.31413,
+          "geoname_id": 498817,
+          "aliases": [
+            "Saint Petersburg",
+            "St Petersburg"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "TR",
+      "name": "土耳其",
+      "aliases": [
+        "Turkey",
+        "Turkiye"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "伊斯坦布尔",
+          "latitude": 41.01384,
+          "longitude": 28.94966,
+          "geoname_id": 745044,
+          "aliases": [
+            "Istanbul"
+          ]
+        },
+        {
+          "name": "安卡拉",
+          "latitude": 39.91987,
+          "longitude": 32.85427,
+          "geoname_id": 323786,
+          "aliases": [
+            "Ankara"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MC",
+      "name": "摩纳哥",
+      "aliases": [
+        "Monaco"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "摩纳哥",
+          "latitude": 43.73718,
+          "longitude": 7.42145,
+          "geoname_id": 2993458,
+          "aliases": [
+            "Monaco"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "SM",
+      "name": "圣马力诺",
+      "aliases": [
+        "San Marino"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "圣马力诺",
+          "latitude": 43.93667,
+          "longitude": 12.44639,
+          "geoname_id": 3168070,
+          "aliases": [
+            "San Marino"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "LI",
+      "name": "列支敦士登",
+      "aliases": [
+        "Liechtenstein"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "瓦杜兹",
+          "latitude": 47.14151,
+          "longitude": 9.52154,
+          "geoname_id": 3042030,
+          "aliases": [
+            "Vaduz"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "AD",
+      "name": "安道尔",
+      "aliases": [
+        "Andorra"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "安道尔城",
+          "latitude": 42.50779,
+          "longitude": 1.52109,
+          "geoname_id": 3041563,
+          "aliases": [
+            "Andorra la Vella"
+          ]
+        }
+      ]
+    },
+    {
+      "code": "VA",
+      "name": "梵蒂冈",
+      "aliases": [
+        "Vatican"
+      ],
+      "group": "欧洲",
+      "cities": [
+        {
+          "name": "梵蒂冈",
+          "latitude": 41.90268,
+          "longitude": 12.45414,
+          "geoname_id": 6691831,
+          "aliases": [
+            "Vatican City"
+          ]
+        }
+      ]
+    }
+  ]
+}

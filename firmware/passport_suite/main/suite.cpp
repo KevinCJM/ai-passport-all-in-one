@@ -169,6 +169,7 @@ bool Worker::shutdown() {
 }
 bool Runtime::init(SystemSettings& settings) {
     settings_ = &settings;
+    SettingsStore::loadMenu(menuLayout_);menuView_.build(menuLayout_);ensureMenuSelection();
     const auto screen = SettingsStore::loadByte("home_screen");
     model.wakeWord = SettingsStore::loadByte("wake_word") == 1;
     model.voiceJump = SettingsStore::loadByte("jump_off") != 1;  // stored as off, so a badge that never saved it has it on
@@ -186,6 +187,25 @@ bool Runtime::init(SystemSettings& settings) {
     if (events_) vQueueDelete(events_);
     events_ = nullptr;
     return false;
+}
+void Runtime::ensureMenuSelection(){
+    if(menuView_.position(selection_)>=menuView_.count)selection_=menuView_.items[0];
+    const unsigned row=menuPosition()/3;
+    if(row<menuTopRow_)menuTopRow_=row;
+    if(row>=unsigned(menuTopRow_)+3)menuTopRow_=row-2;
+    const unsigned rows=(menuView_.count+2)/3;
+    menuTopRow_=std::min<unsigned>(menuTopRow_,rows>3?rows-3:0);
+}
+void Runtime::moveMenu(int delta){
+    const int count=menuView_.count;
+    const int next=(static_cast<int>(menuPosition())+delta%count+count)%count;
+    selection_=menuView_.items[next];ensureMenuSelection();
+}
+bool Runtime::configureMenu(const MenuLayout& layout,bool persist){
+    if(!layout.valid())return false;
+    if(!std::memcmp(&layout,&menuLayout_,sizeof(layout)))return true;
+    if(persist&&!SettingsStore::saveMenu(layout))return false;
+    menuLayout_=layout;menuView_.build(layout);ensureMenuSelection();return true;
 }
 void Model::chatRecord(unsigned turn, const char* heard, const char* sentence) {
     const auto push=[this](bool user,const char* text){
@@ -317,8 +337,8 @@ bool Runtime::longKey(bool up, uint64_t now) {
     tick(now); lastInput_ = now;
     auto& m = model;
     if (active_ == App::Menu) {
-        constexpr unsigned pages = std::size(kMenuPages);
-        selection_ = kMenuStarts[(menuPageOf(selection_) + (up ? pages - 1 : 1)) % pages];
+        if(menuLayout_.mode==MenuLayout::Continuous)moveMenu(up?-9:9);
+        else {const unsigned pages=menuView_.pages,page=menuView_.page(menuPosition());selection_=menuView_.items[menuView_.starts[(page+(up?pages-1:1))%pages]];ensureMenuSelection();}
         return true;
     }
     if (active_ == App::Calendar) {
@@ -804,7 +824,7 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
     active_ = target;
     ++switches;
     // The menu shows the page last opened, however it was opened (说功能名跳转 too): Back lands on its icon.
-    if (const auto at = std::find(kFunctions.begin(), kFunctions.end(), target); at != kFunctions.end()) selection_ = static_cast<uint8_t>(at - kFunctions.begin());
+    if (const auto at = std::find(kFunctions.begin(), kFunctions.end(), target); at != kFunctions.end()&&menuLayout_.shown(target)){selection_=static_cast<uint8_t>(at-kFunctions.begin());ensureMenuSelection();}
     if (target == App::Words) {
         // A deck that fails to load or no longer matches the list starts over.
         if (!SettingsStore::loadWords(model.words) || model.words.next > kWordCount) model.words = {};
@@ -904,9 +924,9 @@ void Runtime::key(Key key, uint64_t now) {
             SettingsStore::saveByte("home_screen", static_cast<uint8_t>(model.homeScreen));
         }
     } else if (active_ == App::Menu) {
-        if (key == Key::Up) selection_ = (selection_ + kFunctions.size() - 1) % kFunctions.size();
-        if (key == Key::Down) selection_ = (selection_ + 1) % kFunctions.size();
-        if (key == Key::Confirm) switchTo(kFunctions[selection_]);
+        if (key == Key::Up) moveMenu(-1);
+        if (key == Key::Down) moveMenu(1);
+        if (key == Key::Confirm) switchTo(selectedApp());
     } else if (active_ == App::Words) {
         auto& session = model.wordSession;
         if (key == Key::Up || key == Key::Down) wordsMove(session, key == Key::Up ? -1 : 1);
