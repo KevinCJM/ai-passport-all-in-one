@@ -67,6 +67,11 @@ def foreground(window):
     return False
 
 
+def front_class():
+    user32=ctypes.windll.user32;buffer=ctypes.create_unicode_buffer(64)
+    user32.GetClassNameW(user32.GetForegroundWindow(),buffer,64);return buffer.value
+
+
 def typing():
     import passport_windows as win
     import passport_dictation
@@ -75,6 +80,9 @@ def typing():
     user32.FindWindowExW.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_wchar_p,ctypes.c_wchar_p]
     user32.SetForegroundWindow.argtypes=[ctypes.c_void_p];user32.ShowWindow.argtypes=[ctypes.c_void_p,ctypes.c_int]
     user32.SendMessageW.argtypes=[ctypes.c_void_p,ctypes.c_uint,ctypes.c_size_t,ctypes.c_void_p]
+    user32.GetClassNameW.argtypes=[ctypes.c_void_p,ctypes.c_wchar_p,ctypes.c_int]
+    # The page the second launch opened: Edge's first-run window takes the focus back while it animates.
+    subprocess.run(['taskkill','/F','/IM','msedge.exe'],capture_output=True);time.sleep(2)
     notepad=subprocess.Popen(['notepad.exe'])
     try:
         window=until(lambda:user32.FindWindowW('Notepad',None))
@@ -84,12 +92,13 @@ def typing():
         check('notepad_foreground',foreground(window))
         check('notepad_not_a_terminal',not win.foreground_terminal())
         win.set_text('剪贴板原来的内容')
+        foreground(window);front=front_class()
         restore=passport_dictation.paste('第一行：语音输入粘贴测试',win.keys);restore()
-        check('paste_text',until(lambda:'第一行：语音输入粘贴测试' in notepad_text(edit),5),notepad_text(edit))
+        check('paste_text',until(lambda:'第一行：语音输入粘贴测试' in notepad_text(edit),5),{'text':notepad_text(edit),'front':front,'after':front_class()})
         check('clipboard_restored',win.get_text()=='剪贴板原来的内容',win.get_text())
-        win.keys('enter');restore=passport_dictation.paste('第二行要删掉',win.keys);restore()
+        foreground(window);win.keys('enter');restore=passport_dictation.paste('第二行要删掉',win.keys);restore()
         check('enter_then_paste',until(lambda:notepad_text(edit)=='第一行：语音输入粘贴测试\r\n第二行要删掉',5),notepad_text(edit))
-        win.keys('delete_line');time.sleep(.5)
+        foreground(window);win.keys('delete_line');time.sleep(.5)
         check('delete_line',notepad_text(edit)=='第一行：语音输入粘贴测试\r\n',notepad_text(edit))
     finally:notepad.kill()
 
