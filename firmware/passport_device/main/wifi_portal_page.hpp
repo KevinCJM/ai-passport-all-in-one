@@ -102,7 +102,7 @@ function paint(canvas,offset,alpha){const w=canvas.width,h=canvas.height,n=w*h,p
 function flags(){return new DataView(image.buffer).getUint32(12,true);}
 function setFlag(bit){new DataView(image.buffer).setUint32(12,flags()|bit,true);}
 function crop(file,w,h){return new Promise((resolve,reject)=>{const picture=new Image();picture.onload=()=>{const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const g=canvas.getContext('2d');const scale=Math.max(w/picture.width,h/picture.height),dw=picture.width*scale,dh=picture.height*scale;g.drawImage(picture,(w-dw)/2,(h-dh)/2,dw,dh);URL.revokeObjectURL(picture.src);resolve(g.getImageData(0,0,w,h));};picture.onerror=()=>{URL.revokeObjectURL(picture.src);reject(Error('无法读取这张图片，请换一张 JPG 或 PNG'));};picture.src=URL.createObjectURL(file);});}
-async function choose(input,w,h,offset,alpha,bit,canvas){const file=input.files[0];if(!file||!image)return;try{encode(await crop(file,w,h),offset,alpha);setFlag(bit);paint(canvas,offset,alpha);$('card-feedback').hidden=true;}catch(error){show('card',error.message,'error');}finally{input.value='';}}
+async function choose(input,w,h,offset,alpha,bit,canvas){const file=input.files[0];if(!file)return;if(!image){input.value='';show('card','还在读取设备上的身份卡，请稍等几秒再选','error');return;}try{encode(await crop(file,w,h),offset,alpha);setFlag(bit);paint(canvas,offset,alpha);$('card-feedback').hidden=true;}catch(error){show('card',error.message,'error');}finally{input.value='';}}
 async function loadCard(){if(cardLoaded||cardBusy)return;cardBusy=true;$('save-card').disabled=true;show('card','正在读取设备上的身份卡…','loading');
  try{const result=await fetch('/identity/data',{cache:'no-store'});if(result.status===404){image=new Uint8Array(TOTAL).fill(255);image.fill(0,0,16);$('card-feedback').hidden=true;}
   else{if(!result.ok)throw Error('暂时无法读取身份卡，请稍后重试');const raw=new Uint8Array(await result.arrayBuffer());if(raw.length!==TOTAL)throw Error('读取不完整，请重新打开此页');image=raw;$('name').value=text(16,64);$('title').value=text(80,64);$('motto').value=text(144,160);$('card-feedback').hidden=true;}
@@ -110,6 +110,10 @@ async function loadCard(){if(cardLoaded||cardBusy)return;cardBusy=true;$('save-c
  catch(error){show('card',error.message,'error');}finally{cardBusy=false;$('save-card').disabled=!cardLoaded;}}
 $('avatar-file').onchange=()=>choose($('avatar-file'),AW,AH,AVATAR,true,1,$('avatar-canvas'));
 $('photo-file').onchange=()=>choose($('photo-file'),PW,PH,PHOTO,false,2,$('photo-canvas'));
+// Android's "sign in to network" window (captive portal WebView) has no file chooser: a tap on a file input does nothing.
+// If the page never loses focus after the tap, no picker opened; tell the user to use the real browser.
+for(const id of ['avatar-file','photo-file'])$(id).addEventListener('click',()=>{let away=false;const left=()=>{away=true;};addEventListener('blur',left,{once:true});$(id).addEventListener('change',left,{once:true});document.addEventListener('visibilitychange',left,{once:true});
+ setTimeout(()=>{removeEventListener('blur',left);document.removeEventListener('visibilitychange',left);if(!away&&!$(id).files.length)show('card','没弹出相册？手机连热点时自动弹出的「登录网络」窗口不能选图片。请打开手机浏览器（Chrome 或自带浏览器），在地址栏输入 192.168.8.1 再选。打不开时先关掉移动数据，手机提示「无法上网」时选「保持连接」。','error');},1500);});
 $('card-form').onsubmit=event=>{event.preventDefault();if(!image||cardBusy)return;const name=$('name').value.trim();if(!name){show('card','请填写姓名','error');$('name').focus();return;}
  let body;try{body=packIdentity(image,{name,title:$('title').value.trim(),motto:$('motto').value.trim()},flags()&3);}catch(error){show('card',error.message,'error');return;}
  cardBusy=true;$('save-card').disabled=true;const request=new XMLHttpRequest();request.open('POST','/identity');request.setRequestHeader('Content-Type','application/octet-stream');

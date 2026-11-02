@@ -13,6 +13,7 @@ const server=http.createServer(async(req,res)=>{
  if(req.url==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(html);return;}
  if(req.url==='/menu-editor.js'){res.setHeader('Content-Type','text/javascript');res.end(fs.readFileSync(path.join(root,'scripts/passport_menu.js')));return;}
  res.setHeader('Content-Type','application/json; charset=utf-8');
+ if(req.url==='/identity/data'){res.statusCode=404;res.end('{}');return;}
  if(req.url==='/media/prefs'){res.end(JSON.stringify(stored));return;}
  if(req.url==='/media'&&req.method==='POST'){
   let body='';for await(const chunk of req)body+=chunk;
@@ -64,11 +65,18 @@ try{
  for(const cc of ['CA','GB']){assert(await select('伦敦',cc),'London '+cc+' unavailable');await save();assert(stored.country===cc,'wrong London country');}
  const before=posts.length;await search('not-a-real-city-123');await evaluate(`document.getElementById('save-media').click()`);await pause(100);assert(posts.length===before,'empty search overwrote city');
  await search('温哥华');assert(await select('温哥华','CA'),'Chinese search failed');await save();
+ // Android's captive-portal window opens no file picker: a tap that never leaves the page must explain what to do.
+ await evaluate(`document.getElementById('tab-card').click()`);await until(`!document.getElementById('save-card').disabled`);
+ await evaluate(`document.getElementById('photo-file').click()`);await pause(1700);
+ assert(await evaluate(`document.getElementById('card-message').textContent.includes('192.168.8.1')`),'no hint when the picker did not open');
+ await evaluate(`document.getElementById('card-feedback').hidden=true;document.getElementById('photo-file').click();window.dispatchEvent(new Event('blur'))`);await pause(1700);
+ assert(await evaluate(`document.getElementById('card-feedback').hidden`),'hint shown although the picker opened');
+ await evaluate(`document.getElementById('tab-media').click()`);
  await evaluate(`document.getElementById('media-panel').scrollIntoView()`);
  const shot=await call('Page.captureScreenshot',{format:'png',fromSurface:true});fs.writeFileSync(path.join(out,'city-portal-mobile.png'),Buffer.from(shot.data,'base64'));
  assert(await evaluate(`document.documentElement.scrollWidth<=window.innerWidth`),'mobile page overflows');
  assert(exceptions.length===0,'browser exceptions: '+JSON.stringify(exceptions));
- const report={status:'PASS',real_chrome:true,physical_device_accessed:false,portal_catalog_cities:count,regions:regions.map(x=>x[2]),unlisted_ip_city_retained:true,same_name_ip_coordinates_retained:true,london_disambiguated:true,english_country_search:true,empty_search_did_not_save:true,posts:posts.length,exceptions};
+ const report={status:'PASS',real_chrome:true,physical_device_accessed:false,portal_catalog_cities:count,regions:regions.map(x=>x[2]),unlisted_ip_city_retained:true,same_name_ip_coordinates_retained:true,london_disambiguated:true,english_country_search:true,empty_search_did_not_save:true,photo_picker_hint:true,posts:posts.length,exceptions};
  fs.writeFileSync(path.join(out,'city-browser-verification.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));
  await call('Browser.close');
 }finally{
