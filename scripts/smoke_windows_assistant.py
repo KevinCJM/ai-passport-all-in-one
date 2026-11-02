@@ -61,6 +61,8 @@ def foreground(window):
     import passport_windows as win
     user32=ctypes.windll.user32
     for _ in range(10):
+        # Only while another window is in front: a lone Alt in Notepad itself would open its menu bar.
+        if user32.GetForegroundWindow()==window:return True
         win.press([(0x12,)]);user32.ShowWindow(window,9);user32.SetForegroundWindow(window)
         if user32.GetForegroundWindow()==window:return True
         time.sleep(.3)
