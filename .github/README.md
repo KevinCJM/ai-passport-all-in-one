@@ -190,7 +190,11 @@ python -m esptool --chip esp32c3 -p PORT -b 921600 write-flash \
 
 ### 1. 安装
 
-**Mac**：目前没有提供现成的安装包，需要从源码运行或自己打包。
+安装包在 [Releases › 电脑助手 0.1.9 预览版](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/assistant-v0.1.9-preview)：Mac 下载 `…-macos-arm64.pkg`，Windows 下载 `…-windows-x64.zip`，可用同页的 `SHA256SUMS` 校验。
+
+**Mac**：双击 `.pkg` 安装，助手会装进「应用程序」。安装包没有签名和 Apple 公证，双击安装包或第一次打开时如果提示无法验证，到「系统设置 › 隐私与安全性」点「仍要打开」。
+
+也可以从源码运行或自己打包：
 
 ```bash
 xcode-select --install                 # 首次需要 Xcode Command Line Tools
@@ -203,14 +207,13 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 - 打包时会自动下载 FFmpeg 7.1.2 和 LAME 3.100 的源码并编译，第一次要几分钟。
 - 打包时会在 `~/Library/Application Support/AI Passport/signing` 生成一个本机用的签名证书，以后每次更新都用它签名，这样系统授权不会因为更新而失效。
-- 双击 `.pkg` 安装后，助手位于「应用程序」里。安装包没有经过 Apple 公证，第一次打开时如果被拦截，到「系统设置 › 隐私与安全性」点「仍要打开」。
+- 自己打包的 `.pkg` 安装方法同上。
 
 **Windows**：
 
-1. 打开仓库的 Actions 页，选「Windows assistant」，点「Run workflow」。也可以推送 `assistant-v*` 标签自动触发。
-2. 跑完后在这次运行的 Artifacts 里下载 `ai-passport-assistant-windows`，里面有 zip、`SHA256SUMS` 和 `manifest.json`。
-3. 把 zip 解压到一个固定的位置，例如 `D:\Apps\`。之后不要再移动这个文件夹，开机启动记的是这里的路径。
-4. 双击 `AI Passport Assistant\AI Passport Assistant.exe`。程序没有代码签名，SmartScreen 会拦截，点「更多信息 › 仍要运行」。
+1. 从上面的 Releases 页下载 zip。想用最新源码自己打包：在仓库的 Actions 页选「Windows assistant」点「Run workflow」（或推送 `assistant-v*` 标签），跑完在 Artifacts 里下载 `ai-passport-assistant-windows`。
+2. 把 zip 解压到一个固定的位置，例如 `D:\Apps\`。之后不要再移动这个文件夹，开机启动记的是这里的路径。
+3. 双击 `AI Passport Assistant\AI Passport Assistant.exe`。程序没有代码签名，SmartScreen 会拦截，点「更多信息 › 仍要运行」。
 
 从源码运行（Windows）：安装 Python 3.12 和 MSYS2；在 MSYS2 UCRT64 终端里执行 `bash scripts/build_windows_helpers.sh`，编译 PPP 网关和 ffmpeg；再在命令提示符里执行 `pip install -r scripts\requirements-assistant-windows.txt`、`set PYTHONUTF8=1`，然后 `python scripts\passport_assistant.py`。
 
