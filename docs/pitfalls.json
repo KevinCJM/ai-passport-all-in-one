@@ -233,6 +233,48 @@
         "宿主实际原生和HTTP保存方法的ASan/UBSan测试",
         "隔离浏览器手机页及C3模拟器519个城市字形检查；实机语音、网络另验"
       ]
+    },
+    {
+      "id": "P06",
+      "title": "xiaozhi_unbound_device_code_must_reach_the_screen",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "unbound_transcription_device",
+        "activation_code_hidden",
+        "chat_memory_pollution"
+      ],
+      "symptoms": [
+        "未绑定的识别设备仍能拿到stt，验证码只在被丢弃的TTS里，用户永远看不到",
+        "笔记、翻译、设置等页只显示一行小字验证码，不知道去哪里输入",
+        "Mac语音输入只报识别失败"
+      ],
+      "trigger_actions": [
+        "修改小智身份、OTA、激活或语音识别页的错误显示"
+      ],
+      "related_paths": [
+        "firmware/passport_device/main/native_services.cpp",
+        "firmware/passport_suite/main/ui.cpp",
+        "scripts/passport_device_cloud.py",
+        "scripts/passport_dictation.py"
+      ],
+      "affected_modules": [
+        "xiaozhi_identity"
+      ],
+      "blast_radius": [
+        "小智语音及所有用小智识别的页面",
+        "Mac语音输入"
+      ],
+      "check_before_edit": [
+        "2026-11起小智OTA对新设备返回activation.code；识别身份即使有旧聊天凭据也必须走OTA",
+        "激活状态以「验证码 」开头，renderConnection据此在除主页、菜单外的任何页整屏显示，liveLines[0]写绑定方法",
+        "识别设备应绑到新建的智能体，否则识别文字进入聊天记忆；胸牌与Mac共用同一派生身份，绑定一次即可"
+      ],
+      "safe_observation_methods": [
+        "随机MAC调用OTA看activation字段",
+        "C3模拟器xiaozhi_code_*截图",
+        "Mac测试用arm64 Python"
+      ]
     }
   ]
 }

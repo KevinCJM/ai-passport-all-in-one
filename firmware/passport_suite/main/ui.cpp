@@ -2454,7 +2454,9 @@ void renderSlides(const Runtime& runtime){
 void renderConnection(const Runtime& runtime){
     const auto& model=runtime.model;const auto app=runtime.active();const bool pairing=*model.pairingCode;
     // Once its list is shown, media reports loading and errors on its own status line.
-    const bool connecting=pairing||(model.live&&app!=App::Home&&app!=App::Focus&&app!=App::Settings&&app!=App::Menu&&app!=App::Words&&!(app==App::Radio&&model.mediaCount)&&!keepsContent(app,model)&&model.livePhase!=LivePhase::Ready);
+    // A XiaoZhi activation code ("验证码 123456") covers any page, also one that keeps its content, with how to bind.
+    const bool code=model.live&&app!=App::Home&&app!=App::Menu&&strstr(model.liveState,"验证码 ");
+    const bool connecting=pairing||code||(model.live&&app!=App::Home&&app!=App::Focus&&app!=App::Settings&&app!=App::Menu&&app!=App::Words&&!(app==App::Radio&&model.mediaCount)&&!keepsContent(app,model)&&model.livePhase!=LivePhase::Ready);
     visible(connectionRoot,connecting);
     if(!connecting)return;
     const bool error=!pairing&&model.livePhase==LivePhase::Error;setLabel(connectionTitle,pairing?"电脑配对":profile(app).title);
@@ -2465,7 +2467,7 @@ void renderConnection(const Runtime& runtime){
     const char* shown=error?model.liveState:model.connectionState;
     const bool setup=needsComputer(app)&&(strstr(shown,"电脑助手")||strstr(shown,"电脑蓝牙"));
     setLabel(connectionHint,pairing?"请核对电脑上的配对码":setup?"首次使用：电脑安装 AI Passport 助手，USB 连接后点「配对设备」"
-        :*model.liveLines[0]&&(error||app==App::Radio||app==App::Chat)?model.liveLines[0]:error?"连接失败，请重试":"请稍候");
+        :*model.liveLines[0]&&(error||code||app==App::Radio||app==App::Chat)?model.liveLines[0]:error?"连接失败，请重试":"请稍候");
 }
 // A window reads "5小时" with "2:10 重置" beside it, or "6天3时重置" when more than a day remains.
 void quotaLine(char* name,char* reset,size_t size,const Model::Quota& q){

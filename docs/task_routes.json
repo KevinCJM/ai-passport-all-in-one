@@ -232,6 +232,42 @@
         "subtree_only",
         "host_and_emulator_evidence"
       ]
+    },
+    {
+      "id": "R06",
+      "task_type": "xiaozhi_identity_activation",
+      "match_keywords": [
+        "小智激活",
+        "验证码",
+        "激活码",
+        "绑定设备",
+        "识别小智",
+        "xiaozhi",
+        "transcriber",
+        "cloudIdentity"
+      ],
+      "negative_keywords": [],
+      "route_priority": 85,
+      "first_read_modules": [
+        "xiaozhi_identity"
+      ],
+      "expand_to_modules": [],
+      "pitfall_ids": [
+        "P06"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_reference_map_first"
+      ],
+      "scope_flags": [
+        "subtree_only",
+        "host_and_emulator_evidence"
+      ]
     }
   ]
 }

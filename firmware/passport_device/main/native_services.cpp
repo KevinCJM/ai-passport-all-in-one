@@ -690,8 +690,10 @@ bool NativeServices::cloudIdentity(const uint8_t* mac,const char* client,char* u
         }
         if(probe)return false;
         // New to XiaoZhi: the user binds this board to their account with the code, then the check answers again.
-        char state[40];snprintf(state,sizeof(state),"验证码 %s",number);
-        const char* lines[]{"打开小智 App 或 xiaozhi.me，添加设备，输入上面的验证码","","",""};
+        // Two XiaoZhi devices, each bound once under an agent: the chat, and the one only for speech-to-text.
+        // The page shows any "验证码 " state full screen with lines[0] (renderConnection in ui.cpp).
+        char state[40];snprintf(state,sizeof(state),transcribing()?"识别小智 验证码 %s":"验证码 %s",number);
+        const char* lines[]{transcribing()?"语音识别用的第 2 个小智：在 xiaozhi.me 新建一个智能体，添加此设备":"注册登录 xiaozhi.me，在智能体里添加设备，输入上面的验证码","","",""};
         const auto until=esp_timer_get_time()+std::max(60.0,std::min(600.0,num(activation,"timeout_ms")/1000))*1000000;
         publish(current_,state,transcribing()?"error":"loading",transcribing()?"":"小智语音",lines);
         int result=202;
@@ -723,11 +725,11 @@ void NativeServices::chat(){
     }
     // 语音笔记 is a second XiaoZhi device (same server and token) so notes stay out of the chat's history and memory:
     // the MAC with its locally administered bit set, and a Client-Id the Mac's 语音输入 derives the same way
-    // (transcriber() in passport_device_cloud.py). A board that never ran XiaoZhi's firmware uses that Client-Id
-    // form for its chat too, and asks XiaoZhi for the server and token.
+    // (transcriber() in passport_device_cloud.py). It always asks XiaoZhi (OTA), so an unbound one shows its code.
+    // A board that never ran XiaoZhi's firmware uses that Client-Id form for its chat too, and asks the same way.
     uint8_t mac[6];esp_read_mac(mac,ESP_MAC_WIFI_STA);if(memo)mac[0]|=2;
     if(memo||!found||!*credentials->client)snprintf(credentials->client,sizeof(credentials->client),"61692d70-6173-4000-8000-%02x%02x%02x%02x%02x%02x",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
-    if(!found&&!cloudIdentity(mac,credentials->client,credentials->url,sizeof(credentials->url),credentials->token,sizeof(credentials->token),probe))return;
+    if((memo||!found)&&!cloudIdentity(mac,credentials->client,credentials->url,sizeof(credentials->url),credentials->token,sizeof(credentials->token),probe))return;
     if(strncmp(credentials->url,"wss://",6)||strpbrk(credentials->token,"\r\n")||strpbrk(credentials->client,"\r\n")){status("云端连接凭据无效","error");return;}
     const char* authority=credentials->url+6;const char* slash=strchr(authority,'/');const char* end=slash?slash:authority+strlen(authority);const char* colon=static_cast<const char*>(memchr(authority,':',end-authority));
     const size_t hostLength=(colon?colon:end)-authority;if(!hostLength||hostLength>=sizeof(credentials->host)){status("云端地址无效","error");return;}

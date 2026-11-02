@@ -1259,7 +1259,20 @@ void testInternationalCities(passport::Runtime& runtime){
     runtime.key(Key::Down,0);CHECK(m.cityRow==1);runtime.key(Key::Up,0);CHECK(m.cityRow==0);
     m.livePhase=LivePhase::Ready;strcpy(m.cityName,"温哥华 · 加拿大");strcpy(m.lastNotice,"所在城市已改为温哥华");
     CHECK(!strcmp(m.cityStatus(),m.lastNotice));uiRender(runtime);uiCapture("city_voice_saved");
+    // Leave 设置 on its list, as Back does: the menu checks later open it from there.
+    m.settingsPage=SettingsPage::List;m.lastNotice[0]=0;
     CHECK(runtime.switchTo(App::Home)==Result::Ok);runtime.model.weatherReading=original;uiRender(runtime);
+    // An unbound XiaoZhi device's code covers any page, also those that keep their content (笔记, 翻译) or never
+    // show the connection screen (设置), with how to bind it; the chat's and the transcription device's wording.
+    runtime.model.live=true;
+    for(const App app:{App::Chat,App::Memo,App::Translate,App::Dictation,App::Status,App::Settings}){
+        CHECK(runtime.switchTo(app)==Result::Ok);const bool chat=app==App::Chat;
+        m.livePhase=LivePhase::Error;m.liveValue[0]=0;strcpy(m.liveState,chat?"验证码 648346":"识别小智 验证码 648346");
+        strcpy(m.liveLines[0],chat?"注册登录 xiaozhi.me，在智能体里添加设备，输入上面的验证码":"语音识别用的第 2 个小智：在 xiaozhi.me 新建一个智能体，添加此设备");
+        char name[24];snprintf(name,sizeof(name),"xiaozhi_code_%u",static_cast<unsigned>(app));uiRender(runtime);uiCapture(name);
+        m.liveState[0]=m.liveLines[0][0]=0;
+    }
+    CHECK(runtime.switchTo(App::Home)==Result::Ok);runtime.model.live=false;runtime.model.livePhase=LivePhase::Ready;
     printf("CITY_CHECKS_DONE cities=%u heap=%u model=%u runtime=%u\n",count,unsigned(esp_get_free_heap_size()),unsigned(sizeof(Model)),unsigned(sizeof(Runtime)));
 }
 }

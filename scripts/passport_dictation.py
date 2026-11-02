@@ -208,6 +208,12 @@ class BluetoothDictation:
         """Waits for the utterance's text and types it; the device shows the outcome."""
         recognizer.done.wait(25)
         if recognizer.cancelled:return
+        from passport_device_cloud import Unbound
+        if isinstance(recognizer.error,Unbound):
+            # The page shows any "验证码 " state full screen, with lines[0] (renderConnection in ui.cpp).
+            self.stats['error']='Unbound'
+            return self.services.push(dict(self.status('fail'),phase='error',state='识别小智 验证码 '+recognizer.error.args[0],
+                lines=['语音识别用的第 2 个小智：在 xiaozhi.me 新建一个智能体，添加此设备','','','']),self.context)
         if recognizer.text is None:
             self.stats['error']=type(recognizer.error).__name__ if recognizer.error else 'TimeoutError'
             return self.publish('fail','识别失败，请重试')

@@ -87,13 +87,17 @@ class BluetoothDictationTests(TestCase):
         self.assertEqual(self.bridge.status()['lines'][0],'明天下午三点开会。','the page shows the last input again')
 
     def test_nothing_heard_and_failures_type_nothing(self):
-        for text,error,value in [('  ',None,'empty'),(None,TimeoutError(),'fail')]:
+        from passport_device_cloud import Unbound
+        for text,error,value in [('  ',None,'empty'),(None,TimeoutError(),'fail'),(None,Unbound('648346'),'fail')]:
             self.recognizer.done.clear();self.recognizer.text=text;self.recognizer.error=error
             self.start()
             with patch('passport_dictation.paste') as paste:
                 self.bridge.handle(self.packet(3,2));self.recognizer.done.set();self.bridge.delivery.join(2)
                 paste.assert_not_called()
             self.assertEqual(self.pushed[-1]['value'],value);self.bridge.handle(self.packet(4,3))
+        code=[p for p in self.pushed if '验证码' in p['state']]
+        self.assertEqual([(p['state'],p['phase']) for p in code],[('识别小智 验证码 648346','error')],'an unbound device shows its code')
+        self.assertIn('xiaozhi.me',code[0]['lines'][0]);self.assertNotIn('验证码',self.bridge.stats['state'])
 
     def test_device_cancel_drops_the_utterance(self):
         self.start();self.bridge.handle(self.packet(6,2))
@@ -144,13 +148,20 @@ class BluetoothDictationTests(TestCase):
 class TranscriberIdentityTests(TestCase):
     def test_second_device_derived_from_the_board_mac(self):
         import passport_device_cloud
-        board={'mac':'10:20:30:40:50:60','xiaozhi':{'url':'wss://x/v1/','token':'t','client_id':'chat-client'}}
-        identity=passport_device_cloud.transcriber(board)
-        self.assertEqual(identity,{'mac':'12:20:30:40:50:60','xiaozhi':{'url':'wss://x/v1/','token':'t','client_id':'61692d70-6173-4000-8000-122030405060'}})
-        reply=Mock();reply.read.return_value=json.dumps({'websocket':{'url':'wss://ota/v1/','token':'shared'}}).encode()
-        opener=Mock();opener.open.return_value=reply
-        with patch('urllib.request.build_opener',return_value=opener):
-            fresh=passport_device_cloud.transcriber({'mac':'10:20:30:40:50:60'})
-        self.assertEqual(fresh['xiaozhi'],{'url':'wss://ota/v1/','token':'shared','client_id':'61692d70-6173-4000-8000-122030405060'})
-        sent=opener.open.call_args.args[0]
-        self.assertEqual((sent.get_header('Device-id'),sent.get_header('Client-id')),('12:20:30:40:50:60','61692d70-6173-4000-8000-122030405060'))
+        def ask(answer):
+            reply=Mock();reply.read.return_value=json.dumps(answer).encode()
+            opener=Mock();opener.open.return_value=reply
+            with patch('urllib.request.build_opener',return_value=opener):
+                try:return passport_device_cloud.transcriber({'mac':'10:20:30:40:50:60','xiaozhi':{'url':'wss://x/v1/','token':'t','client_id':'chat'}})
+                finally:self.sent=opener.open.call_args.args[0]
+        fresh=ask({'websocket':{'url':'wss://ota/v1/','token':'shared'}})
+        self.assertEqual(fresh,{'mac':'12:20:30:40:50:60','xiaozhi':{'url':'wss://ota/v1/','token':'shared','client_id':'61692d70-6173-4000-8000-122030405060'}},
+            'asked even when the board has a chat identity')
+        self.assertEqual((self.sent.get_header('Device-id'),self.sent.get_header('Client-id')),('12:20:30:40:50:60','61692d70-6173-4000-8000-122030405060'))
+        with self.assertRaises(passport_device_cloud.Unbound) as unbound:
+            ask({'websocket':{'url':'wss://ota/v1/','token':'shared'},'activation':{'code':'648346'}})
+        self.assertEqual(unbound.exception.args[0],'648346')
+
+
+if __name__=='__main__':
+    import unittest;unittest.main()

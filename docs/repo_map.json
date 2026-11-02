@@ -521,6 +521,92 @@
         ],
         "unsampled_paths": []
       }
+    },
+    {
+      "id": "xiaozhi_identity",
+      "name": "小智身份与激活",
+      "path": "firmware/passport_device/main/native_services.cpp",
+      "kind": "firmware_feature",
+      "purpose": "两个小智设备：聊天身份与只做语音识别的派生身份（MAC置本地位）；未绑定时经OTA拿激活码，在胸牌整屏显示并说明绑定方法，Mac语音输入同样转交。",
+      "module_tags": [
+        "xiaozhi",
+        "activation",
+        "voice",
+        "dictation",
+        "memo"
+      ],
+      "entry_files": [
+        "firmware/passport_device/main/native_services.cpp",
+        "scripts/passport_device_cloud.py"
+      ],
+      "key_symbols": [
+        "NativeServices::cloudIdentity",
+        "NativeServices::chat",
+        "renderConnection",
+        "transcriber",
+        "Unbound",
+        "BluetoothDictation.deliver"
+      ],
+      "child_modules": [],
+      "first_read_files": [
+        "firmware/passport_device/main/native_services.cpp",
+        "scripts/passport_device_cloud.py",
+        "scripts/passport_dictation.py"
+      ],
+      "then_check_files": [
+        "firmware/passport_suite/main/ui.cpp",
+        "firmware/passport_suite/main/apps.hpp",
+        "firmware/passport_connectivity/main/live_services.cpp",
+        ".github/README.md"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [
+        "小智OTA是否要求激活及其激活码时效",
+        "xiaozhi.me控制台绑定流程"
+      ],
+      "related_tests": [
+        "tests/test_passport_bluetooth_dictation.py",
+        "firmware/passport_suite/main/sim_main.cpp"
+      ],
+      "related_configs": [
+        "firmware/passport_device/CMakeLists.txt",
+        "scripts/build_passport_suite.sh"
+      ],
+      "risk_flags": [
+        "transcription_identity_always_asks_ota",
+        "activation_state_prefix_drives_full_screen",
+        "separate_agent_keeps_chat_memory_clean"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "小智语音及所有用小智识别的页面",
+        "Mac语音输入"
+      ],
+      "pitfall_ids": [
+        "P06"
+      ],
+      "minimum_regression": [
+        "python3 tests/test_passport_bluetooth_dictation.py -v",
+        "bash scripts/build_passport_suite.sh",
+        "bash scripts/build_passport_suite.sh device"
+      ],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "subtree_only",
+        "host_and_emulator_evidence"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "firmware/passport_device/main/native_services.cpp",
+          "firmware/passport_suite/main/ui.cpp",
+          "scripts/passport_device_cloud.py",
+          "tests/test_passport_bluetooth_dictation.py",
+          "firmware/passport_suite/main/sim_main.cpp"
+        ],
+        "unsampled_paths": []
+      }
     }
   ]
 }

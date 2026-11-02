@@ -11,16 +11,20 @@ def device_socket(config=None,open_timeout=15):
  if token:headers['Authorization']=token if ' ' in token else 'Bearer '+token
  return connect(identity['url'],additional_headers=headers,proxy=None,compression=None,open_timeout=open_timeout,close_timeout=2,max_size=65536,max_queue=32)
 OTA='https://api.tenclass.net/xiaozhi/ota/'
+class Unbound(Exception):
+ """XiaoZhi wants this device bound to the user's account first; args[0] is the activation code."""
 def transcriber(config=None):
  """A second XiaoZhi device for speech-to-text only (语音输入, 语音笔记), so dictated words stay out of the chat's
  history and memory. Its Device-Id is the board MAC with the locally administered bit set; its Client-Id is a fixed
  prefix ("ai-pas") and that MAC, so the board (native_services.cpp) computes the same one. The firmware's settings check (OTA) gives any
- device the server address and the shared token, so a Mac without the board's old identity can transcribe too."""
+ device the server address and the shared token, so a Mac without the board's old identity can transcribe too.
+ It is always asked: until the user binds this device, XiaoZhi answers with an activation code (Unbound)."""
  config=config or json.loads(config_file().read_text());octets=config['mac'].lower().split(':');octets[0]='%02x'%(int(octets[0],16)|2);mac=':'.join(octets)
- client='61692d70-6173-4000-8000-'+mac.replace(':','');identity=config.get('xiaozhi')
- if not identity:
-  request=urllib.request.Request(OTA,data=json.dumps({'mac_address':mac,'uuid':client}).encode(),method='POST',headers={'Device-Id':mac,'Client-Id':client,'User-Agent':'ai-passport/1','Content-Type':'application/json'})
-  identity=json.loads(urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request,timeout=10).read())['websocket']
+ client='61692d70-6173-4000-8000-'+mac.replace(':','')
+ request=urllib.request.Request(OTA,data=json.dumps({'mac_address':mac,'uuid':client}).encode(),method='POST',headers={'Device-Id':mac,'Client-Id':client,'User-Agent':'ai-passport/1','Content-Type':'application/json'})
+ reply=json.loads(urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request,timeout=10).read())
+ if (reply.get('activation') or {}).get('code'):raise Unbound(reply['activation']['code'])
+ identity=reply['websocket']
  return {'mac':mac,'xiaozhi':{'url':identity['url'],'token':identity.get('token',''),'client_id':client}}
 class DeviceXiaoZhi(XiaoZhi):
  def __init__(self,audio,update):
