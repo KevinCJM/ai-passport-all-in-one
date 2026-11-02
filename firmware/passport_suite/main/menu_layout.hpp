@@ -14,8 +14,10 @@ inline unsigned menuCategory(App app) {
 }
 // All fields are bytes: a stable, endian-independent NVS/wire record. App IDs, never menu positions.
 struct MenuLayout {
-    static constexpr unsigned kVersion=1,kApps=64,kPages=8,kName=25,kBytes=481;
-    enum Mode : uint8_t { Categories, Continuous, Custom };
+    static constexpr unsigned kVersion=1,kApps=64,kPages=8,kName=25,kBytes=481,kListRows=7;
+    // Continuous: no named pages, nine icons a screen. List: no pages, kListRows compact rows; it shares Continuous's order.
+    enum Mode : uint8_t { Categories, Continuous, Custom, List };
+    static unsigned orderOf(unsigned mode){return mode==List?Continuous:mode;}
     uint8_t version{kVersion},mode{},catalogCount{static_cast<uint8_t>(kFunctions.size())},pageCount{5};
     uint8_t hidden[8]{},categories[5]{0,1,2,3,4},order[3][kApps]{},assignment[kApps]{},pages[kPages]{};
     char names[kPages][kName]{};
@@ -35,7 +37,7 @@ struct MenuLayout {
         return false;
     }
     bool valid(bool older=false)const {
-        if(version!=kVersion||mode>Custom||!pageCount||pageCount>kPages||catalogCount>kFunctions.size()||(!older&&catalogCount!=kFunctions.size())||!catalogCount)return false;
+        if(version!=kVersion||mode>List||!pageCount||pageCount>kPages||catalogCount>kFunctions.size()||(!older&&catalogCount!=kFunctions.size())||!catalogCount)return false;
         uint64_t known=0;for(auto app:kFunctions)known|=uint64_t{1}<<static_cast<unsigned>(app);
         for(unsigned i=0;i<kApps;++i)if((hidden[i/8]&(1u<<(i%8)))&&(!(known&(uint64_t{1}<<i))||i==static_cast<unsigned>(App::Settings)))return false;
         unsigned groupBits=0,pageBits=0;
@@ -79,17 +81,20 @@ struct MenuView {
     uint8_t items[MenuLayout::kApps]{},starts[MenuLayout::kPages+1]{},groups[MenuLayout::kPages]{},count{},pages{};
     void build(const MenuLayout& layout){
         count=pages=0;
-        const unsigned groups=layout.mode==MenuLayout::Continuous?1:layout.mode==MenuLayout::Categories?5:layout.pageCount;
+        const bool flat=layout.mode==MenuLayout::Continuous||layout.mode==MenuLayout::List;
+        const unsigned groups=flat?1:layout.mode==MenuLayout::Categories?5:layout.pageCount;
         for(unsigned p=0;p<groups;++p){
             const unsigned group=layout.mode==MenuLayout::Categories?layout.categories[p]:layout.mode==MenuLayout::Custom?layout.pages[p]:0;
             const auto begin=count;
-            for(unsigned i=0;i<layout.catalogCount;++i){const auto app=static_cast<App>(layout.order[layout.mode][i]);if(!layout.shown(app))continue;
+            for(unsigned i=0;i<layout.catalogCount;++i){const auto app=static_cast<App>(layout.order[MenuLayout::orderOf(layout.mode)][i]);if(!layout.shown(app))continue;
                 if(layout.mode==MenuLayout::Categories&&menuCategory(app)!=group)continue;
                 if(layout.mode==MenuLayout::Custom&&layout.assignment[static_cast<unsigned>(app)]!=group)continue;
                 const int index=menuCatalogIndex(app);if(index>=0)items[count++]=static_cast<uint8_t>(index);
             }
             if(count!=begin){starts[pages]=begin;this->groups[pages++]=group;}
         }
+        // Nine a screen: at most 64 apps, so at most kPages screens.
+        if(layout.mode==MenuLayout::Continuous){pages=(count+8)/9;for(unsigned p=0;p<pages;++p){starts[p]=p*9;this->groups[p]=0;}}
         starts[pages]=count;
     }
     unsigned position(unsigned catalogIndex)const {for(unsigned i=0;i<count;++i)if(items[i]==catalogIndex)return i;return count;}

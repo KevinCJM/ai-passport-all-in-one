@@ -128,6 +128,11 @@ void settingsTests(Runtime& runtime){
         runtime.key(Key::Back,0);CHECK(runtime.active()==App::Settings&&runtime.model.settingsPage==SettingsPage::List);
         runtime.key(Key::Back,0);CHECK(runtime.active()==App::Menu);runtime.key(Key::Back,0);CHECK(runtime.active()==App::Home);
     }
+    // 联系开发者: the last row, a read-only card; Up/Down/Confirm change nothing, Back returns to the list.
+    {CHECK(runtime.switchTo(App::Settings)==Result::Ok);runtime.model.settingsPage=SettingsPage::List;runtime.model.settingsSelection=kSettingsRows-1;uiRender(runtime);uiCapture("settings_list_contact");
+    const auto kept=runtime.settings();runtime.key(Key::Confirm,0);CHECK(runtime.model.settingsPage==SettingsPage::Contact);
+    runtime.key(Key::Down,0);runtime.key(Key::Up,0);runtime.key(Key::Confirm,0);CHECK(runtime.model.settingsPage==SettingsPage::Contact&&runtime.settings().brightness==kept.brightness&&runtime.settings().idleSeconds==kept.idleSeconds);
+    uiRender(runtime);uiCapture("settings_contact");runtime.key(Key::Back,0);CHECK(runtime.model.settingsPage==SettingsPage::List);runtime.key(Key::Back,0);runtime.key(Key::Back,0);}
     CHECK(runtime.switchTo(App::Settings)==Result::Ok);runtime.model.settingsPage=SettingsPage::List;runtime.model.settingsSelection=2;
     const auto brightness=runtime.settings().brightness;
     runtime.key(Key::Confirm,1);CHECK(runtime.model.settingsPage==SettingsPage::Brightness);
@@ -177,8 +182,8 @@ void settingsTests(Runtime& runtime){
         m.wifiConnected=false;runtime.rememberWifi(before.wifiSsid,before.wifiPassword);CHECK(!strcmp(runtime.settings().wifiSsid,before.wifiSsid));
         runtime.key(Key::Back,30);CHECK(m.settingsPage==SettingsPage::List);
     }
-    // 语音唤醒: the row above the last (所在城市), reached upward from the first; Confirm toggles and saves it.
-    runtime.key(Key::Up,29);runtime.key(Key::Up,29);CHECK(runtime.model.settingsSelection==kSettingsRows-2);runtime.key(Key::Confirm,29);CHECK(runtime.model.settingsPage==SettingsPage::Wake);
+    // 唤醒与对讲: third from the bottom (above 所在城市 and 联系开发者), reached upward from the first; Confirm toggles and saves it.
+    runtime.key(Key::Up,29);runtime.key(Key::Up,29);runtime.key(Key::Up,29);CHECK(runtime.model.settingsSelection==kSettingsRows-3);runtime.key(Key::Confirm,29);CHECK(runtime.model.settingsPage==SettingsPage::Wake);
     runtime.key(Key::Confirm,29);CHECK(runtime.model.wakeWord&&SettingsStore::loadByte("wake_word")==1);uiRender(runtime);uiCapture("settings_wake");
     runtime.key(Key::Confirm,29);CHECK(!runtime.model.wakeWord&&SettingsStore::loadByte("wake_word")==0);
     // The second row, 说功能名跳转, is on until switched off (saved as jump_off) and back on.
@@ -502,8 +507,8 @@ void voiceAddTests(Runtime& runtime){
     strcpy(m.lastNotice,"已添加比亚迪（深A）");uiRender(runtime);uiCapture("stock_added");
     m.lastNotice[0]=0;m.stockArmed=true;uiRender(runtime);uiCapture("stock_delete");runtime.key(Key::Down,970);CHECK(!m.stockArmed&&m.stockIndex==0);
     strcpy(m.liveValue,"rec");m.listenAt=971;uiRender(runtime);uiCapture("stock_listening");runtime.key(Key::Down,972);CHECK(m.stockIndex==0);strcpy(m.liveValue,"--");m.stockCount=0;
-    // 所在城市: the last Settings row; the Confirm that opens it does not also start listening.
-    CHECK(runtime.switchTo(App::Settings)==Result::Ok);m.settingsPage=SettingsPage::List;m.settingsSelection=kSettingsRows-1;
+    // 所在城市: the row above 联系开发者; the Confirm that opens it does not also start listening.
+    CHECK(runtime.switchTo(App::Settings)==Result::Ok);m.settingsPage=SettingsPage::List;m.settingsSelection=kSettingsRows-2;
     strcpy(m.cityName,"杭州 · 浙江");uiRender(runtime);uiCapture("settings_city_row");
     runtime.key(Key::Confirm,980);CHECK(m.settingsPage==SettingsPage::City&&m.confirmTaken&&!m.cityRow);
     strcpy(m.lastNotice,"所在城市已改为杭州");uiRender(runtime);uiCapture("settings_city");
@@ -1189,14 +1194,22 @@ static void menuLayoutTests(Runtime& runtime){
     for(auto app:kFunctions)if(menuCategory(app)==0)layout.show(app,false);
     CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==4&&runtime.menuView().count==34);
     runtime.switchTo(App::Menu);runtime.key(Key::Confirm,0);CHECK(runtime.active()!=App::Chat);
-    // Continuous grid reuses nine cells and scrolls a row, retaining stable catalog selection semantics.
+    // Unpaged grid: nine a screen in the user's order, no page names; long Down jumps to the next screen.
     layout=defaultMenuLayout();layout.mode=MenuLayout::Continuous;std::reverse(layout.order[1],layout.order[1]+layout.catalogCount);
-    CHECK(runtime.configureMenu(layout));runtime.switchTo(App::Settings);runtime.switchTo(App::Menu);
+    CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==5);runtime.switchTo(App::Settings);runtime.switchTo(App::Menu);
     CHECK(runtime.menuPosition()==0&&runtime.menuWindowStart()==0);uiRender(runtime);uiCapture("menu_continuous_top");
     for(unsigned i=0;i<10;++i)runtime.key(Key::Down,0);
-    CHECK(runtime.menuPosition()==10&&runtime.menuWindowStart()==3);uiRender(runtime);uiCapture("menu_continuous_scroll");
-    for(unsigned i=0;i<43;++i){const auto before=runtime.menuPosition();runtime.key(Key::Down,0);CHECK(runtime.menuPosition()==(before+1)%43);CHECK(runtime.menuPosition()>=runtime.menuWindowStart()&&runtime.menuPosition()<runtime.menuWindowStart()+9);}
-    const auto before=runtime.menuPosition();CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==(before+9)%43);
+    CHECK(runtime.menuPosition()==10&&runtime.menuWindowStart()==9);uiRender(runtime);uiCapture("menu_continuous_scroll");
+    for(unsigned i=0;i<43;++i){const auto before=runtime.menuPosition();runtime.key(Key::Down,0);CHECK(runtime.menuPosition()==(before+1)%43);CHECK(runtime.menuWindowStart()==runtime.menuPosition()/9*9);}
+    CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==18);CHECK(runtime.longKey(true,0)&&runtime.longKey(true,0)&&runtime.longKey(true,0));CHECK(runtime.menuPosition()==36);
+    // Compact list: the same order as the grid, seven rows that scroll with the selection.
+    layout.mode=MenuLayout::List;CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==1&&runtime.menuView().count==43);
+    runtime.switchTo(App::Settings);runtime.switchTo(App::Menu);CHECK(runtime.menuPosition()==0&&runtime.menuWindowStart()==0);uiRender(runtime);uiCapture("menu_list_top");
+    for(unsigned i=0;i<10;++i)runtime.key(Key::Down,0);
+    CHECK(runtime.menuPosition()==10&&runtime.menuWindowStart()==4);uiRender(runtime);uiCapture("menu_list_scroll");
+    for(unsigned i=0;i<43;++i){runtime.key(Key::Up,0);CHECK(runtime.menuPosition()>=runtime.menuWindowStart()&&runtime.menuPosition()<runtime.menuWindowStart()+MenuLayout::kListRows&&runtime.menuWindowStart()<=36);}
+    const auto before=runtime.menuPosition();CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==(before+7)%43);
+    layout.mode=MenuLayout::Continuous;CHECK(runtime.configureMenu(layout));uiRender(runtime);uiCapture("menu_continuous_after_list");
     layout.show(App::Macro,false);CHECK(runtime.configureMenu(layout));const auto selection=runtime.selection();
     CHECK(runtime.switchTo(App::Macro)==Result::Ok);runtime.key(Key::Back,0);CHECK(runtime.active()==App::Menu&&runtime.selection()==selection);
     // Save and reload the complete record; the standard system settings stay separate.

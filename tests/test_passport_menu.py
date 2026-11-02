@@ -58,7 +58,7 @@ int main(int argc,char** argv){
     for(auto app:kFunctions)d.show(app,app==App::Settings);
     view.build(d);assert(d.valid()&&view.count==1&&view.pages==1&&kFunctions[view.items[0]]==App::Settings);
     auto bad=d;bad.show(App::Settings,false);assert(!bad.valid());bad=d;bad.order[0][0]=0;assert(!bad.valid());
-    bad=d;bad.mode=3;assert(!bad.valid());bad=d;bad.categories[1]=0;assert(!bad.valid());
+    bad=d;bad.mode=4;assert(!bad.valid());bad=d;bad.categories[1]=0;assert(!bad.valid());
     bad=d;bad.names[0][0]=char(0xff);assert(!bad.valid());bad=d;memset(bad.names[0],'a',25);assert(!bad.valid());
     bad=defaultMenuLayout();memset(bad.assignment,0,sizeof(bad.assignment));assert(!bad.valid());
     bad=defaultMenuLayout();bad.pageCount=9;assert(!bad.valid());bad=d;bad.assignment[10]=8;assert(!bad.valid());
@@ -67,13 +67,13 @@ int main(int argc,char** argv){
     assert(!old.valid()&&old.valid(true)&&old.upgrade()&&old.valid()&&old.shown(App::Macro));
     std::mt19937 random(42);
     for(unsigned trial=0;trial<1000;++trial){
-        d=defaultMenuLayout();d.mode=trial%3;
+        d=defaultMenuLayout();d.mode=trial%4;
         for(auto& list:d.order)std::shuffle(list,list+d.catalogCount,random);
         std::shuffle(d.categories,d.categories+5,random);std::shuffle(d.pages,d.pages+5,random);
         unsigned expected=0;for(auto app:kFunctions){const bool show=app==App::Settings||random()%2;d.show(app,show);expected+=show;}
         assert(d.valid());view.build(d);assert(view.count==expected&&view.pages>=1&&view.pages<=8);
         uint64_t seen=0;for(unsigned i=0;i<view.count;++i){const auto app=kFunctions[view.items[i]];assert(d.shown(app));const auto bit=uint64_t{1}<<unsigned(app);assert(!(seen&bit));seen|=bit;assert(view.position(view.items[i])==i);assert(view.page(i)<view.pages);}
-        for(unsigned page=0;page<view.pages;++page){assert(view.starts[page]<view.starts[page+1]);if(d.mode!=MenuLayout::Continuous)assert(view.starts[page+1]-view.starts[page]<=9);}
+        for(unsigned page=0;page<view.pages;++page){assert(view.starts[page]<view.starts[page+1]);if(d.mode!=MenuLayout::List)assert(view.starts[page+1]-view.starts[page]<=9);else assert(view.pages==1);}
     }
 }
 '''

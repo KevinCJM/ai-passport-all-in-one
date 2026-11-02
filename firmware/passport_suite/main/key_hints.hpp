@@ -11,6 +11,7 @@ inline const char* keyHint(App app,SettingsPage page,bool focusRunning,bool pair
         // tab: 0 the setup hotspot is on, 1 添加 WiFi, 2 a saved network, 3 its delete asked.
         if(page==SettingsPage::Wifi){static const char* const hints[]{"确认：关闭配网热点  |  长按确认：返回","上下：选择  |  确认：手机配网  |  长按确认：返回","上下：选择  |  确认：连接  |  长按下：删除","长按下：确认删除  |  其他键：取消"};return hints[tab%4];}
         if(page==SettingsPage::Bluetooth)return "确认：开关蓝牙  |  长按确认：返回";
+        if(page==SettingsPage::Contact)return "长按确认：返回";
         // tab: 0 the time picked, 1 连电脑时常亮 picked, 2 changing the time.
         if(page==SettingsPage::Idle){static const char* const hints[]{"上下：选择  |  确认：修改  |  长按确认：返回","上下：选择  |  确认：开关  |  长按确认：返回","上下：调整  |  确认：保存  |  长按确认：取消"};return hints[tab%3];}
         if(page==SettingsPage::Wake)return "上下：选择  |  确认：开关  |  长按确认：返回";

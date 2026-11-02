@@ -19,7 +19,7 @@ import certifi
 from passport_identity import paired_port
 from passport_paths import helper, user_data, codex_command, PACKAGED
 
-VERSION='0.1.3-preview'
+VERSION='0.1.8-preview'
 LABEL='local.ai-passport.assistant'
 
 
@@ -239,7 +239,7 @@ HELP='''首次使用
 在胸牌「语音输入」页按确认开始说话，再按确认结束，文字粘贴到 Mac 当前光标处。需要授权辅助功能，不用装输入法。
 
 网页设置
-菜单排序、状态牌、倒数日、二维码和打开 Mac 程序的口令，都在「网页设置」里改，保存后写进胸牌。
+窗口里「网页设置」的七个按钮会在浏览器打开对应页面：菜单自定义、状态牌、倒数日、二维码、打开 Mac 程序的口令、模拟遥控（在电脑上按胸牌的键），以及诊断（连接状态，出问题时发给开发者）。保存后写进胸牌。
 
 其他
 Codex、Claude Code 需要自己安装并登录。小智、天气、电台用胸牌自己的 WiFi；没 WiFi 时可通过 USB 借电脑上网。'''
@@ -250,6 +250,7 @@ def gui(controller,background=False):
     from Foundation import NSObject,NSTimer
     from objc import python_method
     WIDTH=500;WEB='http://127.0.0.1:8768/'
+    WEB_PAGES=[('菜单自定义','menu'),('状态牌','status'),('倒数日','countdown'),('二维码','qr'),('打开 Mac 程序','mac'),('模拟遥控','remote'),('诊断','diag')]
     def text(value='',size=13,bold=False,color=None,wrap=False):
         item=A.NSTextField.wrappingLabelWithString_(value) if wrap else A.NSTextField.labelWithString_(value)
         item.setFont_(A.NSFont.boldSystemFontOfSize_(size) if bold else A.NSFont.systemFontOfSize_(size))
@@ -315,15 +316,20 @@ def gui(controller,background=False):
             ip=self.switch('允许按 IP 定位城市（天气、空气质量）','location:',allowed)
             ip_note=text('会向 ipwho.is 发送这台 Mac 的公网 IP。不开也可以在胸牌上说城市名。',11,color=A.NSColor.secondaryLabelColor(),wrap=True)
             # Actions
-            self.web=self.button('网页设置','web:');self.web.setToolTip_('菜单排序、状态牌、倒数日、二维码、打开 Mac 程序的口令')
+            # Web settings: one button per section of the assistant's page, opened in the browser.
+            self.webButtons=[]
+            for index,(title,_) in enumerate(WEB_PAGES):
+                item=self.button(title,'webPage:');item.setTag_(index);item.setToolTip_('在浏览器打开「'+title+'」；胸牌连上后可用');self.webButtons.append(item)
+            webRows=[stack(self.webButtons[:4]),stack(self.webButtons[4:])]
+            for row in webRows:row.setDistribution_(A.NSStackViewDistributionFillEqually)
             self.toggle=self.button('暂停助手','toggle:')
-            actions=stack([self.web,self.button('记账表格','ledger:'),self.button('使用说明','help:'),spacer(),self.toggle])
-            sections=[header,self.card,heading('设备'),device,importing,heading('电脑功能'),*features,heading('选项'),self.login,ip,ip_note,actions]
+            actions=stack([self.button('记账表格','ledger:'),self.button('使用说明','help:'),spacer(),self.toggle])
+            sections=[header,self.card,heading('设备'),device,importing,heading('电脑功能'),*features,heading('网页设置（在浏览器打开）'),*webRows,heading('选项'),self.login,ip,ip_note,actions]
             root=stack(sections,True,10);root.setEdgeInsets_((20,24,20,24))
             for view in sections[1:]:
                 if view not in (importing,self.login,ip):view.widthAnchor().constraintEqualToConstant_(WIDTH-48).setActive_(True)
             root.setCustomSpacing_afterView_(18,header);root.setCustomSpacing_afterView_(18,self.card);root.setCustomSpacing_afterView_(14,importing)
-            root.setCustomSpacing_afterView_(14,features[-1]);root.setCustomSpacing_afterView_(18,ip_note)
+            root.setCustomSpacing_afterView_(14,features[-1]);root.setCustomSpacing_afterView_(14,webRows[-1]);root.setCustomSpacing_afterView_(18,ip_note)
             self.root=root;self.window.setContentView_(root);self.fit();self.window.center()
             # Menu bar item
             self.item=A.NSStatusBar.systemStatusBar().statusItemWithLength_(A.NSVariableStatusItemLength)
@@ -335,7 +341,8 @@ def gui(controller,background=False):
                 item=menu.addItemWithTitle_action_keyEquivalent_(title,selector,key);item.setTarget_(self);return item
             self.menuStatus=menu.addItemWithTitle_action_keyEquivalent_('正在检查','',"");self.menuStatus.setEnabled_(False)
             menu.addItem_(A.NSMenuItem.separatorItem());entry('打开助手窗口','show:')
-            self.webItems=[entry('菜单自定义…','webMenu:'),entry('状态牌 · 倒数日 · 二维码…','statusLabels:'),entry('打开 Mac 程序的口令…','macApps:')]
+            self.webItems=[entry(title+'…','webPage:') for title,_ in WEB_PAGES]
+            for index,item in enumerate(self.webItems):item.setTag_(index)
             entry('记账表格','ledger:');menu.addItem_(A.NSMenuItem.separatorItem())
             self.menuToggle=entry('暂停助手','toggle:');entry('退出 AI Passport 助手','quit:','q');self.item.setMenu_(menu)
             self.timer=NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(1,self,'refresh:',None,True)
@@ -376,8 +383,7 @@ def gui(controller,background=False):
             missing=([] if not checked or (deps['accessibility'] and deps['post_event_access']) else ['辅助功能'])+(['蓝牙'] if deps.get('bluetooth_denied') else [])
             self.setRow('permission',None if not checked else not missing,'正在检查' if not checked else '需要授权：'+'、'.join(missing) if missing else '辅助功能、蓝牙已授权')
             self.fix.setHidden_(not missing)
-            self.web.setEnabled_(state['web'])
-            for item in self.webItems:item.setEnabled_(state['web'])
+            for item in self.webButtons+self.webItems:item.setEnabled_(state['web'])
             self.toggle.setTitle_('暂停助手' if state['enabled'] else '恢复助手');self.menuToggle.setTitle_(self.toggle.title())
             permission=controller.permission_event()
             if permission=='required':self.permissionGuide_(None)
@@ -436,10 +442,7 @@ def gui(controller,background=False):
                 controller.error=str(error) if isinstance(error,ValueError) else '设置登录启动失败；请从应用程序文件夹打开助手'
         def help_(self,_):
             alert=A.NSAlert.alloc().init();alert.setMessageText_('AI Passport 助手使用说明');alert.setInformativeText_(HELP);alert.runModal()
-        def web_(self,_):open_url(WEB)
-        def webMenu_(self,_):open_url(WEB+'#menu')
-        def statusLabels_(self,_):open_url(WEB+'#status')
-        def macApps_(self,_):open_url(WEB+'#mac')
+        def webPage_(self,sender):open_url(WEB+'#'+WEB_PAGES[sender.tag()][1])
         def ledger_(self,_):
             # 语音记账: the CSV passport_services keeps in sync with the badge, opened in Numbers or Excel.
             path=controller.directory/'记账.csv'

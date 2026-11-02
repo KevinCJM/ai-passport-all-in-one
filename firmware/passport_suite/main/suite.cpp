@@ -190,11 +190,11 @@ bool Runtime::init(SystemSettings& settings) {
 }
 void Runtime::ensureMenuSelection(){
     if(menuView_.position(selection_)>=menuView_.count)selection_=menuView_.items[0];
-    const unsigned row=menuPosition()/3;
+    // Only the compact list scrolls; every other mode shows the selection's whole page.
+    constexpr unsigned rows=MenuLayout::kListRows;const unsigned row=menuPosition();
     if(row<menuTopRow_)menuTopRow_=row;
-    if(row>=unsigned(menuTopRow_)+3)menuTopRow_=row-2;
-    const unsigned rows=(menuView_.count+2)/3;
-    menuTopRow_=std::min<unsigned>(menuTopRow_,rows>3?rows-3:0);
+    if(row>=unsigned(menuTopRow_)+rows)menuTopRow_=row-(rows-1);
+    menuTopRow_=std::min<unsigned>(menuTopRow_,menuView_.count>rows?menuView_.count-rows:0);
 }
 void Runtime::moveMenu(int delta){
     const int count=menuView_.count;
@@ -337,7 +337,7 @@ bool Runtime::longKey(bool up, uint64_t now) {
     tick(now); lastInput_ = now;
     auto& m = model;
     if (active_ == App::Menu) {
-        if(menuLayout_.mode==MenuLayout::Continuous)moveMenu(up?-9:9);
+        if(menuLayout_.mode==MenuLayout::List)moveMenu(up?-int(MenuLayout::kListRows):int(MenuLayout::kListRows));
         else {const unsigned pages=menuView_.pages,page=menuView_.page(menuPosition());selection_=menuView_.items[menuView_.starts[(page+(up?pages-1:1))%pages]];ensureMenuSelection();}
         return true;
     }
@@ -1340,6 +1340,7 @@ bool Runtime::settingsKey(Key key) {
         if(!SettingsStore::saveByte("usb_dim",model.usbAwake)){strcpy(model.lastNotice,"保存失败，请重试");return false;}
         model.usbAwake=!model.usbAwake;return true;
     }
+    if(page==SettingsPage::Contact)return true;  // read-only; Back is handled above
     if(page==SettingsPage::Bluetooth){
         if(key!=Key::Confirm)return true;
         auto candidate=*settings_;candidate.bluetoothEnabled=!candidate.bluetoothEnabled;SettingsStore store;

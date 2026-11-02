@@ -305,53 +305,66 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 <main>
 <header><h1>AI Passport 设置</h1><span id=conn class=pill>正在检查连接…</span></header>
 <p class=lead>这些内容保存在胸牌里。胸牌通过 USB 或蓝牙连着这台 Mac 时才能读取和保存。</p>
-<nav><a href="#menu">菜单</a><a href="#status">状态牌</a><a href="#countdown">倒数日</a><a href="#qr">二维码</a><a href="#mac">打开 Mac 程序</a><a href="#remote">遥控与诊断</a></nav>
+<nav><a href="#menu">菜单</a><a href="#status">状态牌</a><a href="#countdown">倒数日</a><a href="#qr">二维码</a><a href="#mac">打开 Mac 程序</a><a href="#remote">模拟遥控</a><a href="#diag">诊断</a></nav>
 
 <section id=menu><h2>菜单自定义</h2><p class=muted>选择显示哪些功能、怎么分页和排序，保存后胸牌菜单马上更新。隐藏的功能仍可以用语音打开。</p><div id=menu-editor></div></section>
 
 <section id=status><h2>状态牌文字</h2><p class=muted>显示在胸牌「状态牌」页，排在预设标签前面。最多 5 条，每条最多 12 个字，留空表示不用。</p>
-<div class=note>保存会替换胸牌上全部自定义文字，包括在胸牌上说的。这里显示的是本浏览器上次保存的内容。</div>
-<div id=labels class=row></div><div class=actions><button class=primary onclick="saveLabels()">保存到胸牌</button><span id=labelResult class=out></span></div></section>
+<p class=hint>下面是胸牌上现有的文字，包括在胸牌上说的。直接改，或点「删除」，再保存。</p>
+<div id=labels class=rows></div><div class=actions><button class=primary onclick="saveLabels()">保存到胸牌</button><button onclick="loadLabels()">重新读取</button><span id=labelResult class=out></span></div></section>
 
 <section id=countdown><h2>倒数日</h2><p class=muted>最多 6 个日子，名称最多 8 个字。勾「每年」按周年倒数；勾「农历」时，日期里的月和日按农历算。没勾「每年」且已经过去的，显示「已经 N 天」。</p>
 <div class=row><label>下班时间 <input id=offwork type=time value="18:00"></label><span class=hint>留空表示不显示下班倒计时</span></div>
-<div id=events class=rows></div><div class=actions><button class=primary onclick="saveEvents()">保存到胸牌</button><span id=eventResult class=out></span></div></section>
+<div id=events class=rows></div><div class=actions><button class=primary onclick="saveEvents()">保存到胸牌</button><button onclick="loadEvents()">重新读取</button><span id=eventResult class=out></span></div></section>
 
 <section id=qr><h2>二维码</h2><p class=muted>最多 4 个。内容可以是网址、微信或支付宝收款码里的链接、任意文字，最多 300 字节（约 100 个汉字）。WiFi 二维码由胸牌按已连接的 WiFi 自动生成。</p>
-<div id=codes class=rows></div><div class=actions><button class=primary onclick="saveCodes()">保存到胸牌</button><span id=codeResult class=out></span></div></section>
+<div id=codes class=rows></div><div class=actions><button class=primary onclick="saveCodes()">保存到胸牌</button><button onclick="loadCodes()">重新读取</button><span id=codeResult class=out></span></div></section>
 
 <section id=mac><h2>打开 Mac 程序</h2><p class=muted>对胸牌说「你好小智」，等它开始听，再说「打开 Mac 的 xxx」。这里设的口令优先，没设的按程序名自动找。胸牌自带的功能名（计算器、日历、天气…）仍打开胸牌上的，要开电脑上的请说「打开 Mac 的计算器」。最多 40 条，口令最多 12 个字。</p>
 <div id=macRows class=rows></div><datalist id=macApps></datalist>
 <div class=actions><button onclick="macRow()">＋ 添加一条</button><button class=primary onclick="saveMac()">保存</button><span id=macResult class=out></span></div>
 <h3>胸牌最近听到的</h3><p class=hint>没打开对的程序，可以把听到的词设为口令。</p><div id=macHeard class=rows></div></section>
 
-<section id=remote><h2>遥控与诊断</h2><p class=muted>和胸牌按键一样：确认进入功能，返回等于长按确认。</p>
-<div class="row remote"><button onclick="act('up')">上</button><button onclick="act('down')">下</button><button onclick="act('ok')">确认</button><button onclick="act('back')">返回</button><button onclick="act('settings')">设置</button><span id=actResult class=out></span></div>
-<details id=diag><summary>连接诊断信息</summary><pre id=state></pre></details></section>
+<section id=remote><h2>模拟遥控</h2><p class=muted>点一下等于按一下胸牌上对应的键，长按也一样。</p>
+<div class="row remote"><button onclick="act('up')">上</button><button onclick="act('down')">下</button><button onclick="act('ok')">确认</button><button onclick="act('ap_on')">长按上</button><button onclick="act('settings')">长按下</button><button onclick="act('back')">长按确认</button><span id=actResult class=out></span></div></section>
+<section id=diag><h2>诊断</h2><p class=muted>助手和胸牌之间的连接状态，每 2 秒刷新。遇到问题时复制下来发给开发者。</p>
+<div class=row><button onclick="copyDiag()">复制诊断信息</button><span id=diagResult class=out></span></div><pre id=state>正在读取…</pre></section>
 </main>
 <script src="/menu-editor.js"></script><script>
 const $=s=>document.querySelector(s);
 PassportMenu.mount($('#menu-editor'),'/api');
-function load(key){try{return JSON.parse(localStorage[key]||'null')}catch(e){return null}}
-function keep(key,value){try{localStorage[key]=JSON.stringify(value)}catch(e){}}
 function say(out,text,kind=''){out.textContent=text;out.className='out '+kind}
 const bytes=s=>new TextEncoder().encode(s).length,chars=s=>[...s].length;
 async function post(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let j={};try{j=await r.json()}catch(e){}if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j}
 async function send(path,body,out){say(out,'正在保存…');try{await post(path,body);say(out,'✓ 已保存到胸牌','ok');return true}catch(e){say(out,'保存失败：请确认胸牌已连接后重试（'+e.message+'）','err');return false}}
 
-const box=$('#labels'),savedLabels=load('labels')||[];
-for(let i=0;i<5;i++){const input=document.createElement('input');input.maxLength=12;input.placeholder=['例如：开会中','午休勿扰','外出 3 点回','专注写代码','蹲坑中'][i];input.value=savedLabels[i]||'';input.style.width='150px';input.setAttribute('aria-label','状态牌文字 '+(i+1));box.append(input)}
-async function saveLabels(){const labels=[...box.querySelectorAll('input')].map(i=>i.value.trim()),out=$('#labelResult');if(labels.some(t=>chars(t)>12||bytes(t)>=40))return say(out,'每条最多 12 个字','err');if(await send('/api/status-labels',{labels},out))keep('labels',labels)}
+// 状态牌 / 倒数日 / 二维码: read what the badge has, edit or delete rows, save the whole list back.
+// Saving waits for a successful read, so a failed read can never wipe the badge with empty rows.
+const loaded={};
+function del(row,out){row.querySelectorAll('input:not([type=checkbox]),textarea').forEach(i=>i.value='');row.querySelectorAll('input[type=checkbox]').forEach(i=>i.checked=false);row.dispatchEvent(new Event('input',{bubbles:true}));}
+function changed(box,out){box.oninput=()=>{if(loaded[box.id])say(out,'有修改，记得保存')}}
+function delButton(row,out){const b=document.createElement('button');b.textContent='删除';b.onclick=()=>del(row,out);return b}
+async function read(path,box,out,fill){say(out,'正在读取胸牌…');loaded[box.id]=false;try{const r=await fetch(path);const j=await r.json();if(!r.ok)throw new Error(j.error);fill(j);loaded[box.id]=true;say(out,'已读取胸牌上的内容')}catch(e){say(out,'读取失败：请确认胸牌已连接（固件需 0.5.28 及以上），再点「重新读取」','err')}}
+function ready(box,out){if(loaded[box.id])return true;say(out,'还没读到胸牌上的内容，请先点「重新读取」','err');return false}
 
-const events=$('#events'),savedEvents=load('events')||[],off=load('offwork');if(off!==null)$('#offwork').value=off;
-for(let i=0;i<6;i++){const e=savedEvents[i]||{},row=document.createElement('div');row.className='row';row.innerHTML='<input class=name maxlength=8 placeholder="例如：发工资" style="width:140px" aria-label="名称"><input class=date type=date min=1901-01-01 max=2099-12-31 aria-label="日期"><label><input class=yearly type=checkbox> 每年</label><label><input class=lunar type=checkbox> 农历</label>';row.querySelector('.name').value=e.name||'';row.querySelector('.date').value=e.date||'';row.querySelector('.yearly').checked=!!e.yearly;row.querySelector('.lunar').checked=!!e.lunar;events.append(row)}
-async function saveEvents(){const list=[...events.children].map(r=>({name:r.querySelector('.name').value.trim(),date:r.querySelector('.date').value,yearly:r.querySelector('.yearly').checked,lunar:r.querySelector('.lunar').checked})),offwork=$('#offwork').value,out=$('#eventResult');
- for(const e of list){if(!e.name)continue;if(!e.date)return say(out,'「'+e.name+'」还没选日期','err');const y=+e.date.slice(0,4),d=+e.date.slice(8);if(y<1901||y>2099)return say(out,'「'+e.name+'」的年份要在 1901–2099 之间','err');if(e.lunar&&d>30)return say(out,'「'+e.name+'」是农历，日子最大 30','err')}
- if(await send('/api/countdowns',{events:list.filter(e=>e.name),offwork},out)){keep('events',list);keep('offwork',offwork)}}
+const box=$('#labels'),labelOut=$('#labelResult');changed(box,labelOut);
+for(let i=0;i<5;i++){const row=document.createElement('div');row.className='row';const input=document.createElement('input');input.maxLength=12;input.placeholder='空位，可填新的';input.style.width='220px';input.setAttribute('aria-label','状态牌文字 '+(i+1));row.append(input,delButton(row,labelOut));box.append(row)}
+const labelInputs=()=>[...box.querySelectorAll('input')];
+function loadLabels(){return read('/api/status-labels',box,labelOut,j=>labelInputs().forEach((input,i)=>input.value=j.labels[i]||''))}
+async function saveLabels(){if(!ready(box,labelOut))return;const labels=labelInputs().map(i=>i.value.trim()).filter(Boolean);if(labels.some(t=>chars(t)>12||bytes(t)>=40))return say(labelOut,'每条最多 12 个字','err');if(await send('/api/status-labels',{labels},labelOut))await loadLabels().then(()=>say(labelOut,'✓ 已保存到胸牌','ok'))}
 
-const codes=$('#codes'),savedCodes=load('codes')||[];
-for(let i=0;i<4;i++){const c=savedCodes[i]||{},row=document.createElement('div');row.className='rows';row.innerHTML='<div class=row><input class=title maxlength=12 placeholder="标题，例如：我的名片" style="width:200px" aria-label="标题"><span class=count></span></div><textarea class=text rows=2 style="width:100%" placeholder="内容，例如：https://…" aria-label="内容"></textarea>';const t=row.querySelector('.text'),n=row.querySelector('.count');row.querySelector('.title').value=c.title||'';t.value=c.text||'';const count=()=>{const b=bytes(t.value.trim());n.textContent=b+' / 300 字节';n.className='count'+(b>300?' err':'')};t.oninput=count;count();codes.append(row)}
-async function saveCodes(){const list=[...codes.children].map(r=>({title:r.querySelector('.title').value.trim(),text:r.querySelector('.text').value.trim()})),out=$('#codeResult');if(list.some(c=>bytes(c.text)>300))return say(out,'有内容超过 300 字节','err');if(await send('/api/qr-codes',{codes:list},out))keep('codes',list)}
+const events=$('#events'),eventOut=$('#eventResult');changed(events,eventOut);$('#offwork').oninput=()=>{if(loaded.events)say(eventOut,'有修改，记得保存')};
+for(let i=0;i<6;i++){const row=document.createElement('div');row.className='row';row.innerHTML='<input class=name maxlength=8 placeholder="例如：发工资" style="width:140px" aria-label="名称"><input class=date type=date min=1901-01-01 max=2099-12-31 aria-label="日期"><label><input class=yearly type=checkbox> 每年</label><label><input class=lunar type=checkbox> 农历</label>';row.append(delButton(row,eventOut));events.append(row)}
+function loadEvents(){return read('/api/countdowns',events,eventOut,j=>{$('#offwork').value=j.offwork||'';[...events.children].forEach((r,i)=>{const e=j.events[i]||{};r.querySelector('.name').value=e.name||'';r.querySelector('.date').value=e.date||'';r.querySelector('.yearly').checked=!!e.yearly;r.querySelector('.lunar').checked=!!e.lunar})})}
+async function saveEvents(){if(!ready(events,eventOut))return;const list=[...events.children].map(r=>({name:r.querySelector('.name').value.trim(),date:r.querySelector('.date').value,yearly:r.querySelector('.yearly').checked,lunar:r.querySelector('.lunar').checked})).filter(e=>e.name),offwork=$('#offwork').value;
+ for(const e of list){if(!e.date)return say(eventOut,'「'+e.name+'」还没选日期','err');const y=+e.date.slice(0,4),d=+e.date.slice(8);if(y<1901||y>2099)return say(eventOut,'「'+e.name+'」的年份要在 1901–2099 之间','err');if(e.lunar&&d>30)return say(eventOut,'「'+e.name+'」是农历，日子最大 30','err')}
+ if(await send('/api/countdowns',{events:list,offwork},eventOut))await loadEvents().then(()=>say(eventOut,'✓ 已保存到胸牌','ok'))}
+
+const codes=$('#codes'),codeOut=$('#codeResult');changed(codes,codeOut);
+for(let i=0;i<4;i++){const row=document.createElement('div');row.className='rows';row.innerHTML='<div class=row><input class=title maxlength=12 placeholder="标题，例如：我的名片" style="width:200px" aria-label="标题"><span class=count></span></div><textarea class=text rows=2 style="width:100%" placeholder="内容，例如：https://…" aria-label="内容"></textarea>';const t=row.querySelector('.text'),n=row.querySelector('.count');row.count=()=>{const b=bytes(t.value.trim());n.textContent=b+' / 300 字节';n.className='count'+(b>300?' err':'')};t.addEventListener('input',row.count);row.firstChild.append(delButton(row,codeOut));row.addEventListener('input',row.count);codes.append(row)}
+function loadCodes(){return read('/api/qr-codes',codes,codeOut,j=>[...codes.children].forEach((r,i)=>{const c=j.codes[i]||{};r.querySelector('.text').value=c.text||'';r.querySelector('.title').value=c.text?c.title||'':'';r.count()}))}
+async function saveCodes(){if(!ready(codes,codeOut))return;const list=[...codes.children].map(r=>({title:r.querySelector('.title').value.trim(),text:r.querySelector('.text').value.trim()})).filter(c=>c.text);if(list.some(c=>bytes(c.text)>300))return say(codeOut,'有内容超过 300 字节','err');if(await send('/api/qr-codes',{codes:list},codeOut))await loadCodes().then(()=>say(codeOut,'✓ 已保存到胸牌','ok'))}
+loadLabels();loadEvents();loadCodes();
 
 let macApps=[];const macRows=$('#macRows'),macOut=$('#macResult');
 function macRow(word='',path=''){const row=document.createElement('div');row.className='row';row.innerHTML='<input class=word maxlength=12 placeholder="说的词，例如：浏览器" style="width:170px" aria-label="口令"> → <input class=app list=macApps placeholder="输入或选择程序" style="width:260px" aria-label="程序"> <button class=try>试一下</button><button class=del>删除</button> <span class=out></span>';
@@ -369,8 +382,13 @@ async function saveMac(){const aliases={},rows=[...macRows.children];for(let i=0
 macLoad();
 
 async function act(command){const out=$('#actResult');try{await post('/api/action',{command});say(out,'')}catch(e){say(out,'胸牌没有响应','err')}}
-async function poll(){try{const s=await (await fetch('/api/state')).json(),c=$('#conn');const ready=s.link_ready,via=s.transport=='usb'?'USB':s.transport=='ble'?'蓝牙':'';c.textContent=ready?'胸牌已连接 · '+via:'胸牌未连接'+(via?'（正在通过'+via+'连接）':'');c.className='pill '+(ready?'ok':'bad');if($('#diag').open)$('#state').textContent=JSON.stringify(s,null,2)}catch(e){$('#conn').textContent='助手未响应';$('#conn').className='pill bad'}}
-poll();setInterval(poll,2000);$('#diag').ontoggle=poll;
+async function copyDiag(){try{await navigator.clipboard.writeText($('#state').textContent);say($('#diagResult'),'已复制')}catch(e){say($('#diagResult'),'复制失败，请手动选中复制','err')}}
+async function poll(){try{const s=await (await fetch('/api/state')).json(),c=$('#conn');const ready=s.link_ready,via=s.transport=='usb'?'USB':s.transport=='ble'?'蓝牙':'';c.textContent=ready?'胸牌已连接 · '+via:'胸牌未连接'+(via?'（正在通过'+via+'连接）':'');c.className='pill '+(ready?'ok':'bad');$('#state').textContent=JSON.stringify(s,null,2)}catch(e){$('#conn').textContent='助手未响应';$('#conn').className='pill bad'}}
+poll();setInterval(poll,2000);
+// Opened at #status etc. from the assistant window: the menu editor loads above and grows, so keep the section in view
+// until loading settles or the user scrolls.
+const target=location.hash&&document.getElementById(location.hash.slice(1));
+if(target){const follow=new ResizeObserver(()=>target.scrollIntoView());follow.observe(document.body);const stop=()=>follow.disconnect();setTimeout(stop,6000);for(const e of ['wheel','touchstart','keydown','mousedown'])addEventListener(e,stop,{once:true})}
 </script></html>'''
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
@@ -394,6 +412,10 @@ class Handler(BaseHTTPRequestHandler):
    if self.path=='/api/app-state':return self.send(200,DEVICE.request('/app_state'))
    if self.path=='/api/device-info':return self.send(200,DEVICE.request('/wifi/status'))
    if self.path=='/api/mac-apps':return self.send(200,DEVICE.services.mac_config())
+   # What the badge has saved now (0.5.28+), so the page edits that instead of a stale browser copy.
+   if self.path=='/api/status-labels':return self.send(200,DEVICE.request('/content/status'))
+   if self.path=='/api/countdowns':return self.send(200,DEVICE.request('/content/countdowns'))
+   if self.path=='/api/qr-codes':return self.send(200,{'codes':[DEVICE.request('/content/qr?index=%d'%i) for i in range(4)]})
    return self.send(404,{'error':'not found'})
   except Exception as error:return self.send(500,{'error':str(error) if self.path.startswith('/api/menu') else type(error).__name__})
  def do_POST(self):
@@ -405,7 +427,9 @@ class Handler(BaseHTTPRequestHandler):
    size=int(self.headers.get('Content-Length','0'))
    if size<=0 or size>16384:raise ValueError('invalid size')
    data=json.loads(self.rfile.read(size))
-   if self.path=='/api/action':result=DEVICE.command(data['command'])
+   if self.path=='/api/action':
+    # Like the real keys: long Up/Down do nothing on Home (the raw commands would open the hotspot / settings).
+    result=0 if data['command'] in ('ap_on','settings') and DEVICE.state.get('app')==0 else DEVICE.command(data['command'])
    elif self.path=='/api/menu':result=DEVICE.menu(data)
    elif self.path=='/api/native':result=DEVICE.native(data)
    elif self.path=='/api/status-labels':result=DEVICE.status_labels(data['labels'])

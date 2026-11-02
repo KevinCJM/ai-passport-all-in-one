@@ -340,7 +340,7 @@ public:
     const MenuLayout& menuLayout()const{return menuLayout_;}
     const MenuView& menuView()const{return menuView_;}
     unsigned menuPosition()const{return menuView_.position(selection_);}
-    unsigned menuWindowStart()const{return menuLayout_.mode==MenuLayout::Continuous?menuTopRow_*3:menuView_.starts[menuView_.page(menuPosition())];}
+    unsigned menuWindowStart()const{return menuLayout_.mode==MenuLayout::List?menuTopRow_:menuView_.starts[menuView_.page(menuPosition())];}
     App selectedApp()const{return kFunctions[selection_];}
     bool setIdleMinutes(uint32_t minutes);
     bool settingsKey(Key key);

@@ -538,6 +538,32 @@ bool saveQr(const cJSON* object){
     strcpy(entry.title,title->valuestring);strcpy(entry.text,text->valuestring);
     return SettingsStore::saveQr(index->valueint,entry);
 }
+// What the three savers above stored, for the computer's page to show and edit: /content/status, /content/countdowns
+// and /content/qr?index=0-3 (one entry each, so a 300-byte text fits the BLE exchange). 404 for any other path.
+int contentRequest(const char* path,char* output,size_t size){
+    auto* root=cJSON_CreateObject();if(!root)return 500;
+    constexpr char qrPrefix[]="/content/qr?index=";
+    if(!strcmp(path,"/content/status")){
+        StatusBoard board;SettingsStore::loadStatus(board);auto* labels=cJSON_AddArrayToObject(root,"labels");
+        for(const auto& text:board.custom)if(*text)cJSON_AddItemToArray(labels,cJSON_CreateString(text));
+    }else if(!strcmp(path,"/content/countdowns")){
+        CountdownBoard board;SettingsStore::loadCountdown(board);char text[16]="";
+        if(board.offwork)snprintf(text,sizeof(text),"%02u:%02u",board.offwork/60u,board.offwork%60u);
+        cJSON_AddStringToObject(root,"offwork",text);auto* events=cJSON_AddArrayToObject(root,"events");
+        for(const auto& event:board.events){
+            if(!*event.name)continue;
+            auto* item=cJSON_CreateObject();cJSON_AddItemToArray(events,item);
+            snprintf(text,sizeof(text),"%04lu-%02lu-%02lu",static_cast<unsigned long>(event.date/10000),static_cast<unsigned long>(event.date/100%100),static_cast<unsigned long>(event.date%100));
+            cJSON_AddStringToObject(item,"name",event.name);cJSON_AddStringToObject(item,"date",text);
+            cJSON_AddBoolToObject(item,"yearly",event.flags&CountdownBoard::kYearly);cJSON_AddBoolToObject(item,"lunar",event.flags&CountdownBoard::kLunar);
+        }
+    }else if(!strncmp(path,qrPrefix,sizeof(qrPrefix)-1)&&path[sizeof(qrPrefix)-1]>='0'&&path[sizeof(qrPrefix)-1]<'0'+QrEntry::kCount&&!path[sizeof(qrPrefix)]){
+        QrEntry entry{};SettingsStore::loadQr(path[sizeof(qrPrefix)-1]-'0',entry);
+        cJSON_AddStringToObject(root,"title",entry.title);cJSON_AddStringToObject(root,"text",entry.text);
+    }else{cJSON_Delete(root);return 404;}
+    const bool printed=cJSON_PrintPreallocated(root,output,static_cast<int>(size),false);cJSON_Delete(root);
+    return printed?200:500;
+}
 void sonarTick(){
     const bool wanted=runtime.active()==App::Sonar&&bt&&bleReady;
     if(wanted&&!scanning){
@@ -595,6 +621,7 @@ int companionRequest(const char* raw,char* output,size_t size){
         return group[0]>='0'&&group[0]<='4'&&!group[1]?MenuService::catalog(group[0]-'0',output,size):400;
     }
     if(!strcmp(path->valuestring,"/status")){state(output,size);return 200;}
+    if(!strncmp(path->valuestring,"/content/",9))return contentRequest(path->valuestring,output,size);
     if(!strcmp(path->valuestring,"/events")){board::nextEvent(output,size);return 200;}
     if(!strcmp(path->valuestring,"/app_state"))return live.snapshotJson(output,size)?200:500;
     if(!strcmp(path->valuestring,"/wifi/status")){
@@ -835,6 +862,17 @@ void initMenuHttp(httpd_handle_t server){
         httpd_resp_set_type(request,"application/json");return httpd_resp_sendstr(request,out);
     };
     ESP_ERROR_CHECK(httpd_register_uri_handler(server,&route));
+#ifdef PASSPORT_DEVICE
+    // The owner's saved 状态牌 / 倒数日 / 二维码 (contentRequest); the setup hotspot does not get them.
+    route.uri="/content/*";route.method=HTTP_GET;
+    route.handler=[](httpd_req_t* request)->esp_err_t{
+        if(!board::authorized(request))return httpd_resp_send_err(request,HTTPD_401_UNAUTHORIZED,"unauthorized");
+        const int status=contentRequest(request->uri,menuHttpBuffer,sizeof(menuHttpBuffer));
+        if(status!=200)return httpd_resp_send_err(request,status==404?HTTPD_404_NOT_FOUND:HTTPD_500_INTERNAL_SERVER_ERROR,"content");
+        httpd_resp_set_hdr(request,"Cache-Control","no-store");httpd_resp_set_type(request,"application/json");return httpd_resp_sendstr(request,menuHttpBuffer);
+    };
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server,&route));
+#endif
     route.uri="/menu";route.method=HTTP_POST;
     route.handler=[](httpd_req_t* request)->esp_err_t{
 #ifdef PASSPORT_DEVICE
@@ -886,7 +924,7 @@ extern "C" void app_main() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     // /app_state builds a bounded 2 KiB JSON snapshot; simulator and badge need the same stack budget.
     config.stack_size = 6144;
-    config.max_uri_handlers = 22;
+    config.max_uri_handlers = 23;  // 22 + /content/*
     config.uri_match_fn=httpd_uri_match_wildcard;
 #ifdef PASSPORT_DEVICE
     config.lru_purge_enable=true;

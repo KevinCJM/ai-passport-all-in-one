@@ -165,6 +165,7 @@ Badge settingsBadge(SettingsPage page){
     case SettingsPage::Volume: return {LV_SYMBOL_VOLUME_MAX,0x4bffc4};
     case SettingsPage::Wake: return {LV_SYMBOL_AUDIO,0xc792ff};
     case SettingsPage::City: return {LV_SYMBOL_GPS,0x34d399};
+    case SettingsPage::Contact: return {LV_SYMBOL_ENVELOPE,0xff9f7a};
     default: return {LV_SYMBOL_POWER,0xff8a73};
     }
 }
@@ -200,6 +201,7 @@ lv_obj_t *slidesRoot,*slidesLink,*slidesTime,*slidesCaption,*slidesStatus,*slide
 lv_obj_t *alertRoot,*alertName;
 lv_obj_t *statusRoot,*statusText,*statusTag,*statusFoot,*statusVoice;
 lv_obj_t *cells[kCells],*cellBadges[kCells],*cellIcons[kCells],*cellNames[kCells],*menuTitle,*menuPage;
+bool menuListShape;  // cells currently laid out as compact list rows
 constexpr int kPodcastRows=5;
 lv_obj_t *podRoot,*podPosition,*podSleep,*podList,*podRows[kPodcastRows],*podNames[kPodcastRows],*podNotes[kPodcastRows],*podPlayer,*podTitle,*podProgram,*podStatus,*podVolume,*podDetail,*podFill,*podTime,*podNote;
 lv_obj_t *torchRoot,*torchName;
@@ -258,7 +260,7 @@ void renderChrome(const Runtime& runtime){
     const auto* hint=keyHint(app,m.settingsPage,m.focusRunning,*m.pairingCode,m.live&&m.livePhase==LivePhase::Loading,m.live&&m.livePhase==LivePhase::Error,alt,app==App::Wifi?m.wifiTab:app==App::Settings?(m.settingsPage==SettingsPage::City?dictationTab(m):m.settingsPage==SettingsPage::Idle?m.idleRow:m.wifiSetup?0u:m.wifiArmed?3u:m.wifiRow?2u:1u):
         app==App::Rate?voiceTab(m,m.rateArmed):app==App::Stock?voiceTab(m,m.stockArmed):app==App::Macro?0u:app==App::Countdown?voiceTab(m,m.countdownArmed):
         app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:m.soundView);
-    if(app==App::Menu&&runtime.menuLayout().mode==MenuLayout::Continuous)hint="上下：选择 | 长按上下：快移 | 确认：进入";
+    if(app==App::Menu&&runtime.menuLayout().mode==MenuLayout::List)hint="上下：选择 | 长按上下：快移 | 确认：进入";
     char text[256];
     // 打开 Mac 程序: what the computer is doing takes the key hints' place for a few seconds, on any page.
     if(*m.macNote)snprintf(text,sizeof(text),"%s",m.macNote);
@@ -623,7 +625,7 @@ void renderStatus(const Model& m){
     visible(statusVoice,m.voiceBusy());visible(statusRoot,!m.voiceBusy());
     if(m.voiceBusy()){drawModel=&m;lv_obj_invalidate(statusVoice);}
 }
-// Menu: a themed page of 3 x 3 icons under its name and number; the selection moves through them in order and
+// Menu: a themed page of 3 x 3 icons (or, in the compact list mode, kListRows rows) under its name and number; the selection moves through them in order and
 // the page follows.
 void initMenu(lv_obj_t* screen){
     titleMark(screen,12,43);menuTitle=label(screen,24,40,160,LV_FONT_DEFAULT,kText);
@@ -634,12 +636,33 @@ void initMenu(lv_obj_t* screen){
         cellIcons[i]=label(cellBadges[i],0,8,40,&passport_icon_font_20,kBg);setTextAlign(cellIcons[i],LV_TEXT_ALIGN_CENTER,0);
         cellNames[i]=label(cells[i],0,48,72,LV_FONT_DEFAULT,kText);setTextAlign(cellNames[i],LV_TEXT_ALIGN_CENTER,0);
     }
+    menuListShape=false;
+}
+// The compact list reuses the nine cells as kListRows rows: small badge, name beside it.
+void shapeMenu(bool list){
+    if(list==menuListShape)return;
+    menuListShape=list;
+    for(int i=0;i<kCells;++i){
+        if(list){
+            lv_obj_set_pos(cells[i],8,64+i*32);lv_obj_set_size(cells[i],224,29);lv_obj_set_style_radius(cells[i],8,0);
+            lv_obj_set_pos(cellBadges[i],4,3);lv_obj_set_size(cellBadges[i],23,23);lv_obj_set_style_radius(cellBadges[i],6,0);
+            lv_obj_set_pos(cellIcons[i],0,1);setWidth(cellIcons[i],23);
+            lv_obj_set_pos(cellNames[i],36,6);setWidth(cellNames[i],180);setTextAlign(cellNames[i],LV_TEXT_ALIGN_LEFT,0);
+        }else{
+            lv_obj_set_pos(cells[i],8+i%3*76,64+i/3*76);lv_obj_set_size(cells[i],72,72);lv_obj_set_style_radius(cells[i],12,0);
+            lv_obj_set_pos(cellBadges[i],16,6);lv_obj_set_size(cellBadges[i],40,40);lv_obj_set_style_radius(cellBadges[i],12,0);
+            lv_obj_set_pos(cellIcons[i],0,8);setWidth(cellIcons[i],40);
+            lv_obj_set_pos(cellNames[i],0,48);setWidth(cellNames[i],72);setTextAlign(cellNames[i],LV_TEXT_ALIGN_CENTER,0);
+        }
+    }
 }
 void renderMenu(const Runtime& runtime){
     const auto& view=runtime.menuView();const auto& layout=runtime.menuLayout();
     const unsigned selected=runtime.menuPosition(),page=view.page(selected),start=runtime.menuWindowStart();
+    const bool list=layout.mode==MenuLayout::List;shapeMenu(list);
     for(unsigned i=0;i<kCells;++i){
-        const unsigned index=start+i;visible(cells[i],index<view.starts[page+1]);if(index>=view.starts[page+1])continue;
+        const unsigned index=start+i;const bool shown=index<view.starts[page+1]&&(!list||i<MenuLayout::kListRows);
+        visible(cells[i],shown);if(!shown)continue;
         const auto app=kFunctions[view.items[index]];const bool on=index==selected;auto badge=appBadge(app);
         // The calendar icon shows today's date.
         char day[4];const time_t now=time(nullptr);tm t{};localtime_r(&now,&t);
@@ -648,8 +671,8 @@ void renderMenu(const Runtime& runtime){
         setBgColor(cells[i],lv_color_hex(on?kAccent:kPanel),0);
         setLabel(cellNames[i],menuLabel(app));setTextColor(cellNames[i],lv_color_hex(on?kBg:kText),0);
     }
-    setLabel(menuTitle,layout.mode==MenuLayout::Continuous?"全部功能":layout.mode==MenuLayout::Categories?kMenuPages[view.groups[page]]:layout.names[view.groups[page]]);
-    char text[16];snprintf(text,sizeof(text),"%u/%u",layout.mode==MenuLayout::Continuous?selected+1:page+1,layout.mode==MenuLayout::Continuous?view.count:view.pages);setLabel(menuPage,text);
+    setLabel(menuTitle,list||layout.mode==MenuLayout::Continuous?"全部功能":layout.mode==MenuLayout::Categories?kMenuPages[view.groups[page]]:layout.names[view.groups[page]]);
+    char text[16];snprintf(text,sizeof(text),"%u/%u",list?selected+1:page+1,list?view.count:view.pages);setLabel(menuPage,text);
 }
 // Torch: the whole screen in one colour; main.cpp drives the backlight from the level.
 void initTorch(lv_obj_t* screen){
@@ -2688,7 +2711,7 @@ bool uiPrepare(App app){
     if(dashboardNeeded&&!dashboard){initDashboard(lv_screen_active(),app);created=true;}
     if(app==App::Settings&&!rows[0]){
         auto* screen=lv_screen_active();
-        const bool menu=false;const int count=kRows,top=68,step=29,height=27,badge=23;  // above the notice at y=270
+        const bool menu=false;const int count=kRows,top=64,step=26,height=24,badge=21;  // eight rows end at y=270, above the notice
         for (int i = 0; i < count; ++i) {
             rows[i] = lv_obj_create(screen);
             box(rows[i], 8, top + i * step, 224, height, kPanel, 8);
@@ -2737,6 +2760,7 @@ void uiRender(const Runtime& runtime) {
     setLabel(value, "");
     for (int i = 0; i < kRows; ++i) visible(rows[i], settingsList||(wifiList&&i<=model.wifiSavedCount));
     for(unsigned i=0;i<4;++i)setLabel(lines[i],"");
+    if(lines[1])setTextFont(lines[1],LV_FONT_DEFAULT,0);  // 联系开发者 shows the email in a smaller Latin font
     if(settingsList){
         char values[kRows][48];
         strcpy(values[0],model.wifiConnected?"已连接":"未连接");
@@ -2747,7 +2771,8 @@ void uiRender(const Runtime& runtime) {
         strcpy(values[5],model.wakeWord?"已开启":"已关闭");
         // The city without its province ("杭州 · 浙江").
         snprintf(values[6],sizeof(values[6]),"%s",*model.cityName?model.cityName:"未设置");if(char* dot=strstr(values[6]," · "))*dot=0;
-        const char* names[kRows]={"WiFi 配置","蓝牙连接","屏幕亮度","默认音量","自动息屏","唤醒与对讲","所在城市"};
+        strcpy(values[7],"");
+        const char* names[kRows]={"WiFi 配置","蓝牙连接","屏幕亮度","默认音量","自动息屏","唤醒与对讲","所在城市","联系开发者"};
         for(unsigned i=0;i<kRows;++i){
             const bool selected=i==model.settingsSelection;
             setLabel(rowLabels[i],names[i]);setLabel(rowValues[i],values[i]);setBadge(rowBadges[i],rowIcons[i],settingsBadge(static_cast<SettingsPage>(i+1)),selected);
@@ -2877,6 +2902,12 @@ void uiRender(const Runtime& runtime) {
                 setTextColor(lines[0],lv_color_hex(usb?kMuted:kAccent),0);setTextColor(lines[1],lv_color_hex(usb?kAccent:kMuted),0);
                 setLabel(lines[2],editing?"上下调整时间，0 表示永不":usb?(model.usbAwake?"连着电脑一直亮屏":"连着电脑也按时间熄屏"):"确认后上下调整");
                 setLabel(lines[3],usb?"连电脑时只熄屏，不会睡眠":editing?"确认保存 · 长按确认取消":"充电头供电照常熄屏");
+            }else if(page==SettingsPage::Contact){
+                // A read-only card: the developer's WeChat and email, and a thank-you.
+                setLabel(heading,"联系开发者");setLabel(value,"感谢使用！");
+                setLabel(lines[0],"微信：Kevin-CJM");
+                setTextFont(lines[1],&lv_font_montserrat_14,0);setLabel(lines[1],"cjm_success@hotmail.com");setTextColor(lines[1],lv_color_hex(kText),0);
+                setLabel(lines[2],"有问题或建议，欢迎来聊");setLabel(lines[3],"谢谢支持，祝使用愉快");
             }else if(number){
                 setLabel(heading,page==SettingsPage::Brightness?"屏幕亮度":"默认音量");
                 char text[16];snprintf(text,sizeof(text),"%lu%%",static_cast<unsigned long>(model.settingsValue));setLabel(value,text);
