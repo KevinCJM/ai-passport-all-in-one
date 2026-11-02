@@ -673,7 +673,8 @@
         "tests/test_passport_menu.py",
         "tests/test_passport_guard.py",
         "tests/test_passport_mac_open.py",
-        "tests/test_passport_bluetooth_dictation.py"
+        "tests/test_passport_bluetooth_dictation.py",
+        "scripts/smoke_windows_assistant.py"
       ],
       "related_configs": [
         "scripts/requirements-assistant-windows.txt",

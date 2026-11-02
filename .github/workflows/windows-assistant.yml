@@ -47,6 +47,19 @@ jobs:
           PYTHONUTF8: '1'
         run: python scripts/build_passport_assistant_windows.py
 
+      # The packaged app and 语音输入's typing on this runner's real desktop: everything but the badge.
+      - name: Smoke test on the Windows desktop
+        env:
+          PYTHONUTF8: '1'
+        run: python scripts/smoke_windows_assistant.py smoke
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-smoke
+          path: smoke/*
+          if-no-files-found: ignore
+
       - uses: actions/upload-artifact@v4
         with:
           name: ai-passport-assistant-windows
