@@ -14,11 +14,19 @@ for file in "$OUT/passport-ppp.exe" "$OUT/libopus-0.dll"; do
   ldd "$file" | awk '$3 ~ /^\/ucrt64\/bin\// {print $3}' | while read -r dll; do cp -n "$dll" "$OUT/"; done
 done
 "$OUT/passport-ppp.exe" --self-test
-for package in libslirp glib2 opus gettext-runtime libiconv pcre2 libwinpthread gcc-libs lame; do
+for package in libslirp glib2 opus gettext-runtime libiconv pcre2 libwinpthread gcc-libs; do
   [ -d "/ucrt64/share/licenses/$package" ] && cp -r "/ucrt64/share/licenses/$package" "$OUT/licenses/"
 done
 
 if [ ! -f "$OUT/ffmpeg.exe" ]; then
+  # LAME from source, static, like the Mac build (MSYS2's package links only as a DLL).
+  PREFIX="$PWD/$WORK/prefix"
+  lame="$WORK/lame-3.100.tar.gz"
+  [ -f "$lame" ] || curl -fsSL -o "$lame" https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz
+  echo "ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e  $lame" | sha256sum -c -
+  tar -xf "$lame" -C "$WORK"
+  (cd "$WORK/lame-3.100" && ./configure --prefix="$PREFIX" --disable-shared --enable-static --disable-frontend && make -j4 && make install)
+  cp "$WORK/lame-3.100/COPYING" "$OUT/licenses/lame-COPYING"
   archive="$WORK/ffmpeg-7.1.2.tar.xz"
   [ -f "$archive" ] || curl -fsSL -o "$archive" https://ffmpeg.org/releases/ffmpeg-7.1.2.tar.xz
   echo "089bc60fb59d6aecc5d994ff530fd0dcb3ee39aa55867849a2bbc4e555f9c304  $archive" | sha256sum -c -
@@ -28,7 +36,9 @@ if [ ! -f "$OUT/ffmpeg.exe" ]; then
      --enable-protocol=file,pipe,http,https,tcp,tls,httpproxy --enable-demuxer=mp3,mov,aac,ogg,wav,flac,matroska \
      --enable-decoder=mp3,mp3float,aac,flac,opus,vorbis,pcm_s16le --enable-encoder=libmp3lame,pcm_s16le \
      --enable-parser=mpegaudio,aac,flac,opus,vorbis --enable-muxer=mp3,pcm_s16le --enable-filter=aresample,anull,aformat \
-     --extra-ldflags=-static --pkg-config-flags=--static && make -j4)
+     --extra-cflags="-I$PREFIX/include" --extra-ldflags="-static -L$PREFIX/lib" --pkg-config-flags=--static \
+     || { tail -40 ffbuild/config.log; exit 1; }
+   make -j4)
   cp "$WORK/ffmpeg-7.1.2/ffmpeg.exe" "$OUT/"
   cp "$WORK/ffmpeg-7.1.2/COPYING.LGPLv2.1" "$OUT/licenses/ffmpeg-COPYING.LGPLv2.1"
 fi
