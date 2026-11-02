@@ -1,7 +1,7 @@
 # ai-passport-all-in-one
 
 AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个按键）的自制固件，C++20 + ESP-IDF 6.1 + LVGL 9.5。
-这里是开发版本 **0.5.25** 的源码；[最近发布的固件为 0.5.21](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/v0.5.21)。
+这里是 **0.5.28** 的源码；[最近发布的固件为 0.5.28](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/v0.5.28)。
 
 主页是时钟和天气，默认菜单五页、共 43 项功能：
 
@@ -23,7 +23,7 @@ AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个�
 - **Mac 小助手改版**：升级到 `0.1.8-preview`，窗口和设置网页重新设计。窗口里七个按钮直接打开网页对应部分：菜单自定义、状态牌、倒数日、二维码、打开 Mac 程序、模拟遥控、诊断。状态牌、倒数日和二维码会先读出胸牌上已有的内容，可修改或删除后再保存。
 - **联系开发者**：「系统设置 › 联系开发者」可以看到开发者的微信和邮箱。
 
-上述功能包含在开发版本 **0.5.28** 中；下方公开下载仍为 **0.5.21**，尚不包含本次更新。使用新版请从当前源码编译。
+以上更新包含在 **0.5.28** 中，可在下方「下载固件」获取。
 
 ## 开始使用
 
@@ -104,9 +104,9 @@ tests/                          Mac 助手与固件数据解析的宿主测试
 
 ## 下载固件
 
-- [0.5.21 完整固件包](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.21/ai-passport-0.5.21-esp32c3.zip)：应用、引导程序、分区表、唤醒词模型及刷机说明。
-- [仅应用 passport_device.bin](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.21/passport_device.bin)：已安装本项目固件时使用。
-- [SHA256SUMS](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.21/SHA256SUMS)：下载校验。
+- [0.5.28 完整固件包](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.28/ai-passport-0.5.28-esp32c3.zip)：应用、引导程序、分区表、唤醒词模型及刷机说明。
+- [仅应用 passport_device.bin](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.28/passport_device.bin)：已安装本项目固件时使用。
+- [SHA256SUMS](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.28/SHA256SUMS)：下载校验。
 
 适用于上述 ESP32-C3、8 MB Flash、无PSRAM的 AI Passport。升级保留原分区表和设置，只写应用；首次安装按下文「刷机」操作。下载包解压后的文件布局与编译产物一致。
 
