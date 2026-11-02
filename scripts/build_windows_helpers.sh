@@ -22,13 +22,13 @@ if [ ! -f "$OUT/ffmpeg.exe" ]; then
   # LAME from source, static, like the Mac build (MSYS2's package links only as a DLL).
   PREFIX="$PWD/$WORK/prefix"
   lame="$WORK/lame-3.100.tar.gz"
-  [ -f "$lame" ] || curl -fsSL -o "$lame" https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz
+  [ -f "$lame" ] || curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "$lame" https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz
   echo "ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e  $lame" | sha256sum -c -
   tar -xf "$lame" -C "$WORK"
   (cd "$WORK/lame-3.100" && ./configure --prefix="$PREFIX" --disable-shared --enable-static --disable-frontend && make -j4 && make install)
   cp "$WORK/lame-3.100/COPYING" "$OUT/licenses/lame-COPYING"
   archive="$WORK/ffmpeg-7.1.2.tar.xz"
-  [ -f "$archive" ] || curl -fsSL -o "$archive" https://ffmpeg.org/releases/ffmpeg-7.1.2.tar.xz
+  [ -f "$archive" ] || curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "$archive" https://ffmpeg.org/releases/ffmpeg-7.1.2.tar.xz
   echo "089bc60fb59d6aecc5d994ff530fd0dcb3ee39aa55867849a2bbc4e555f9c304  $archive" | sha256sum -c -
   tar -xf "$archive" -C "$WORK"
   (cd "$WORK/ffmpeg-7.1.2" && ./configure --disable-autodetect --disable-doc --disable-debug --disable-shared --enable-static \
