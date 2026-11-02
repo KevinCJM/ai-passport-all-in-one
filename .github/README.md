@@ -184,7 +184,7 @@ python -m esptool --chip esp32c3 -p PORT -b 921600 write-flash \
 | 系统 | macOS 15 以上，Apple Silicon | Windows 10/11，x64 |
 | 界面 | 菜单栏图标 + 助手窗口 + 设置网页 | 右下角托盘图标 + 设置网页 |
 | 数据目录 | `~/Library/Application Support/AI Passport/` | `%APPDATA%\AI Passport\` |
-| 状态 | 已在真机上日常使用 | 能打包，还没在 Windows 真机上验收 |
+| 状态 | 已在真机上日常使用 | CI 在 Windows 桌面上自动测过（插胸牌的部分除外） |
 
 设置网页地址都是 http://127.0.0.1:8768/ ，只有本机能打开。助手一启动网页就能用，胸牌没连上时，读写胸牌的部分会提示「胸牌未连接」。
 

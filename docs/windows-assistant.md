@@ -105,8 +105,8 @@ Windows 上用 `Get-StartApps` 列出开始菜单里的程序，桌面程序和�
 |---|---|
 | Mac 不回归 | 现有单元测试 + 菜单 HTTP 测试 + 真机连接 |
 | 桥接数据通路 | Mac 上用桥接模式连真机：`link_ready`、模拟按键 |
-| Windows 代码路径 | 单元测试注入假的 Win32 接口；CI 在 Windows 上跑测试、打包和 `--self-test` |
-| Windows 真机 | 还没验证：需要一台 Windows 电脑插胸牌测试 USB 配对、语音输入粘贴和蓝牙 |
+| Windows 代码路径 | CI 在 Windows 上跑单元测试、打包和 `--self-test`，再用 `scripts/smoke_windows_assistant.py` 在 runner 的真实桌面上做冒烟测试：启动打包好的程序，检查网页和接口、单实例、暂停、开机启动注册表；在记事本里实际测粘贴、回车、删除整行，以及剪贴板恢复；从开始菜单打开程序；最后截图。26 项全部通过。 |
+| 插胸牌的部分 | 还没验证：CI 机器插不了胸牌，USB 配对（Windows 串口驱动）和蓝牙配对需要 Windows 电脑或带 USB 直通的虚拟机 |
 
 ## 6. 已知限制
 
