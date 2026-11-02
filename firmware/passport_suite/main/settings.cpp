@@ -258,6 +258,17 @@ WheelBoard defaultWheel() {
     add("掷骰子", {"1", "2", "3", "4", "5", "6"});
     return board;
 }
+bool SettingsStore::loadScore(ScoreBoard& board) {
+    Handle handle; size_t size = sizeof(board);
+    if (nvs_open("suite_system", NVS_READONLY, &handle.value) != ESP_OK || nvs_get_blob(handle.value, "score_v1", &board, &size) != ESP_OK
+        || size != sizeof(board) || !board.valid()) { board = {}; return false; }
+    return true;
+}
+bool SettingsStore::saveScore(const ScoreBoard& board) {
+    Handle handle;
+    return board.valid() && nvs_open("suite_system", NVS_READWRITE, &handle.value) == ESP_OK
+        && nvs_set_blob(handle.value, "score_v1", &board, sizeof(board)) == ESP_OK && nvs_commit(handle.value) == ESP_OK;
+}
 bool SettingsStore::loadWheel(WheelBoard& board) {
     Handle handle; size_t size = sizeof(board);
     if (nvs_open("suite_system", NVS_READONLY, &handle.value) != ESP_OK || nvs_get_blob(handle.value, "wheel_v1", &board, &size) != ESP_OK

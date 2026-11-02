@@ -1,5 +1,6 @@
 #pragma once
 #include "ledger.hpp"
+#include "score.hpp"
 #include <cstddef>
 #include <cstdint>
 
@@ -156,6 +157,8 @@ public:
     static bool saveLedger(const LedgerBook& book);
     static bool loadGuard(GuardPrefs& prefs);
     static bool saveGuard(const GuardPrefs& prefs);
+    static bool loadScore(ScoreBoard& board);
+    static bool saveScore(const ScoreBoard& board);
     static bool loadWheel(WheelBoard& board);
     static bool saveWheel(const WheelBoard& board);
     static bool loadWifi(WifiList& list);

@@ -38,6 +38,7 @@ extern const lv_font_t passport_ui_font, passport_status_font, passport_ui_font_
 #define ICON_MIC "\xEE\x80\x89"
 #define ICON_WALLET "\xEE\x80\x8A"
 #define ICON_CALC "\xEE\x80\x8B"
+#define ICON_TROPHY "\xEE\x80\x8C"
 namespace {
 // Status sign fallback: the 16 px UI font drawn three times larger, so any GB2312 text typed on the
 // computer still shows at sign size. Softer than the 48 px preset glyphs, but needs no extra flash.
@@ -99,7 +100,7 @@ constexpr int kCells = 9;  // menu: a 3 x 3 page of icons
 constexpr unsigned kDrawRows = 20;
 struct Badge { const char* symbol; uint32_t color; };
 // Pages that draw their own title and body (no hero card, heading or notice line).
-constexpr bool ownPage(App app){return app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Voice||app==App::Walkie;}
+constexpr bool ownPage(App app){return app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Score||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Voice||app==App::Walkie;}
 // Once these pages show content, a refresh or the next item loads behind it instead of under the loading screen.
 bool keepsContent(App app,const Model& m){
     return (app==App::Podcast&&m.podcastCount)||(app==App::Daily&&*m.page.daily.en)||(app==App::Quiz&&m.quizCount)||(app==App::Quake&&m.quakeCount)||(app==App::Hacker&&m.storyCount)||(app==App::Forecast&&m.page.forecast.days)||(app==App::Stock&&m.stockCount)||app==App::Macro||(app==App::Typhoon&&m.page.typhoon.count)||(app==App::Hot&&m.hotCount)||app==App::Memo||app==App::Translate||app==App::Guard;
@@ -147,6 +148,7 @@ Badge appBadge(App app){
     case App::Hot: return {ICON_FIRE,0xff6a3c};
     case App::Memo: return {ICON_MIC,0x5eead4};
     case App::Wheel: return {LV_SYMBOL_SHUFFLE,0xffa94d};
+    case App::Score: return {ICON_TROPHY,0xfbbf24};
     case App::Translate: return {"A",0x60a5fa};
     case App::Guard: return {LV_SYMBOL_EYE_CLOSE,0x22c55e};
     case App::Todo: return {LV_SYMBOL_OK,0xf5a524};
@@ -259,7 +261,7 @@ void renderChrome(const Runtime& runtime){
     const bool alt=app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Stock?m.stockDetail:app==App::Macro?m.macroDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Walkie?m.walkieAuto:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
     const auto* hint=keyHint(app,m.settingsPage,m.focusRunning,*m.pairingCode,m.live&&m.livePhase==LivePhase::Loading,m.live&&m.livePhase==LivePhase::Error,alt,app==App::Wifi?m.wifiTab:app==App::Settings?(m.settingsPage==SettingsPage::City?dictationTab(m):m.settingsPage==SettingsPage::Idle?m.idleRow:m.wifiSetup?0u:m.wifiArmed?3u:m.wifiRow?2u:1u):
         app==App::Rate?voiceTab(m,m.rateArmed):app==App::Stock?voiceTab(m,m.stockArmed):app==App::Macro?0u:app==App::Countdown?voiceTab(m,m.countdownArmed):
-        app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:m.soundView);
+        app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:m.page.score.fresh()?0u:1u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:m.soundView);
     if(app==App::Menu&&runtime.menuLayout().mode==MenuLayout::List)hint="上下：选择 | 长按上下：快移 | 确认：进入";
     char text[256];
     // 打开 Mac 程序: what the computer is doing takes the key hints' place for a few seconds, on any page.
@@ -2414,6 +2416,41 @@ void initWheel(lv_obj_t* screen){
     wheelView=lv_obj_create(wheelRoot);box(wheelView,8,2,224,255,kBg);lv_obj_add_event_cb(wheelView,drawWheel,LV_EVENT_DRAW_MAIN,nullptr);
 }
 void renderWheel(const Model& m){drawModel=&m;lv_obj_invalidate(wheelView);}
+// 记分牌: 红方 on top (Up scores), 蓝方 below (Down), each score in large seven-segment digits that read across a table.
+lv_obj_t *scoreRoot,*scoreView;
+struct ScoreColors{uint32_t panel,dim,lit;};
+constexpr ScoreColors kScoreSides[]{{0x2a1218,0x3d1a22,0xff5a5f},{0x0e1c34,0x172a4d,0x4f8dff}};
+void scoreDigit(Painter& p,unsigned digit,int x,int y,int w,int h,int t,const ScoreColors& c){
+    static constexpr uint8_t kSegments[]{0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7d,0x07,0x7f,0x6f};  // bit 0 top ... bit 6 middle
+    const int mid=y+h/2;
+    const int r[7][4]{{x,y,x+w,y+t},{x+w-t,y,x+w,mid},{x+w-t,mid,x+w,y+h},{x,y+h-t,x+w,y+h},{x,mid,x+t,y+h},{x,y,x+t,mid},{x,mid-t/2,x+w,mid+t/2}};
+    for(unsigned on:{0u,1u})for(unsigned s=0;s<7;++s)if(bool(kSegments[digit]>>s&1)==bool(on))p.rect(r[s][0],r[s][1],r[s][2],r[s][3],on?c.lit:c.dim,2);
+}
+void drawScore(lv_event_t* e){
+    const auto& m=*drawModel;auto p=painter(e);const auto& s=m.page.score;const auto& rule=kScoreRules[s.rule];const auto t=scoreReplay(s);char text[64];
+    snprintf(text,sizeof(text),"%s · %s",rule.name,rule.note);p.text(text,0,0,170,kText);
+    if(rule.points){if(t.winner==ScoreState::kNone)snprintf(text,sizeof(text),"第 %u 局",t.done+1u);else strcpy(text,"已结束");p.text(text,150,0,223,kMuted,LV_TEXT_ALIGN_RIGHT);}
+    for(unsigned side=0;side<2;++side){
+        const auto& c=kScoreSides[side];const int y=26+int(side)*104;const bool won=t.winner==side;
+        p.rect(0,y,223,y+98,won?c.dim:c.panel,12);
+        p.text(side?"蓝方":"红方",12,y+10,90,c.lit);
+        if(rule.points){snprintf(text,sizeof(text),"局分 %u",t.games[side]);p.text(text,12,y+38,90,kText);}
+        const char* tag=won?"获胜":t.chance==side?(t.matchPoint?"赛点":"局点"):nullptr;
+        if(t.server==side){snprintf(text,sizeof(text),"%s%s%s","● 发球",tag?" · ":"",tag?tag:"");p.text(text,12,y+66,100,kAccent);}
+        else if(tag)p.text(tag,12,y+66,100,won?c.lit:kWarn);
+        unsigned v=t.winner!=ScoreState::kNone?t.games[side]:t.points[side];int x=212;constexpr int w=36,h=74,th=9,gap=8;  // a finished match shows the games won
+        do{x-=w;scoreDigit(p,v%10,x,y+12,w,h,th,c);x-=gap;v/=10;}while(v);
+    }
+    const char* line=*m.lastNotice?m.lastNotice:m.scoreArmed?"再长按下键：清零重开":nullptr;
+    if(!line&&t.done){text[0]=0;for(unsigned i=t.done>ScoreState::kGames?t.done-ScoreState::kGames:0;i<t.done;++i){char g[12];snprintf(g,sizeof(g),"%s%u:%u",*text?"  ":"",t.history[i%ScoreState::kGames][0],t.history[i%ScoreState::kGames][1]);strcat(text,g);}line=text;}
+    if(!line&&s.fresh())line="长按上键：换赛制";
+    if(line)p.text(line,0,236,223,*m.lastNotice||m.scoreArmed?kWarn:kMuted,LV_TEXT_ALIGN_CENTER);
+}
+void initScore(lv_obj_t* screen){
+    scoreRoot=lv_obj_create(screen);box(scoreRoot,0,35,240,257,kBg);
+    scoreView=lv_obj_create(scoreRoot);box(scoreView,8,0,224,257,kBg);lv_obj_add_event_cb(scoreView,drawScore,LV_EVENT_DRAW_MAIN,nullptr);
+}
+void renderScore(const Model& m){drawModel=&m;lv_obj_invalidate(scoreView);}
 // 秒表: the running time in large digits, then the last six laps (total and split), newest first.
 void initStopwatch(lv_obj_t* screen){
     swRoot=lv_obj_create(screen);box(swRoot,0,35,240,257,kBg);
@@ -2648,6 +2685,7 @@ void uiInit() {
     else if(guiApp==App::Hot)initHot(screen);
     else if(guiApp==App::Memo)initMemo(screen);
     else if(guiApp==App::Wheel)initWheel(screen);
+    else if(guiApp==App::Score)initScore(screen);
     else if(guiApp==App::Translate)initTranslate(screen);
     else if(guiApp==App::Guard)initGuard(screen);
     else if(guiApp==App::Todo)initTodo(screen);
@@ -2819,6 +2857,7 @@ void uiRender(const Runtime& runtime) {
     } else if(app==App::Memo){renderMemo(model);
     } else if(app==App::Dictation){renderDictation(model);
     } else if(app==App::Wheel){renderWheel(model);
+    } else if(app==App::Score){renderScore(model);
     } else if(app==App::Translate){renderTranslate(model);
     } else if(app==App::Guard){renderGuard(model);
     } else if(app==App::Todo){renderTodo(model);

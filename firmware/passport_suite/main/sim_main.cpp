@@ -115,7 +115,7 @@ void domainTests(Runtime& runtime) {
     puts("CASE_PASS foreground_only_timer_pause_notifications");
 }
 void settingsTests(Runtime& runtime){
-    CHECK(kFunctions.size()==43&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
+    CHECK(kFunctions.size()==44&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
     // Physical long-confirm emits Back: each step must follow the hierarchy.
     for(auto app:kFunctions){
         CHECK(runtime.switchTo(app)==Result::Ok);runtime.model.settingsPage=SettingsPage::List;
@@ -418,6 +418,52 @@ void calcTests(Runtime& runtime){
     // Leaving forgets them.
     CHECK(runtime.switchTo(App::Menu)==Result::Ok&&runtime.switchTo(App::Calc)==Result::Ok&&!m.calcCount);
     puts("CASE_PASS calc");
+}
+// 记分牌: Up/Down score, Confirm undoes, long Up changes the rule only before the first point, a second long Down
+// starts over; games, deuce, the serve and the match under 乒乓球, the 羽毛球 cap, 自由计分 past the record; kept on leaving.
+void scoreTests(Runtime& runtime){
+    auto& m=runtime.model;auto& s=m.page.score;
+    CHECK(runtime.switchTo(App::Score)==Result::Ok);s={};CHECK(SettingsStore::saveScore(s));
+    CHECK(runtime.switchTo(App::Menu)==Result::Ok&&runtime.switchTo(App::Score)==Result::Ok&&s.fresh()&&s.rule==0&&!m.scoreArmed);
+    uiRender(runtime);uiCapture("score_empty");
+    runtime.key(Key::Up,1000);runtime.key(Key::Up,1000);runtime.key(Key::Down,1000);
+    auto t=scoreReplay(s);CHECK(t.points[0]==2&&t.points[1]==1&&t.server==ScoreState::kNone);
+    CHECK(runtime.longKey(true,1001)&&s.rule==0&&strstr(m.lastNotice,"不能换赛制"));
+    runtime.key(Key::Confirm,1001);CHECK(s.count==2&&strstr(m.lastNotice,"撤销"));
+    CHECK(runtime.longKey(false,1002)&&m.scoreArmed&&s.count==2);uiRender(runtime);uiCapture("score_reset_armed");
+    runtime.key(Key::Up,1002);CHECK(!m.scoreArmed&&s.count==3);  // any other key cancels
+    CHECK(runtime.longKey(false,1003)&&runtime.longKey(false,1003)&&s.fresh()&&!m.scoreArmed&&s.rule==0);
+    CHECK(runtime.longKey(true,1004)&&s.rule==1&&!strcmp(kScoreRules[s.rule].name,"乒乓球"));
+    for(int i=0;i<9;++i){runtime.key(Key::Up,1005);runtime.key(Key::Down,1005);}
+    t=scoreReplay(s);CHECK(t.points[0]==9&&t.points[1]==9&&t.server==1);  // two serves each: 18 points, 9 changes
+    runtime.key(Key::Up,1005);t=scoreReplay(s);CHECK(t.chance==0&&!t.matchPoint);
+    uiRender(runtime);uiCapture("score_table_tennis");
+    runtime.key(Key::Up,1005);t=scoreReplay(s);CHECK(t.games[0]==1&&t.done==1&&!t.points[0]&&strstr(m.lastNotice,"红方拿下第 1 局 11:9"));
+    CHECK(runtime.switchTo(App::Menu)==Result::Ok);s={};CHECK(runtime.switchTo(App::Score)==Result::Ok&&s.rule==1&&scoreReplay(s).games[0]==1);
+    for(int i=0;i<10;++i){runtime.key(Key::Down,1006);runtime.key(Key::Up,1006);}
+    t=scoreReplay(s);CHECK(t.points[0]==10&&t.points[1]==10&&t.chance==ScoreState::kNone&&t.server==1);  // 蓝方 opened game 2
+    runtime.key(Key::Down,1006);t=scoreReplay(s);CHECK(t.server==0&&t.chance==1);  // one serve each from deuce
+    runtime.key(Key::Down,1006);t=scoreReplay(s);CHECK(t.games[0]==1&&t.games[1]==1&&t.history[1][0]==10&&t.history[1][1]==12);
+    for(int i=0;i<11;++i)runtime.key(Key::Up,1007);
+    for(int i=0;i<10;++i)runtime.key(Key::Up,1007);
+    t=scoreReplay(s);CHECK(t.chance==0&&t.matchPoint);
+    runtime.key(Key::Up,1007);t=scoreReplay(s);CHECK(t.winner==0&&t.games[0]==3&&t.games[1]==1&&strstr(m.lastNotice,"红方获胜 3:1"));
+    uiRender(runtime);uiCapture("score_match_won");
+    const auto points=s.count;runtime.key(Key::Down,1008);CHECK(s.count==points&&strstr(m.lastNotice,"比赛已结束"));
+    runtime.key(Key::Confirm,1008);t=scoreReplay(s);CHECK(t.winner==ScoreState::kNone&&t.points[0]==10&&t.games[0]==2);
+    // 羽毛球: 29 all, then the 30th point wins whatever the lead.
+    CHECK(runtime.longKey(false,1009)&&runtime.longKey(false,1009)&&runtime.longKey(true,1009)&&s.rule==2);
+    for(int i=0;i<29;++i){runtime.key(Key::Up,1010);runtime.key(Key::Down,1010);}
+    t=scoreReplay(s);CHECK(t.points[0]==29&&t.server==1&&t.chance==1);  // the rally winner serves; at 29 all either side wins with the next
+    runtime.key(Key::Up,1010);t=scoreReplay(s);CHECK(t.games[0]==1&&t.history[0][0]==30&&t.history[0][1]==29&&t.server==0);
+    uiRender(runtime);uiCapture("score_badminton");
+    // 自由计分 keeps counting past the replayed record.
+    CHECK(runtime.longKey(false,1011)&&runtime.longKey(false,1011));while(s.rule)CHECK(runtime.longKey(true,1011));
+    for(int i=0;i<600;++i)runtime.key(Key::Up,1012);
+    t=scoreReplay(s);CHECK(t.points[0]==600&&s.count<=ScoreBoard::kPoints&&s.base[0]>0);
+    runtime.key(Key::Down,1012);runtime.key(Key::Down,1012);uiRender(runtime);uiCapture("score_free");
+    CHECK(runtime.longKey(false,1013)&&runtime.longKey(false,1013)&&s.fresh());
+    puts("CASE_PASS score");
 }
 // 对讲机: a call opens it from any page and goes back when over; keys keep it; the channel and talks.
 void walkieTests(Runtime& runtime){
@@ -1190,9 +1236,9 @@ static MenuLayout sampleCustomMenu(){
 }
 static void menuLayoutTests(Runtime& runtime){
     auto layout=defaultMenuLayout();CHECK(layout.valid());CHECK(runtime.configureMenu(layout));
-    CHECK(runtime.menuView().count==43&&runtime.menuView().pages==5);
+    CHECK(runtime.menuView().count==44&&runtime.menuView().pages==5);
     for(auto app:kFunctions)if(menuCategory(app)==0)layout.show(app,false);
-    CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==4&&runtime.menuView().count==34);
+    CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==4&&runtime.menuView().count==35);
     runtime.switchTo(App::Menu);runtime.key(Key::Confirm,0);CHECK(runtime.active()!=App::Chat);
     // Unpaged grid: nine a screen in the user's order, no page names; long Down jumps to the next screen.
     layout=defaultMenuLayout();layout.mode=MenuLayout::Continuous;std::reverse(layout.order[1],layout.order[1]+layout.catalogCount);
@@ -1200,15 +1246,15 @@ static void menuLayoutTests(Runtime& runtime){
     CHECK(runtime.menuPosition()==0&&runtime.menuWindowStart()==0);uiRender(runtime);uiCapture("menu_continuous_top");
     for(unsigned i=0;i<10;++i)runtime.key(Key::Down,0);
     CHECK(runtime.menuPosition()==10&&runtime.menuWindowStart()==9);uiRender(runtime);uiCapture("menu_continuous_scroll");
-    for(unsigned i=0;i<43;++i){const auto before=runtime.menuPosition();runtime.key(Key::Down,0);CHECK(runtime.menuPosition()==(before+1)%43);CHECK(runtime.menuWindowStart()==runtime.menuPosition()/9*9);}
+    for(unsigned i=0;i<43;++i){const auto before=runtime.menuPosition();runtime.key(Key::Down,0);CHECK(runtime.menuPosition()==(before+1)%44);CHECK(runtime.menuWindowStart()==runtime.menuPosition()/9*9);}
     CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==18);CHECK(runtime.longKey(true,0)&&runtime.longKey(true,0)&&runtime.longKey(true,0));CHECK(runtime.menuPosition()==36);
     // Compact list: the same order as the grid, seven rows that scroll with the selection.
-    layout.mode=MenuLayout::List;CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==1&&runtime.menuView().count==43);
+    layout.mode=MenuLayout::List;CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==1&&runtime.menuView().count==44);
     runtime.switchTo(App::Settings);runtime.switchTo(App::Menu);CHECK(runtime.menuPosition()==0&&runtime.menuWindowStart()==0);uiRender(runtime);uiCapture("menu_list_top");
     for(unsigned i=0;i<10;++i)runtime.key(Key::Down,0);
     CHECK(runtime.menuPosition()==10&&runtime.menuWindowStart()==4);uiRender(runtime);uiCapture("menu_list_scroll");
-    for(unsigned i=0;i<43;++i){runtime.key(Key::Up,0);CHECK(runtime.menuPosition()>=runtime.menuWindowStart()&&runtime.menuPosition()<runtime.menuWindowStart()+MenuLayout::kListRows&&runtime.menuWindowStart()<=36);}
-    const auto before=runtime.menuPosition();CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==(before+7)%43);
+    for(unsigned i=0;i<44;++i){runtime.key(Key::Up,0);CHECK(runtime.menuPosition()>=runtime.menuWindowStart()&&runtime.menuPosition()<runtime.menuWindowStart()+MenuLayout::kListRows&&runtime.menuWindowStart()<=37);}
+    const auto before=runtime.menuPosition();CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==(before+7)%44);
     layout.mode=MenuLayout::Continuous;CHECK(runtime.configureMenu(layout));uiRender(runtime);uiCapture("menu_continuous_after_list");
     layout.show(App::Macro,false);CHECK(runtime.configureMenu(layout));const auto selection=runtime.selection();
     CHECK(runtime.switchTo(App::Macro)==Result::Ok);runtime.key(Key::Back,0);CHECK(runtime.active()==App::Menu&&runtime.selection()==selection);
@@ -1498,7 +1544,7 @@ extern "C" void app_main() {
     domainTests(runtime);
     settingsTests(runtime);
     powerTests(runtime);
-    slidesTests(runtime);alertTests(runtime);statusTests(runtime);wheelTests(runtime);translateTests(runtime);guardTests(runtime);todoTests(runtime);ledgerTests(runtime);calcTests(runtime);walkieTests(runtime);voiceCommandTests(runtime);voiceAddTests(runtime);toolPagesTests(runtime);
+    slidesTests(runtime);alertTests(runtime);statusTests(runtime);wheelTests(runtime);translateTests(runtime);guardTests(runtime);todoTests(runtime);ledgerTests(runtime);calcTests(runtime);scoreTests(runtime);walkieTests(runtime);voiceCommandTests(runtime);voiceAddTests(runtime);toolPagesTests(runtime);
     bleTests(runtime);
     identityUploadTests(runtime);
     failureTests(runtime);

@@ -757,7 +757,7 @@ int execute(const char* name) {
     // Long presses: the menu turns a page, the calendar steps a month, the sonar switches its filter,
     // the WiFi toolbox and the sound page change tab, the motion monitor turns its alarm on or off.
     // 白噪音 sets the volume with them, 闹钟 the hour; 语音笔记 deletes the open note with a long Down; 状态牌 switches 常亮.
-    if ((previous==App::Menu||previous==App::Calendar||previous==App::Sonar||previous==App::Wifi||previous==App::Sound||previous==App::Motion||previous==App::Noise||previous==App::Alarm||previous==App::Memo||previous==App::Status||previous==App::Wheel||previous==App::Todo||previous==App::Ledger||previous==App::Calc||previous==App::Rate||previous==App::Countdown||previous==App::Walkie)&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {
+    if ((previous==App::Menu||previous==App::Calendar||previous==App::Sonar||previous==App::Wifi||previous==App::Sound||previous==App::Motion||previous==App::Noise||previous==App::Alarm||previous==App::Memo||previous==App::Status||previous==App::Wheel||previous==App::Todo||previous==App::Ledger||previous==App::Calc||previous==App::Rate||previous==App::Countdown||previous==App::Walkie||previous==App::Score)&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {
         runtime.longKey(!strcmp(name,"ap_on"),now);
 #ifdef PASSPORT_DEVICE
         if(previous==App::Noise&&!board::setVolume(runtime.model.volume)){runtime.model.volume=board::volume();return -10;}

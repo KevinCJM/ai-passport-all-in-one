@@ -65,6 +65,7 @@ constexpr Profile kProfiles[] = {
     {"voice", "语音指令", 0, true, false},
     {"walkie", "对讲机", 0, true, false},
     {"macro", "宏观雷达", 0, false, false},
+    {"score", "记分牌", 0, false, false},
 };
 static_assert(std::size(kProfiles) == static_cast<unsigned>(App::Count));
 }
@@ -359,6 +360,18 @@ bool Runtime::longKey(bool up, uint64_t now) {
     }
     if (active_ == App::Macro) {
         if(!m.macroDetail){m.macroGroup=(m.macroGroup+(up?2:1))%3;m.macroIndex=0;m.macroLong=false;m.lastNotice[0]=0;m.page.macro=MacroView{};m.page.macro.group=m.macroGroup;}
+        return true;
+    }
+    // 记分牌: a long Up changes the rule before the first point; a long Down asks to start over, a second one does.
+    if (active_ == App::Score) {
+        auto& s = m.page.score; m.lastNotice[0] = 0;
+        if (up) {
+            m.scoreArmed = false;
+            if (!s.fresh()) { strcpy(m.lastNotice, "比赛中不能换赛制，长按下键重开后再换"); return true; }
+            s.rule = static_cast<uint8_t>((s.rule + 1) % std::size(kScoreRules));
+        } else if (!m.scoreArmed) { m.scoreArmed = !s.fresh(); return true; }
+        else { m.scoreArmed = false; const uint8_t rule = s.rule; s = {}; s.rule = rule; strcpy(m.lastNotice, "已清零，重新开始"); }
+        if (!SettingsStore::saveScore(s)) strcpy(m.lastNotice, "保存失败");
         return true;
     }
     if (active_ == App::Wifi) { m.wifiTab = (m.wifiTab + (up ? 3 : 1)) % 4; m.wifiIndex = 0; return true; }
@@ -856,6 +869,7 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
         auto& m = model; SettingsStore::loadWheel(m.page.wheel);
         m.wheelSpunAt = 0; m.wheelPick = 255; m.wheelArmed = false; m.listenAt = 0;
     }
+    if (target == App::Score) { SettingsStore::loadScore(model.page.score); model.scoreArmed = false; model.lastNotice[0] = 0; }
     if (target == App::Countdown) { reloadCountdown(); model.countdownArmed = false; model.listenAt = 0; }
     if (target == App::Alarm) { auto& m = model; m.alarmIndex = 0; m.alarmEdit = m.alarmArmed = false; m.listenAt = 0; }
     if (target == App::Qr) { model.qrBright = false; reloadQr(); }
@@ -1068,6 +1082,19 @@ void Runtime::key(Key key, uint64_t now) {
             else if (m.newsIndex) --m.newsIndex;
             else if (m.newsPage > 1) { m.newsWant = m.newsPage - 1; m.newsFromEnd = true; }
         }
+    } else if (active_ == App::Score) {
+        // Up: a point to 红方 (on top), Down: to 蓝方, Confirm: undo the last point.
+        auto& m = model; auto& s = m.page.score; m.scoreArmed = false; m.lastNotice[0] = 0;
+        bool changed = false;
+        if (key == Key::Up || key == Key::Down) {
+            changed = scoreAdd(s, key == Key::Down);
+            if (!changed) strcpy(m.lastNotice, scoreReplay(s).winner != ScoreState::kNone ? "比赛已结束，长按下键重开" : "记录已满，长按下键重开");
+            const auto t = scoreReplay(s); const char* side = t.ended ? "蓝方" : "红方";
+            if (changed && t.winner != ScoreState::kNone) snprintf(m.lastNotice, sizeof(m.lastNotice), "%s获胜 %u:%u", side, t.games[0], t.games[1]);
+            else if (changed && t.ended != ScoreState::kNone) snprintf(m.lastNotice, sizeof(m.lastNotice), "%s拿下第 %u 局 %u:%u", side, t.done, t.history[(t.done - 1) % ScoreState::kGames][0], t.history[(t.done - 1) % ScoreState::kGames][1]);
+        }
+        if (key == Key::Confirm) { changed = scoreUndo(s); strcpy(m.lastNotice, changed ? "已撤销上一分" : "还没有得分"); }
+        if (changed && !SettingsStore::saveScore(s)) strcpy(m.lastNotice, "保存失败");
     } else if (active_ == App::Stopwatch) {
         auto& m = model; const uint64_t us = esp_timer_get_time();
         if (key == Key::Confirm) { if (m.swRunning) m.swBase += us - m.swStarted; else m.swStarted = us; m.swRunning = !m.swRunning; }

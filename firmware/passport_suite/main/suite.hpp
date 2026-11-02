@@ -149,6 +149,7 @@ struct Model {
         // rows: the notes from memoTop on show (a line of each); note: the one memoDetail opens.
         struct{std::array<MemoRow,kMemoRows> rows;MemoNote note;} memo;
         WheelBoard wheel;
+        ScoreBoard score;  // 记分牌, loaded on entry and saved on every point
         TodoList todo;
         LedgerBook ledger;
         // 语音计算器: the sums worked out on this visit, newest first (calcCount of them).
@@ -227,6 +228,8 @@ struct Model {
     uint64_t wheelSpunAt{};uint16_t wheelSteps{};uint8_t wheelFrom{},wheelPick{255};bool wheelArmed{};
     bool wheelSpinning() const { return wheelSpunAt&&uint64_t(esp_timer_get_time())-wheelSpunAt<kWheelSpin; }
     unsigned wheelLit() const;  // the option highlighted now
+    // 记分牌: page.score; scoreArmed: a long Down asked to start over.
+    bool scoreArmed{};
     // 待办提醒: page.todo while the page is open. todoNextAt/todoNext: the next reminder (epoch, 0 = none) and its text,
     // kept so it rings from any page; it rings on the page from todoRingAt (monotonic) for at most 3 minutes.
     // todoIndex 0 is the 录音 row, n the todo n-1; kTodoRows show from todoTop. todoArmed: a long Down asked to delete.

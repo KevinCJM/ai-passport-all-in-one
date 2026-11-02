@@ -257,7 +257,7 @@ inline constexpr AppWord kAppWords[]{
     {App::Forecast,"天气预报"},{App::Forecast,"天气"},{App::Typhoon,"台风路径"},{App::Typhoon,"台风"},
     {App::Quake,"地震速报"},{App::Quake,"地震"},{App::News,"财经新闻"},{App::News,"新闻"},
     {App::Stock,"自选股"},{App::Stock,"股票"},{App::Stock,"自选"},{App::Stock,"股市"},{App::Rate,"汇率"},
-    {App::Macro,"宏观雷达"},{App::Macro,"宏观"},
+    {App::Macro,"宏观雷达"},{App::Macro,"宏观"},{App::Score,"记分牌"},{App::Score,"计分板"},{App::Score,"记分"},{App::Score,"计分"},{App::Score,"比分"},
     {App::Hot,"百度热榜"},{App::Hot,"热榜"},{App::Hot,"热搜"},{App::Hacker,"hackernews"},{App::Hacker,"hn头条"},
     {App::Quiz,"知识问答"},{App::Quiz,"问答"},{App::Quiz,"答题"},{App::Words,"背单词"},{App::Words,"单词"},
     {App::Daily,"每日一句"},{App::Radio,"收音机"},{App::Radio,"电台"},{App::Radio,"广播"},{App::Podcast,"播客"},
