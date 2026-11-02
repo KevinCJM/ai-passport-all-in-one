@@ -4,8 +4,11 @@ import collections
 import json
 import socket
 import struct
+import subprocess
+import sys
 import threading
 import time
+from passport_paths import helper
 
 RPC_SERVICE='5d67d66a-70ed-4e30-9f6c-4fbddce3b020'
 RPC_WRITE='5d67d66a-70ed-4e30-9f6c-4fbddce3b021'
@@ -17,6 +20,72 @@ CAPACITY=2304
 
 class LinkBusy(ConnectionError):
     pass
+
+
+def start_gateway(port,forward,audio_forward,log,bridge=sys.platform=='win32'):
+    """The USB PPP gateway on the badge's serial port: a process-like object (poll/terminate/wait/kill)."""
+    command=[str(helper('passport-ppp')),'--forward',str(forward),'--audio-forward',str(audio_forward)]
+    if not bridge:return subprocess.Popen(command+['--serial',port],stdout=log,stderr=subprocess.STDOUT)
+    return SerialBridge(command,port,log)
+
+
+class SerialBridge:
+    """Windows: a COM port cannot be polled together with sockets, so the gateway listens on loopback and two threads
+    copy bytes between it and the port. Ends (poll() returns the exit code) when either side does."""
+    def __init__(self,command,port,log):
+        import serial
+        # The badge's USB Serial/JTAG ignores the baud rate. Windows opens COM ports exclusively; on a Mac, flock.
+        self.serial=serial.Serial(port,115200,timeout=.2,write_timeout=2,exclusive=True);self.socket=None;self.closed=threading.Event()
+        try:
+            with socket.socket() as probe:probe.bind(('127.0.0.1',0));free=probe.getsockname()[1]
+            self.process=subprocess.Popen(command+['--port',str(free)],stdout=log,stderr=subprocess.STDOUT)
+            until=time.monotonic()+5
+            while self.socket is None:
+                try:self.socket=socket.create_connection(('127.0.0.1',free),1)
+                except OSError:
+                    if self.process.poll() is not None or time.monotonic()>until:raise ConnectionError('PPP gateway did not start')
+                    time.sleep(.1)
+        except BaseException:
+            self.terminate();raise
+        for target in (self.upstream,self.downstream):threading.Thread(target=target,daemon=True).start()
+
+    def upstream(self):
+        try:
+            while not self.closed.is_set():
+                data=self.serial.read(self.serial.in_waiting or 1)
+                if data:self.socket.sendall(data)
+        except Exception:pass
+        self.closed.set()
+
+    def downstream(self):
+        try:
+            while not self.closed.is_set():
+                data=self.socket.recv(4096)
+                if not data:break
+                self.serial.write(data)
+        except Exception:pass
+        self.closed.set()
+
+    def poll(self):
+        # Either side gone ends both: the port is freed before the device starts a new gateway on it.
+        if self.closed.is_set() or self.process.poll() is not None:
+            self.terminate()
+            try:return self.process.wait(3)
+            except subprocess.TimeoutExpired:self.process.kill();return self.process.wait()
+        return self.process.poll()
+
+    def terminate(self):
+        self.closed.set()
+        if self.socket:
+            try:self.socket.shutdown(socket.SHUT_RDWR)
+            except OSError:pass
+            self.socket.close()
+        self.serial.close()
+        if getattr(self,'process',None) and self.process.poll() is None:self.process.terminate()
+
+    def wait(self,timeout=None):return self.process.wait(timeout)
+
+    def kill(self):self.process.kill()
 
 
 async def ble_request(client,identity,token,path,data=None):

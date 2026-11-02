@@ -1,17 +1,22 @@
-"""Locations shared by the development tools and the self-contained Mac app."""
+"""Locations shared by the development tools and the self-contained Mac / Windows app."""
 import os
 from pathlib import Path
 import shutil
 import sys
 
 PACKAGED = bool(getattr(sys, 'frozen', False))
+WINDOWS = sys.platform == 'win32'
 ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = Path(getattr(sys, '_MEIPASS', ROOT))
 
 
 def user_data():
-    path = Path(os.environ.get('PASSPORT_DATA_DIR') or
-                Path.home() / 'Library/Application Support/AI Passport')
+    if os.environ.get('PASSPORT_DATA_DIR'):
+        path = Path(os.environ['PASSPORT_DATA_DIR'])
+    elif WINDOWS:
+        path = Path(os.environ.get('APPDATA') or Path.home()) / 'AI Passport'
+    else:
+        path = Path.home() / 'Library/Application Support/AI Passport'
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
     path.chmod(0o700)
     return path
@@ -28,6 +33,8 @@ def live_data():
 
 
 def helper(name):
+    if WINDOWS and '.' not in name:
+        name += '.exe'
     return RESOURCES / 'helpers' / name if PACKAGED else ROOT / 'experiments/passport-connectivity-tools/bin' / name
 
 

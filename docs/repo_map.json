@@ -607,6 +607,112 @@
         ],
         "unsampled_paths": []
       }
+    },
+    {
+      "id": "computer_assistant",
+      "name": "电脑助手（Mac / Windows）",
+      "path": "scripts/passport_assistant.py",
+      "kind": "host_app",
+      "purpose": "胸牌的电脑端：配对、USB PPP 网关/蓝牙连接、语音输入粘贴、离座锁屏、打开电脑程序、AI 额度；Mac 为 AppKit 窗口，Windows 为托盘 + 共用网页 127.0.0.1:8768。",
+      "module_tags": [
+        "assistant",
+        "windows",
+        "mac",
+        "ppp",
+        "dictation",
+        "tray",
+        "pairing"
+      ],
+      "entry_files": [
+        "scripts/passport_assistant.py",
+        "scripts/passport_device.py",
+        "scripts/passport_windows.py"
+      ],
+      "key_symbols": [
+        "Controller.serve",
+        "Controller.web_action",
+        "features",
+        "tray",
+        "start_gateway",
+        "SerialBridge",
+        "passport_windows.keys",
+        "MacOpener",
+        "Handler"
+      ],
+      "child_modules": [],
+      "first_read_files": [
+        "docs/windows-assistant.md",
+        "scripts/passport_assistant.py",
+        "scripts/passport_device.py",
+        "scripts/passport_computer_link.py",
+        "scripts/passport_windows.py"
+      ],
+      "then_check_files": [
+        "scripts/passport_paths.py",
+        "scripts/passport_dictation.py",
+        "scripts/passport_guard.py",
+        "scripts/passport_mac_open.py",
+        "scripts/passport_services.py",
+        "scripts/passport_ppp_gateway.cpp",
+        "scripts/build_passport_assistant.py",
+        "scripts/build_passport_assistant_windows.py",
+        "scripts/build_windows_helpers.sh",
+        ".github/workflows/windows-assistant.yml",
+        ".github/README.md"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [
+        "Windows 真机 USB/蓝牙配对与 SendInput 行为",
+        "MSYS2 包版本",
+        "GitHub Actions windows 运行器"
+      ],
+      "related_tests": [
+        "tests/test_passport_windows.py",
+        "tests/test_passport_assistant.py",
+        "tests/test_passport_menu.py",
+        "tests/test_passport_guard.py",
+        "tests/test_passport_mac_open.py",
+        "tests/test_passport_bluetooth_dictation.py"
+      ],
+      "related_configs": [
+        "scripts/requirements-assistant-windows.txt",
+        ".github/workflows/windows-assistant.yml"
+      ],
+      "risk_flags": [
+        "serial_bridge_must_free_port",
+        "web_server_runs_without_device",
+        "windows_has_no_ble_rssi",
+        "windows_needs_utf8_mode",
+        "same_protocol_no_firmware_change"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "Mac 助手全部电脑功能",
+        "Windows 助手"
+      ],
+      "pitfall_ids": [
+        "P07"
+      ],
+      "minimum_regression": [
+        "python3 tests/test_passport_windows.py -v",
+        "python3 tests/test_passport_menu.py -v"
+      ],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "subtree_only",
+        "host_and_emulator_evidence"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "scripts/passport_assistant.py",
+          "scripts/passport_computer_link.py",
+          "scripts/passport_windows.py",
+          "tests/test_passport_windows.py"
+        ],
+        "unsampled_paths": []
+      }
     }
   ]
 }

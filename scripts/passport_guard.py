@@ -12,6 +12,7 @@ import ctypes
 import os
 import statistics
 import subprocess
+import sys
 import time
 
 DELAYS=(5,10,20,30)
@@ -89,6 +90,10 @@ class Awake:
             self.process=subprocess.Popen(['caffeinate','-d','-i','-w',str(os.getpid())],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         elif not wanted and self.process is not None:
             self.process.terminate();self.process=None
+
+
+if sys.platform=='win32':  # the same six, from Win32
+    from passport_windows import lock_screen,screen_locked,wake_display,idle_seconds,nudge_mouse,Awake  # noqa: F811
 
 
 class Guard:

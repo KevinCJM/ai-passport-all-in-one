@@ -28,7 +28,7 @@ class MenuTests(unittest.TestCase):
             paired=SimpleNamespace(config={'ui_port':0},transport=transport,request=Mock(return_value={'revision':123}),menu=Mock(return_value={'queued':True,'ticket':7}))
             server=device.ThreadingHTTPServer(('127.0.0.1',0),device.Handler);paired.config['ui_port']=server.server_port
             thread=threading.Thread(target=server.serve_forever,daemon=True)
-            with patch.object(device,'DEVICE',paired,create=True):
+            with patch.object(device,'DEVICE',paired,create=True),patch.object(device,'UI_PORT',server.server_port):
                 thread.start();base='http://127.0.0.1:'+str(server.server_port)
                 try:
                     with urllib.request.urlopen(base+'/api/menu') as response:self.assertEqual(json.load(response),{'revision':123})

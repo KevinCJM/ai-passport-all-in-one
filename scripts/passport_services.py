@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import queue
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -131,8 +132,10 @@ class CodexReader:
 
 
 def claude_usage():
-    """Claude Code plan limits, read with its own keychain login; the token is never refreshed or kept."""
-    raw=subprocess.run(['security','find-generic-password','-s','Claude Code-credentials','-w'],capture_output=True,text=True,timeout=10,check=True).stdout
+    """Claude Code plan limits, read with its own login (Mac keychain; on Windows its credentials file); the token is
+    never refreshed or kept."""
+    if sys.platform=='win32':raw=(Path.home()/'.claude/.credentials.json').read_text()
+    else:raw=subprocess.run(['security','find-generic-password','-s','Claude Code-credentials','-w'],capture_output=True,text=True,timeout=10,check=True).stdout
     request=urllib.request.Request('https://api.anthropic.com/api/oauth/usage',headers={
         'Authorization':'Bearer '+json.loads(raw)['claudeAiOauth']['accessToken'],'anthropic-beta':'oauth-2025-04-20'})
     # System proxy settings apply: this endpoint may need the same route Claude Code itself uses.
@@ -322,7 +325,9 @@ class Services:
     def guard_rssi(self):
         """离座锁屏's reading: dBm of the Bluetooth link, None while it is down, 'usb' on the cable."""
         if not getattr(self.sim,'physical_device',False):return None
-        if self.sim.transport=='usb':return 'usb'
+        # Windows cannot read a connected device's signal: treat it as the cable (keep awake, lock on request), since
+        # no reading at all would look like leaving and lock the screen.
+        if self.sim.transport=='usb' or sys.platform=='win32':return 'usb'
         try:return self.sim.radio.rpc('rssi')['result'].get('rssi')
         except Exception:return None
 
@@ -513,7 +518,8 @@ class Services:
         return data
 
     def require_dictation_permissions(self):
-        status=self.helper('status');self.details['dictation_permissions']=status
+        # Windows needs no permission to paste (SendInput); only elevated windows refuse it.
+        status={'accessibility':True,'post_event_access':True} if sys.platform=='win32' else self.helper('status');self.details['dictation_permissions']=status
         if not (status.get('accessibility') and status.get('post_event_access')):
             raise PermissionError('Mac keyboard event permission required')
 

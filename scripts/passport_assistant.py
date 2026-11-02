@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""AI Passport Mac assistant. No official application is installed or bundled."""
+"""AI Passport computer assistant (macOS, Windows). No official application is installed or bundled.
+
+The window is AppKit on a Mac; on Windows a tray icon opens the assistant's web page, which both share."""
 import argparse
-import fcntl
 import http.client
 import json
 import os
@@ -16,11 +17,16 @@ import threading
 import time
 import certifi
 
+from passport_computer_link import start_gateway
 from passport_identity import paired_port
 from passport_paths import helper, user_data, codex_command, PACKAGED
 
-VERSION='0.1.8-preview'
+VERSION='0.1.9-preview'
 LABEL='local.ai-passport.assistant'
+WINDOWS=sys.platform=='win32'
+UI_PORT=8768
+WEB=f'http://127.0.0.1:{UI_PORT}/'
+WEB_PAGES=[('菜单自定义','menu'),('状态牌','status'),('倒数日','countdown'),('二维码','qr'),('打开 Mac 程序' if not WINDOWS else '打开电脑程序','mac'),('模拟遥控','remote'),('诊断','diag')]
 
 
 def validate_config(config):
@@ -30,7 +36,7 @@ def validate_config(config):
         raise ValueError('配对信息无效，请重新配对')
     # Imported development settings must not dictate executable paths or ports.
     result={k:config[k] for k in ('mac','api_token','xiaozhi') if k in config}
-    result.update(http_forward=18763,audio_forward=19548,ui_port=8768)
+    result.update(http_forward=18763,audio_forward=19548,ui_port=UI_PORT)
     return result
 
 
@@ -43,22 +49,29 @@ def save_config(path,config):
 
 
 def devices(ports):
-    # Fixed USB Serial/JTAG with a MAC serial; generic USB boards are not opened.
-    return [{'mac':p.serial_number.lower(),'port':p.device} for p in ports
-            if p.vid==0x303a and p.pid==0x1001 and re.fullmatch(r'(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}',p.serial_number or '')]
+    # Fixed USB Serial/JTAG with a MAC serial; generic USB boards are not opened. Windows may report the serial
+    # without separators (or with dashes): written back as aa:bb:cc:dd:ee:ff.
+    found=[]
+    for p in ports:
+        serial=re.sub('[:-]','',p.serial_number or '').lower()
+        if p.vid==0x303a and p.pid==0x1001 and re.fullmatch('[0-9a-f]{12}',serial):
+            found.append({'mac':':'.join(serial[i:i+2] for i in range(0,12,2)),'port':p.device})
+    return found
 
 
 def dependencies():
     try:codex_command();codex=True
     except FileNotFoundError:codex=False
-    try:
-        result=subprocess.run([str(helper('passport-dictation')),'status'],capture_output=True,timeout=4,check=True)
-        audio=json.loads(result.stdout)
-    except Exception:audio={}
-    try:
-        from CoreBluetooth import CBManager
-        bluetooth=int(CBManager.authorization())
-    except Exception:bluetooth=None
+    if WINDOWS:audio={'accessibility':True,'post_event_access':True};bluetooth=None  # no permission to grant
+    else:
+        try:
+            result=subprocess.run([str(helper('passport-dictation')),'status'],capture_output=True,timeout=4,check=True)
+            audio=json.loads(result.stdout)
+        except Exception:audio={}
+        try:
+            from CoreBluetooth import CBManager
+            bluetooth=int(CBManager.authorization())
+        except Exception:bluetooth=None
     try:
         from passport_dictation import Encoder
         Encoder().encode(bytes(1920));voice=True
@@ -66,6 +79,23 @@ def dependencies():
     return {'voice':voice,'codex':codex,
             'accessibility':audio.get('accessibility'),'post_event_access':audio.get('post_event_access'),
             'bluetooth_allowed':None if bluetooth is None else bluetooth==3,'bluetooth_denied':bluetooth in (1,2)}
+
+
+def features(deps):
+    """The window's / page's 电脑功能 rows: (key, name, ok True/False/None while checking, detail)."""
+    rows=[('voice','语音输入',bool(deps.get('voice')) if 'voice' in deps else None,
+           '小智识别，文字粘贴到光标处' if deps.get('voice') else '编码组件不可用，请重新安装助手' if 'voice' in deps else '正在检查'),
+          ('codex','Codex',True if deps.get('codex') else None,
+           '已安装，可在胸牌「AI 额度」查看用量' if deps.get('codex') else '未安装（可选，需自行安装并登录）' if 'codex' in deps else '正在检查')]
+    if WINDOWS:return rows
+    checked=all(isinstance(deps.get(k),bool) for k in ('accessibility','post_event_access'))
+    missing=([] if not checked or (deps['accessibility'] and deps['post_event_access']) else ['辅助功能'])+(['蓝牙'] if deps.get('bluetooth_denied') else [])
+    return rows+[('permission','系统权限',None if not checked else not missing,'正在检查' if not checked else '需要授权：'+'、'.join(missing) if missing else '辅助功能、蓝牙已授权')]
+
+
+def open_file(path):
+    if WINDOWS:os.startfile(path)
+    else:subprocess.run(['/usr/bin/open',str(path)],check=True,timeout=10)
 
 
 class Controller:
@@ -111,6 +141,40 @@ class Controller:
         if Path(path).stat().st_size>16384:raise ValueError('配对文件无效')
         save_config(self.path,json.loads(Path(path).read_text()));self.error=''
 
+    def ip_location_allowed(self):
+        try:return bool(json.loads((self.directory/'live/settings.json').read_text()).get('ip_location_allowed',False))
+        except (OSError,ValueError):return False
+
+    def ledger(self):
+        """语音记账: the CSV passport_services keeps in sync with the badge, opened in Numbers or Excel."""
+        path=self.directory/'记账.csv'
+        if not path.exists():raise ValueError('还没有记账记录：在胸牌「语音记账」记一笔，胸牌连上电脑后会自动同步到这里。')
+        open_file(path)
+
+    def web_state(self):
+        """The web page's 电脑助手 section."""
+        state=self.snapshot()
+        return dict(state,features=[list(row[1:]) for row in features(state['dependencies'])],login=login_enabled(),
+                    ip_location=self.ip_location_allowed(),platform='windows' if WINDOWS else 'mac',help=HELP)
+
+    def web_action(self,data):
+        """The page's buttons. Errors are ValueError with the text the page shows."""
+        action=data.get('action')
+        if action=='pair':self.pair(str(data.get('mac','')))
+        elif action=='toggle':self.enabled=not self.enabled
+        elif action=='location':self.allow_ip_location(bool(data.get('on')))
+        elif action=='import':
+            try:save_config(self.path,data.get('config'))
+            except (ValueError,TypeError):raise ValueError('配对文件无效')
+            self.error=''
+        elif action=='login':
+            try:login_item(bool(data.get('on')))
+            except ValueError:raise
+            except Exception:raise ValueError('设置开机启动失败')
+        elif action=='ledger':self.ledger()
+        else:raise ValueError('未知操作')
+        return {'ok':True}
+
     def allow_ip_location(self,allowed):
         folder=self.directory/'live';folder.mkdir(exist_ok=True,mode=0o700)
         path=folder/'settings.json';settings=json.loads(path.read_text()) if path.exists() else {}
@@ -126,7 +190,7 @@ class Controller:
         port=paired_port(mac,ports);gateway=None
         log=(self.directory/'gateway.log').open('a')
         try:
-            gateway=subprocess.Popen([str(helper('passport-ppp')),'--serial',port,'--forward','18763','--audio-forward','19548'],stdout=log,stderr=subprocess.STDOUT)
+            gateway=start_gateway(port,18763,19548,log)
             nonce=secrets.token_hex(16);self.code=nonce[:6];self.status='正在配对，请在胸牌上确认'
             started=time.monotonic();begun=False
             while not self.stop.wait(.5) and time.monotonic()-started<65:
@@ -153,11 +217,19 @@ class Controller:
                 except subprocess.TimeoutExpired:gateway.kill();gateway.wait()
             log.close()
 
+    def serve(self):
+        """The web page, from start to quit; badge sections answer 503 until the badge is connected."""
+        import passport_device
+        from http.server import ThreadingHTTPServer
+        passport_device.ASSISTANT=self
+        try:self.http=ThreadingHTTPServer(('127.0.0.1',UI_PORT),passport_device.Handler)
+        except OSError:self.error=f'网页设置不可用：端口 {UI_PORT} 被占用';return
+        threading.Thread(target=self.http.serve_forever,daemon=True).start()
+
     def disconnect(self):
-        if self.http:
-            self.http.shutdown();self.http.server_close();self.http=None
         if self.device:
-            self.device.close();self.device=None
+            import passport_device
+            passport_device.DEVICE=None;self.device.close();self.device=None
 
     def step(self,ports):
         with self.lock:self.candidates=devices(ports)
@@ -183,17 +255,12 @@ class Controller:
             self.factory=Device
         self.device=self.factory(config=config)
         self.device.assistant_permissions=lambda:{k:self.deps.get(k) for k in ('accessibility','post_event_access','bluetooth_allowed','bluetooth_denied')}
-        from passport_device import Handler
-        from http.server import ThreadingHTTPServer
         import passport_device
         passport_device.DEVICE=self.device
-        try:
-            self.http=ThreadingHTTPServer(('127.0.0.1',8768),Handler)
-            threading.Thread(target=self.http.serve_forever,daemon=True).start()
-        except Exception:self.disconnect();raise
         self.status='助手已启动，正在连接胸牌';self.error=''
 
     def start(self):
+        self.serve()
         def run():
             from serial.tools import list_ports
             retry=1;last_deps=0
@@ -211,10 +278,21 @@ class Controller:
     def close(self):
         self.stop.set()
         if self.thread:self.thread.join(40)
+        if self.http:self.http.shutdown();self.http.server_close();self.http=None
+
+
+def login_enabled():
+    if WINDOWS:
+        from passport_windows import autostart
+        return autostart()
+    return (Path.home()/'Library/LaunchAgents'/f'{LABEL}.plist').exists()
 
 
 def login_item(enable):
     if not PACKAGED:raise ValueError('请在安装后的应用中设置登录启动')
+    if WINDOWS:
+        from passport_windows import autostart
+        autostart(enable);return
     if enable and not any(Path(sys.executable).is_relative_to(root) for root in (Path('/Applications'),Path.home()/'Applications')):
         raise ValueError('请先将助手安装到应用程序文件夹')
     target=Path.home()/'Library/LaunchAgents'/f'{LABEL}.plist';domain=f'gui/{os.getuid()}'
@@ -243,14 +321,27 @@ HELP='''首次使用
 
 其他
 Codex、Claude Code 需要自己安装并登录。小智、天气、电台用胸牌自己的 WiFi；没 WiFi 时可通过 USB 借电脑上网。'''
+if WINDOWS:HELP='''首次使用
+用 USB 数据线连上胸牌，在「设备」里选中它，点「配对」。核对胸牌和网页上的配对码一致，在胸牌上按确认。也可以导入在 Mac 上配对后导出的 device.json。
+
+日常使用
+助手在右下角托盘里运行，点图标打开这个网页。插着线走 USB；拔线后进入语音输入、AI 额度等电脑功能，助手会自动改用蓝牙（Windows 提示配对时点「允许」）。
+
+语音输入
+在胸牌「语音输入」页按确认开始说话，再按确认结束，文字粘贴到当前光标处。不用授权、不用装输入法；以管理员身份运行的窗口收不到。
+
+离座锁屏
+Windows 读不到蓝牙信号强度，所以只有防锁屏和立即锁屏，不会按距离自动锁屏。
+
+其他
+Codex、Claude Code 需要自己安装并登录。小智、天气、电台用胸牌自己的 WiFi；没 WiFi 时可通过 USB 借电脑上网。'''
 
 
 def gui(controller,background=False):
     import AppKit as A
     from Foundation import NSObject,NSTimer
     from objc import python_method
-    WIDTH=500;WEB='http://127.0.0.1:8768/'
-    WEB_PAGES=[('菜单自定义','menu'),('状态牌','status'),('倒数日','countdown'),('二维码','qr'),('打开 Mac 程序','mac'),('模拟遥控','remote'),('诊断','diag')]
+    WIDTH=500
     def text(value='',size=13,bold=False,color=None,wrap=False):
         item=A.NSTextField.wrappingLabelWithString_(value) if wrap else A.NSTextField.labelWithString_(value)
         item.setFont_(A.NSFont.boldSystemFontOfSize_(size) if bold else A.NSFont.systemFontOfSize_(size))
@@ -309,11 +400,8 @@ def gui(controller,background=False):
                 if key=='permission':self.fix=self.button('去授权','permissionGuide:');self.fix.setHidden_(True);row.append(self.fix)
                 features.append(stack(row));self.rows[key]=(image,detail)
             # Options
-            self.login=self.switch('登录 Mac 后自动启动助手','login:',(Path.home()/'Library/LaunchAgents'/f'{LABEL}.plist').exists())
-            settings=controller.directory/'live/settings.json';allowed=False
-            try:allowed=bool(json.loads(settings.read_text()).get('ip_location_allowed',False))
-            except (OSError,ValueError):pass
-            ip=self.switch('允许按 IP 定位城市（天气、空气质量）','location:',allowed)
+            self.login=self.switch('登录 Mac 后自动启动助手','login:',login_enabled())
+            ip=self.switch('允许按 IP 定位城市（天气、空气质量）','location:',controller.ip_location_allowed())
             ip_note=text('会向 ipwho.is 发送这台 Mac 的公网 IP。不开也可以在胸牌上说城市名。',11,color=A.NSColor.secondaryLabelColor(),wrap=True)
             # Actions
             # Web settings: one button per section of the assistant's page, opened in the browser.
@@ -377,12 +465,8 @@ def gui(controller,background=False):
                 self.choices.addItemsWithTitles_([d['mac'].upper()+' · '+d['transport']+(' · 已配对' if d['paired'] else '') for d in candidates] or ['未发现胸牌，请用 USB 线连接'])
                 self.choices.selectItemAtIndex_(next((i for i,d in enumerate(candidates) if d['mac']==selected),0))
             self.deviceSelected_(None)
-            self.setRow('voice',bool(deps.get('voice')) if 'voice' in deps else None,'小智识别，文字粘贴到光标处' if deps.get('voice') else '编码组件不可用，请重新安装助手' if 'voice' in deps else '正在检查')
-            self.setRow('codex',True if deps.get('codex') else None,'已安装，可在胸牌「AI 额度」查看用量' if deps.get('codex') else '未安装（可选，需自行安装并登录）' if 'codex' in deps else '正在检查')
-            checked=all(isinstance(deps.get(k),bool) for k in ('accessibility','post_event_access'))
-            missing=([] if not checked or (deps['accessibility'] and deps['post_event_access']) else ['辅助功能'])+(['蓝牙'] if deps.get('bluetooth_denied') else [])
-            self.setRow('permission',None if not checked else not missing,'正在检查' if not checked else '需要授权：'+'、'.join(missing) if missing else '辅助功能、蓝牙已授权')
-            self.fix.setHidden_(not missing)
+            for key,_,ok,detail in features(deps):self.setRow(key,ok,detail)
+            self.fix.setHidden_(features(deps)[-1][2] is not False)
             for item in self.webButtons+self.webItems:item.setEnabled_(state['web'])
             self.toggle.setTitle_('暂停助手' if state['enabled'] else '恢复助手');self.menuToggle.setTitle_(self.toggle.title())
             permission=controller.permission_event()
@@ -444,11 +528,9 @@ def gui(controller,background=False):
             alert=A.NSAlert.alloc().init();alert.setMessageText_('AI Passport 助手使用说明');alert.setInformativeText_(HELP);alert.runModal()
         def webPage_(self,sender):open_url(WEB+'#'+WEB_PAGES[sender.tag()][1])
         def ledger_(self,_):
-            # 语音记账: the CSV passport_services keeps in sync with the badge, opened in Numbers or Excel.
-            path=controller.directory/'记账.csv'
-            if path.exists():A.NSWorkspace.sharedWorkspace().openURL_(A.NSURL.fileURLWithPath_(str(path)));return
-            alert=A.NSAlert.alloc().init();alert.setMessageText_('还没有记账记录')
-            alert.setInformativeText_('在胸牌「语音记账」记一笔，胸牌连上电脑后会自动同步到这里。');alert.runModal()
+            try:controller.ledger()
+            except ValueError as error:
+                alert=A.NSAlert.alloc().init();alert.setMessageText_('还没有记账记录');alert.setInformativeText_(str(error).split('：',1)[-1]);alert.runModal()
         def show_(self,_):self.window.makeKeyAndOrderFront_(None);A.NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
         def quit_(self,_):A.NSApplication.sharedApplication().terminate_(None)
         def applicationShouldTerminateAfterLastWindowClosed_(self,_):return False
@@ -459,20 +541,71 @@ def gui(controller,background=False):
     delegate=Delegate.alloc().init();app.setDelegate_(delegate);app.run()
 
 
+def tray(controller,background=False):
+    """Windows: a tray icon; its window is the web page. The menu shows the state and opens each section."""
+    import webbrowser
+    import pystray
+    from PIL import Image
+    open_page=lambda section='assistant':webbrowser.open(WEB+'#'+section)
+    def page(section):return lambda:open_page(section)
+    def toggle():controller.enabled=not controller.enabled
+    def login(_,item):
+        try:login_item(not login_enabled())
+        except Exception as error:controller.error=str(error) if isinstance(error,ValueError) else '设置开机启动失败'
+    def ledger():
+        try:controller.ledger()
+        except ValueError:open_page()
+    Item=pystray.MenuItem
+    menu=pystray.Menu(Item(lambda _:controller.snapshot()['status'],None,enabled=False),pystray.Menu.SEPARATOR,
+        Item('打开助手',page('assistant'),default=True),Item('网页设置',pystray.Menu(*[Item(title,page(key)) for title,key in WEB_PAGES])),
+        Item('记账表格',ledger),pystray.Menu.SEPARATOR,Item(lambda _:'暂停助手' if controller.enabled else '恢复助手',toggle),
+        Item('开机自动启动',login,checked=lambda _:login_enabled()),Item('退出 AI Passport 助手',lambda icon:icon.stop()))
+    icon=pystray.Icon('ai-passport',Image.open(Path(getattr(sys,'_MEIPASS',Path(__file__).parent/'assets'))/'assistant_icon.png'),'AI Passport 助手',menu)
+    def watch(icon):
+        icon.visible=True
+        if not background:open_page()
+        shown=None
+        while not controller.stop.wait(1):
+            state=controller.snapshot()
+            if (state['status'],state['code'])!=shown:
+                shown=(state['status'],state['code']);icon.title='AI Passport 助手 · '+state['status'];icon.update_menu()
+                # The pairing code is compared on the page; a notification brings it to the front.
+                if state['code']:icon.notify('核对胸牌上的配对码：'+state['code'],'AI Passport 配对')
+    icon.run(watch)
+
+
+def single_instance(lock):
+    if WINDOWS:
+        import msvcrt
+        try:msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1);return True
+        except OSError:return False
+    import fcntl
+    try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);return True
+    except BlockingIOError:return False
+
+
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--background',action='store_true');parser.add_argument('--self-test',type=Path);args=parser.parse_args()
     directory=user_data();os.environ['PASSPORT_DATA_DIR']=str(directory);os.environ['PASSPORT_CONFIG']=str(directory/'device.json');os.environ['SSL_CERT_FILE']=certifi.where()
+    if WINDOWS:
+        # A windowed app's helpers (PPP gateway, ffmpeg, codex.cmd) would each open a console window.
+        # ponytail: one default for every Popen in this process; a helper that needs a console must pass creationflags=0.
+        import functools
+        subprocess.Popen.__init__=functools.partialmethod(subprocess.Popen.__init__,creationflags=subprocess.CREATE_NO_WINDOW)
     lock=(directory/'assistant.lock').open('a')
-    try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-    except BlockingIOError:return
+    if not single_instance(lock):
+        if WINDOWS and not args.background and not args.self_test:
+            import webbrowser;webbrowser.open(WEB+'#assistant')  # opened again: show the running one
+        return
     if args.self_test:
         import bleak,sounddevice,psutil,websockets,cryptography,paho.mqtt.client,serial
+        if WINDOWS:import pystray,PIL,passport_windows
         from passport_device import Device
         gateway=subprocess.run([str(helper('passport-ppp')),'--self-test'],capture_output=True,text=True,timeout=10,check=True)
         result={'version':VERSION,'packaged':PACKAGED,'dependencies':dependencies(),'ppp_self_test':gateway.stdout.strip(),'no_device_opened':True,'no_official_app_installed':True}
         args.self_test.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n');return
     controller=Controller(directory);controller.start()
-    try:gui(controller,args.background)
+    try:(tray if WINDOWS else gui)(controller,args.background)
     finally:controller.close()
 
 

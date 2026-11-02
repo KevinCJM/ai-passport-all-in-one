@@ -9,6 +9,7 @@ import queue
 import select
 import struct
 import subprocess
+import sys
 import threading
 import time
 from passport_paths import helper
@@ -22,8 +23,9 @@ _opus=None
 def opus():
     global _opus
     if _opus is None:
-        bundled=helper('libopus.0.dylib')
-        lib=ctypes.CDLL(str(bundled) if bundled.is_file() else '/opt/homebrew/lib/libopus.0.dylib')
+        name='libopus-0.dll' if sys.platform=='win32' else 'libopus.0.dylib'
+        bundled=helper(name)
+        lib=ctypes.CDLL(str(bundled) if bundled.is_file() else '/opt/homebrew/lib/'+name if sys.platform=='darwin' else name)
         lib.opus_encoder_create.restype=ctypes.c_void_p
         lib.opus_encoder_create.argtypes=[ctypes.c_int32,ctypes.c_int,ctypes.c_int,ctypes.POINTER(ctypes.c_int)]
         lib.opus_encode.argtypes=[ctypes.c_void_p,ctypes.c_char_p,ctypes.c_int,ctypes.c_char_p,ctypes.c_int32]
@@ -105,6 +107,13 @@ class Recognizer:
 def paste(text,keys):
     """Pastes text at the cursor. Returns what puts back the clipboard's former content (unless something else has
     changed it since); it waits for the app to have read the text first."""
+    if sys.platform=='win32':
+        import passport_windows as win
+        saved=win.get_text();win.set_text(text,private=True);mark=win.clipboard_sequence();keys('paste')
+        def restore():
+            time.sleep(1)
+            if saved is not None and win.clipboard_sequence()==mark:win.set_text(saved)
+        return restore
     from AppKit import NSPasteboard,NSPasteboardItem,NSPasteboardTypeString
     board=NSPasteboard.generalPasteboard()
     saved=[{kind:item.dataForType_(kind) for kind in item.types()} for item in board.pasteboardItems() or ()]
@@ -170,6 +179,23 @@ class BluetoothDictation:
         self.services.push(self.status(value,state),self.context)
 
     def key(self,command):
+        """One of 'paste', 'enter', 'delete_line'. Mac: the helper's key codes, through the helper that holds the
+        Accessibility permission. Windows: SendInput from this process."""
+        if sys.platform=='win32':
+            import passport_windows
+            return passport_windows.keys(command)
+        if command=='enter':return self.mac_key('key 36 none')
+        if command=='delete_line':
+            from AppKit import NSWorkspace
+            app=NSWorkspace.sharedWorkspace().frontmostApplication()
+            if app is not None and app.bundleIdentifier() in TERMINALS:
+                # The shell's own line editing: to the end of the line, then delete back to its start.
+                self.mac_key('key 14 ctrl');return self.mac_key('key 32 ctrl')
+            # Text fields and editors: Command-Right to the end of the line, Command-Backspace to its start.
+            self.mac_key('key 124 cmd');return self.mac_key('key 51 cmd')
+        return self.mac_key(command)
+
+    def mac_key(self,command):
         if self.keyboard is None:
             self.keyboard=subprocess.Popen([str(helper('passport-dictation')),'keyboard_daemon'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,text=True,bufsize=1)
@@ -188,17 +214,8 @@ class BluetoothDictation:
         with self.pressing:
             if self.delivery:self.delivery.join(30)
             try:
-                if which==1:self.key('key 36 none');label='已回车'
-                else:
-                    from AppKit import NSWorkspace
-                    app=NSWorkspace.sharedWorkspace().frontmostApplication()
-                    if app is not None and app.bundleIdentifier() in TERMINALS:
-                        # The shell's own line editing: to the end of the line, then delete back to its start.
-                        self.key('key 14 ctrl');self.key('key 32 ctrl')
-                    else:
-                        # Text fields and editors: Command-Right to the end of the line, Command-Backspace to its start.
-                        self.key('key 124 cmd');self.key('key 51 cmd')
-                    label='已删除整行'
+                if which==1:self.key('enter');label='已回车'
+                else:self.key('delete_line');label='已删除整行'
             except PermissionError:return self.publish('fail','需要辅助功能授权')
             except Exception as error:
                 self.stats['error']=type(error).__name__;return self.publish('fail','快捷键失败，请重试')

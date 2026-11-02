@@ -1,4 +1,6 @@
 // PPPoS peer + installed libslirp: uses host sockets, never changes host routes/PF.
+// macOS opens the serial port itself (--serial). Windows cannot poll a COM port with sockets, so there the gateway
+// only listens on loopback (--port) and the assistant copies bytes between the port and that socket.
 #include <slirp/libslirp.h>
 #include <algorithm>
 #include <array>
@@ -10,13 +12,25 @@
 #include <cstdio>
 #include <cstring>
 #include <deque>
+#include <string>
+#include <vector>
+#ifdef _WIN32
+#define poll WSAPoll
+static long readLine(SOCKET fd,uint8_t* data,size_t size) { return recv(fd,reinterpret_cast<char*>(data),int(size),0); }
+static long writeLine(SOCKET fd,const uint8_t* data,size_t size) { return send(fd,reinterpret_cast<const char*>(data),int(size),0); }
+static bool retryable() { const int code=WSAGetLastError();return code==WSAEWOULDBLOCK||code==WSAEINTR; }
+static void closeLine(SOCKET fd) { closesocket(fd); }
+#else
 #include <fcntl.h>
 #include <poll.h>
-#include <string>
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
-#include <vector>
+static long readLine(int fd,uint8_t* data,size_t size) { return ::read(fd,data,size); }
+static long writeLine(int fd,const uint8_t* data,size_t size) { return ::write(fd,data,size); }
+static bool retryable() { return errno==EAGAIN||errno==EINTR; }
+static void closeLine(int fd) { ::close(fd); }
+#endif
 
 using Bytes=std::vector<uint8_t>;
 static volatile std::sig_atomic_t stopping=0;
@@ -28,6 +42,7 @@ static uint16_t crc(const uint8_t* data,size_t size) {
 }
 static uint16_t be16(const uint8_t* p) { return (p[0]<<8)|p[1]; }
 static in_addr ip(const char* text) { in_addr value{}; assert(inet_pton(AF_INET,text,&value)==1); return value; }
+static const slirp_os_socket noLine=slirp_os_socket(-1);
 static const std::array<uint8_t,6> guestMac{2,0,0,0,0,15}, gatewayMac{0x52,0x55,10,77,0,1};
 
 class Peer {
@@ -35,7 +50,7 @@ class Peer {
     Slirp* slirp_{};
     // libslirp retains this pointer; callbacks must outlive every packet and timer.
     SlirpCb callbacks_{};
-    int fd_;
+    slirp_os_socket fd_;
     Bytes frame_,wire_;
     bool escape_{},discard_{},lcpSent_{},lcpAck_{},lcpPeer_{},ipcpSent_{},ipcpAck_{},ipcpPeer_{},up_{};
     uint8_t lcpId_{1},ipcpId_{1};
@@ -49,7 +64,9 @@ class Peer {
         auto& self=*static_cast<Peer*>(opaque); short events=0;
         if(flags&SLIRP_POLL_IN) events|=POLLIN;
         if(flags&SLIRP_POLL_OUT) events|=POLLOUT;
+#ifndef _WIN32
         if(flags&SLIRP_POLL_PRI) events|=POLLPRI;
+#endif
         self.polls_.push_back({fd,events,0}); return self.polls_.size()-1;
     }
     static int getPoll(int index,void* opaque) {
@@ -141,12 +158,12 @@ class Peer {
         } else if(protocol!=0x21) { Bytes rejected{uint8_t(protocol>>8),uint8_t(protocol)};rejected.insert(rejected.end(),payload,payload+std::min<size_t>(size,64));cp(0xc021,8,++lcpId_,rejected); }
     }
 public:
-    explicit Peer(int fd,int forward,int audioForward=0):fd_(fd) {
+    explicit Peer(slirp_os_socket fd,int forward,int audioForward=0):fd_(fd) {
         SlirpConfig config{};config.version=6;config.in_enabled=true;config.vnetwork=ip("10.77.0.0");config.vnetmask=ip("255.255.255.0");
         config.vhost=ip("10.77.0.1");config.vdhcp_start=ip("10.77.0.15");config.vnameserver=ip("10.77.0.3");
         config.if_mtu=config.if_mru=1500;config.disable_host_loopback=true;config.disable_dhcp=true;
         auto& callbacks=callbacks_;
-        callbacks.send_packet=[](const void* data,size_t size,void* opaque)->ssize_t {
+        callbacks.send_packet=[](const void* data,size_t size,void* opaque)->slirp_ssize_t {
             auto& self=*static_cast<Peer*>(opaque);const auto* bytes=static_cast<const uint8_t*>(data);
             if(size>=34&&bytes[12]==8&&bytes[13]==0&&self.up_) { ++self.ipOut_;self.packet(0x21,Bytes(bytes+14,bytes+size)); }return size;
         };
@@ -156,7 +173,7 @@ public:
         callbacks.timer_mod=[](void* value,int64_t at,void*) { static_cast<Timer*>(value)->at=at; };
         callbacks.register_poll_socket=[](slirp_os_socket,void*){};callbacks.unregister_poll_socket=[](slirp_os_socket,void*){};callbacks.notify=[](void*){};
         slirp_=slirp_new(&config,&callbacks,this);assert(slirp_);
-        if(fd_>=0){lcpSent_=true;cp(0xc021,1,lcpId_,lcpOptions_);}
+        if(fd_!=noLine){lcpSent_=true;cp(0xc021,1,lcpId_,lcpOptions_);}
         if(forward) assert(slirp_add_hostfwd(slirp_,0,ip("127.0.0.1"),forward,ip("10.77.0.15"),80)==0);
         if(audioForward) assert(slirp_add_hostfwd(slirp_,0,ip("127.0.0.1"),audioForward,ip("10.77.0.15"),19546)==0);
     }
@@ -194,10 +211,10 @@ public:
         while(!stopping) {
             polls_.clear();polls_.push_back({fd_,short(POLLIN|(wire_.empty()?0:POLLOUT)),0});uint32_t timeout=20;
             slirp_pollfds_fill_socket(slirp_,&timeout,addPoll,this);const int result=poll(polls_.data(),polls_.size(),std::min<uint32_t>(timeout,20));
-            if(result<0&&errno!=EINTR) break;
+            if(result<0&&!retryable()) break;
             if(polls_[0].revents&(POLLHUP|POLLERR)) break;
-            if(polls_[0].revents&POLLIN) { uint8_t data[4096];const auto size=::read(fd_,data,sizeof(data));if(size==0) break;if(size>0)input(data,size); }
-            if((polls_[0].revents&POLLOUT)&&!wire_.empty()) { const auto size=::write(fd_,wire_.data(),wire_.size());if(size>0)wire_.erase(wire_.begin(),wire_.begin()+size);else if(size<0&&errno!=EAGAIN&&errno!=EINTR)break; }
+            if(polls_[0].revents&POLLIN) { uint8_t data[4096];const auto size=readLine(fd_,data,sizeof(data));if(size==0) break;if(size>0)input(data,size);else if(!retryable())break; }
+            if((polls_[0].revents&POLLOUT)&&!wire_.empty()) { const auto size=writeLine(fd_,wire_.data(),wire_.size());if(size>0)wire_.erase(wire_.begin(),wire_.begin()+size);else if(size<0&&!retryable())break; }
             slirp_pollfds_poll(slirp_,result<0,getPoll,this);
             const auto now=nanos();auto timers=timers_;
             for(auto* timer:timers) if(timer->at>=0&&timer->at<=now/1000000) { timer->at=-1;timer->callback(timer->argument); }
@@ -212,23 +229,39 @@ public:
 };
 
 int main(int argc,char** argv) {
-    signal(SIGPIPE,SIG_IGN);signal(SIGTERM,[](int){stopping=1;});signal(SIGINT,[](int){stopping=1;});
-    if(argc==2&&!strcmp(argv[1],"--self-test")) { const char* sample="123456789";assert(uint16_t(~crc(reinterpret_cast<const uint8_t*>(sample),9))==0x906e);Peer test(-1,0);test.testFraming();test.testRestart();puts("PPP_FCS_FRAMING_OK cases=67");return 0; }
+#ifdef _WIN32
+    WSADATA winsock{};if(WSAStartup(MAKEWORD(2,2),&winsock))return 1;
+#else
+    signal(SIGPIPE,SIG_IGN);
+#endif
+    signal(SIGTERM,[](int){stopping=1;});signal(SIGINT,[](int){stopping=1;});
+    if(argc==2&&!strcmp(argv[1],"--self-test")) { const char* sample="123456789";assert(uint16_t(~crc(reinterpret_cast<const uint8_t*>(sample),9))==0x906e);Peer test(noLine,0);test.testFraming();test.testRestart();puts("PPP_FCS_FRAMING_OK cases=67");return 0; }
     if((argc-1)%2)return 2;
-    int port=19547,forward=18762,audioForward=0,fd=-1;std::string serial;
+    int port=19547,forward=18762,audioForward=0;slirp_os_socket fd=noLine;std::string serial;
     for(int i=1;i+1<argc;i+=2) { if(!strcmp(argv[i],"--port"))port=atoi(argv[i+1]);else if(!strcmp(argv[i],"--forward"))forward=atoi(argv[i+1]);else if(!strcmp(argv[i],"--audio-forward"))audioForward=atoi(argv[i+1]);else if(!strcmp(argv[i],"--serial"))serial=argv[i+1];else return 2; }
     if(port<1024||port>65535||forward<1024||forward>65535) return 2;
     if(!serial.empty()) {
+#ifdef _WIN32
+        return 2;
+#else
         if(serial.rfind("/dev/cu.",0)!=0) return 2;
         fd=open(serial.c_str(),O_RDWR|O_NOCTTY|O_NONBLOCK);if(fd<0)return 1;
         if(ioctl(fd,TIOCEXCL)) { close(fd);return 1; }
         termios attributes{};if(tcgetattr(fd,&attributes))return 1;cfmakeraw(&attributes);attributes.c_cflag|=CLOCAL|CREAD;attributes.c_cflag&=~HUPCL;cfsetspeed(&attributes,B115200);if(tcsetattr(fd,TCSANOW,&attributes))return 1;
+#endif
     } else {
-        const int server=socket(AF_INET,SOCK_STREAM,0);int yes=1;setsockopt(server,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof(yes));
+        const auto server=socket(AF_INET,SOCK_STREAM,0);int yes=1;
+#ifndef _WIN32
+        setsockopt(server,SOL_SOCKET,SO_REUSEADDR,reinterpret_cast<const char*>(&yes),sizeof(yes));
+#endif
         sockaddr_in address{};address.sin_family=AF_INET;address.sin_addr=ip("127.0.0.1");address.sin_port=htons(port);
         if(bind(server,reinterpret_cast<sockaddr*>(&address),sizeof(address))||listen(server,1))return 1;
-        puts("PPP_GATEWAY_READY");fflush(stdout);fd=accept(server,nullptr,nullptr);close(server);if(fd<0)return 1;
+        puts("PPP_GATEWAY_READY");fflush(stdout);fd=accept(server,nullptr,nullptr);closeLine(server);if(fd==noLine)return 1;
+#ifdef _WIN32
+        u_long nonblocking=1;ioctlsocket(fd,FIONBIO,&nonblocking);
+#else
         fcntl(fd,F_SETFL,fcntl(fd,F_GETFL)|O_NONBLOCK);
+#endif
     }
-    { Peer peer(fd,forward,audioForward);peer.run(); }close(fd);return 0;
+    { Peer peer(fd,forward,audioForward);peer.run(); }closeLine(fd);return 0;
 }

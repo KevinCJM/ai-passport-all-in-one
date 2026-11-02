@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 """Physical AI Passport companion. Prefers USB and falls back to paired BLE."""
-import asyncio,collections,http.client,json,pathlib,queue,signal,struct,subprocess,threading,time,urllib.request
+import asyncio,collections,http.client,json,pathlib,queue,signal,struct,subprocess,sys,threading,time,urllib.request
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from passport_services import Services
 from passport_device_cloud import DeviceXiaoZhi
-from passport_paths import config_file, helper, user_data, PACKAGED
+from passport_paths import config_file, user_data, PACKAGED
 from passport_identity import paired_port
-from passport_computer_link import ble_request,UsbReports,RPC_SERVICE,RPC_READ,LinkBusy
+from passport_computer_link import ble_request,start_gateway,UsbReports,RPC_SERVICE,RPC_READ,LinkBusy
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 HTTP=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 SERVICE='5d67d66a-70ed-4e30-9f6c-4fbddce3b010'
 KEY='5d67d66a-70ed-4e30-9f6c-4fbddce3b011'
 AUDIO='5d67d66a-70ed-4e30-9f6c-4fbddce3b012'
 ACK='5d67d66a-70ed-4e30-9f6c-4fbddce3b013'
+UI_PORT=8768
+DEVICE=None     # the connected badge, set by the assistant (or __main__)
+ASSISTANT=None  # passport_assistant.Controller: the page's 电脑助手 section
 
 def connected_passport(expected):
+ if sys.platform!='darwin':return None  # Windows: a connected badge keeps advertising, the scan finds it
  from CoreBluetooth import CBUUID
  from bleak.backends.corebluetooth.CentralManagerDelegate import CentralManagerDelegate
  from bleak.backends.device import BLEDevice
@@ -74,6 +78,8 @@ class Radio:
      try:
       await client.connect()
       # Reading the encrypted key starts pairing; leave time to accept the macOS pairing prompt.
+      # Windows does not pair on its own when a read needs encryption: ask for it (bleak accepts the confirmation).
+      if sys.platform=='win32':await client.pair()
       async with asyncio.timeout(60):
        await client.read_gatt_char(KEY)
        await client.read_gatt_char(RPC_READ)
@@ -145,7 +151,7 @@ class Device:
  def start_gateway(self):
   from serial.tools import list_ports
   self.config['port']=paired_port(self.config['mac'],list_ports.comports())
-  self.gateway=subprocess.Popen([str(helper('passport-ppp')),'--serial',self.config['port'],'--forward',str(self.config['http_forward']),'--audio-forward',str(self.config['audio_forward'])],stdout=self.gateway_log,stderr=subprocess.STDOUT)
+  self.gateway=start_gateway(self.config['port'],self.config['http_forward'],self.config['audio_forward'],self.gateway_log)
  def request(self,path,data=None):
   if self.transport=='ble':return self.radio.request(self.token,path,data)
   if self.transport!='usb':raise ConnectionError('device transport not ready')
@@ -300,12 +306,24 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 .out{font-size:14px}.out.ok{color:var(--accent)}.out.err{color:var(--bad)}
 .note{font-size:13px;color:var(--warn);background:#2a2618;border-radius:8px;padding:6px 10px;margin:6px 0 10px}
 .count{font-size:12px;color:var(--muted)}.count.err{color:var(--bad)}
+.code{font:600 34px/1.2 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.25em;color:var(--accent);margin:4px 0 8px}
+.feat{display:grid;grid-template-columns:22px 76px 1fr;gap:6px;align-items:center;margin:4px 0}.feat b{font-weight:600}
 .remote button{min-width:64px}pre{white-space:pre-wrap;font-size:12px;color:var(--muted);max-height:420px;overflow:auto}
 </style>
 <main>
 <header><h1>AI Passport 设置</h1><span id=conn class=pill>正在检查连接…</span></header>
-<p class=lead>这些内容保存在胸牌里。胸牌通过 USB 或蓝牙连着这台 Mac 时才能读取和保存。</p>
-<nav><a href="#menu">菜单</a><a href="#status">状态牌</a><a href="#countdown">倒数日</a><a href="#qr">二维码</a><a href="#mac">打开 Mac 程序</a><a href="#remote">模拟遥控</a><a href="#diag">诊断</a></nav>
+<p class=lead>胸牌的设置保存在胸牌里，胸牌通过 USB 或蓝牙连着这台电脑时才能读取和保存。</p>
+<nav><a href="#assistant" class=assistant hidden>电脑助手</a><a href="#menu">菜单</a><a href="#status">状态牌</a><a href="#countdown">倒数日</a><a href="#qr">二维码</a><a href="#mac">打开电脑程序</a><a href="#remote">模拟遥控</a><a href="#diag">诊断</a></nav>
+
+<section id=assistant class=assistant hidden><h2>电脑助手</h2>
+<div class=row><span id=aStatus class=pill>正在检查…</span></div><p id=aMessage class=hint></p><div id=aCode class=code hidden></div>
+<h3>设备</h3><div class=row><select id=aDevices aria-label=胸牌 style="min-width:300px" onchange="pairButton()"></select><button id=aPair class=primary onclick="assist({action:'pair',mac:$('#aDevices').value})">配对</button>
+<button onclick="$('#aImport').click()">导入配对文件…</button><input type=file id=aImport accept=".json,application/json" hidden onchange="importPair(this)"></div>
+<h3>电脑功能</h3><div id=aFeatures></div>
+<h3>选项</h3><label class=row><input type=checkbox id=aLogin onchange="assist({action:'login',on:this.checked})"> 开机后自动启动助手</label>
+<label class=row><input type=checkbox id=aIp onchange="assist({action:'location',on:this.checked})"> 允许按 IP 定位城市（天气、空气质量）</label><p class=hint>会向 ipwho.is 发送这台电脑的公网 IP。不开也可以在胸牌上说城市名。</p>
+<div class=actions><button onclick="assist({action:'ledger'})">记账表格</button><button id=aToggle onclick="assist({action:'toggle'})">暂停助手</button><button onclick="$('#aHelp').hidden=!$('#aHelp').hidden">使用说明</button><span id=aResult class=out></span></div>
+<pre id=aHelp hidden></pre></section>
 
 <section id=menu><h2>菜单自定义</h2><p class=muted>选择显示哪些功能、怎么分页和排序，保存后胸牌菜单马上更新。隐藏的功能仍可以用语音打开。</p><div id=menu-editor></div></section>
 
@@ -320,7 +338,7 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 <section id=qr><h2>二维码</h2><p class=muted>最多 4 个。内容可以是网址、微信或支付宝收款码里的链接、任意文字，最多 300 字节（约 100 个汉字）。WiFi 二维码由胸牌按已连接的 WiFi 自动生成。</p>
 <div id=codes class=rows></div><div class=actions><button class=primary onclick="saveCodes()">保存到胸牌</button><button onclick="loadCodes()">重新读取</button><span id=codeResult class=out></span></div></section>
 
-<section id=mac><h2>打开 Mac 程序</h2><p class=muted>对胸牌说「你好小智」，等它开始听，再说「打开 Mac 的 xxx」。这里设的口令优先，没设的按程序名自动找。胸牌自带的功能名（计算器、日历、天气…）仍打开胸牌上的，要开电脑上的请说「打开 Mac 的计算器」。最多 40 条，口令最多 12 个字。</p>
+<section id=mac><h2>打开电脑程序</h2><p class=muted>对胸牌说「你好小智」，等它开始听，再说「打开电脑的 xxx」（Mac 上也可以说「打开 Mac 的 xxx」）。这里设的口令优先，没设的按程序名自动找。胸牌自带的功能名（计算器、日历、天气…）仍打开胸牌上的，要开电脑上的请说「打开电脑的计算器」。最多 40 条，口令最多 12 个字。</p>
 <div id=macRows class=rows></div><datalist id=macApps></datalist>
 <div class=actions><button onclick="macRow()">＋ 添加一条</button><button class=primary onclick="saveMac()">保存</button><span id=macResult class=out></span></div>
 <h3>胸牌最近听到的</h3><p class=hint>没打开对的程序，可以把听到的词设为口令。</p><div id=macHeard class=rows></div></section>
@@ -383,8 +401,25 @@ macLoad();
 
 async function act(command){const out=$('#actResult');try{await post('/api/action',{command});say(out,'')}catch(e){say(out,'胸牌没有响应','err')}}
 async function copyDiag(){try{await navigator.clipboard.writeText($('#state').textContent);say($('#diagResult'),'已复制')}catch(e){say($('#diagResult'),'复制失败，请手动选中复制','err')}}
-async function poll(){try{const s=await (await fetch('/api/state')).json(),c=$('#conn');const ready=s.link_ready,via=s.transport=='usb'?'USB':s.transport=='ble'?'蓝牙':'';c.textContent=ready?'胸牌已连接 · '+via:'胸牌未连接'+(via?'（正在通过'+via+'连接）':'');c.className='pill '+(ready?'ok':'bad');$('#state').textContent=JSON.stringify(s,null,2)}catch(e){$('#conn').textContent='助手未响应';$('#conn').className='pill bad'}}
+// The badge connects after the page opened (or comes back): read the sections that could not be read yet.
+let wasReady;
+async function poll(){try{const s=await (await fetch('/api/state')).json(),c=$('#conn');const ready=!!s.link_ready;
+ if(ready&&wasReady===false){if(!loaded.labels)loadLabels();if(!loaded.events)loadEvents();if(!loaded.codes)loadCodes();if(!macApps.length)macLoad()}wasReady=ready;const via=s.transport=='usb'?'USB':s.transport=='ble'?'蓝牙':'';c.textContent=ready?'胸牌已连接 · '+via:'胸牌未连接'+(via?'（正在通过'+via+'连接）':'');c.className='pill '+(ready?'ok':'bad');$('#state').textContent=JSON.stringify(s,null,2)}catch(e){$('#conn').textContent='助手未响应';$('#conn').className='pill bad'}}
 poll();setInterval(poll,2000);
+// 电脑助手: pairing, the computer's features and options (the Windows assistant's only window; the Mac window has them too).
+async function assist(body){const out=$('#aResult');try{await post('/api/assistant',body);say(out,'');assistant()}catch(e){say(out,e.message,'err');assistant()}}
+async function importPair(input){const file=input.files[0];input.value='';if(!file)return;let config;try{config=JSON.parse(await file.text())}catch(e){return say($('#aResult'),'配对文件无效','err')}assist({action:'import',config})}
+let aShown='';
+function pairButton(){const o=$('#aDevices').selectedOptions[0],b=$('#aPair');b.disabled=!(o&&o.dataset.port);b.textContent=o&&o.dataset.paired?(o.dataset.port?'重新配对':'已配对'):'配对'}
+async function assistant(){try{const s=await (await fetch('/api/assistant')).json();if(!s.status)return;
+ document.querySelectorAll('.assistant').forEach(e=>e.hidden=false);const c=$('#aStatus');c.textContent=s.status;c.className='pill '+(s.connected?'ok':'bad');
+ $('#aMessage').textContent=s.code?'核对胸牌屏幕上的配对码，一致就在胸牌上按确认。':s.error;$('#aCode').textContent=[...s.code].join(' ');$('#aCode').hidden=!s.code;
+ const list=JSON.stringify(s.devices);if(list!=aShown){aShown=list;const keep=$('#aDevices').value;$('#aDevices').replaceChildren(...(s.devices.length?s.devices:[{}]).map(d=>{const o=document.createElement('option');o.value=d.mac||'';o.textContent=d.mac?d.mac.toUpperCase()+' · '+d.transport+(d.paired?' · 已配对':''):'未发现胸牌，请用 USB 线连接';o.dataset.port=d.port?1:'';o.dataset.paired=d.paired?1:'';o.selected=d.mac==keep;return o}))}
+ pairButton();
+ $('#aFeatures').replaceChildren(...s.features.map(([name,ok,text])=>{const d=document.createElement('div');d.className='feat';d.innerHTML='<span></span><b></b><span class=hint></span>';d.children[0].textContent=ok===true?'✅':ok===false?'⚠️':'○';d.children[1].textContent=name;d.children[2].textContent=text;return d}));
+ $('#aLogin').checked=s.login;$('#aIp').checked=s.ip_location;$('#aToggle').textContent=s.enabled?'暂停助手':'恢复助手';$('#aHelp').textContent=s.help}
+ catch(e){$('#aStatus').textContent='助手没有响应';$('#aStatus').className='pill bad'}}
+assistant();setInterval(assistant,2000);
 // Opened at #status etc. from the assistant window: the menu editor loads above and grows, so keep the section in view
 // until loading settles or the user scrolls.
 const target=location.hash&&document.getElementById(location.hash.slice(1));
@@ -396,9 +431,11 @@ class Handler(BaseHTTPRequestHandler):
   raw=data.encode() if isinstance(data,str) else json.dumps(data,ensure_ascii=False).encode();self.send_response(code);self.send_header('Content-Type',kind);self.send_header('Content-Length',str(len(raw)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(raw)
  def do_GET(self):
   try:
-   if self.headers.get('Host')!='127.0.0.1:'+str(DEVICE.config['ui_port']):return self.send(403,{'error':'host'})
+   if self.headers.get('Host')!='127.0.0.1:%d'%UI_PORT:return self.send(403,{'error':'host'})
    if self.path=='/':return self.send(200,PAGE,'text/html;charset=utf-8')
-   if self.path=='/menu-editor.js':return self.send(200,(pathlib.Path(__file__).parent/'passport_menu.js').read_text(), 'application/javascript;charset=utf-8')
+   if self.path=='/menu-editor.js':return self.send(200,(pathlib.Path(__file__).parent/'passport_menu.js').read_text(encoding='utf-8'), 'application/javascript;charset=utf-8')
+   if self.path=='/api/assistant':return self.send(200,ASSISTANT.web_state() if ASSISTANT else {})
+   if DEVICE is None:return self.send(503,{'error':'胸牌未连接'})
    if self.path=='/api/menu' or self.path in {f'/api/menu/catalog?group={i}' for i in range(5)}:return self.send(200,DEVICE.request(self.path[4:]))
    if self.path=='/api/state':return self.send(200,DEVICE.snapshot())
    if self.path=='/api/services':return self.send(200,DEVICE.services.snapshot())
@@ -420,13 +457,15 @@ class Handler(BaseHTTPRequestHandler):
   except Exception as error:return self.send(500,{'error':str(error) if self.path.startswith('/api/menu') else type(error).__name__})
  def do_POST(self):
   try:
-   if self.headers.get('Host')!='127.0.0.1:'+str(DEVICE.config['ui_port']):return self.send(403,{'error':'host'})
-   origin=self.headers.get('Origin');allowed='http://127.0.0.1:'+str(DEVICE.config['ui_port'])
+   if self.headers.get('Host')!='127.0.0.1:%d'%UI_PORT:return self.send(403,{'error':'host'})
+   origin=self.headers.get('Origin');allowed='http://127.0.0.1:%d'%UI_PORT
    if origin and origin!=allowed: return self.send(403,{'error':'origin'})
    if self.headers.get('Content-Type','').split(';')[0]!='application/json':return self.send(415,{'error':'content type'})
    size=int(self.headers.get('Content-Length','0'))
    if size<=0 or size>16384:raise ValueError('invalid size')
    data=json.loads(self.rfile.read(size))
+   if self.path=='/api/assistant' and ASSISTANT:return self.send(200,ASSISTANT.web_action(data))
+   if DEVICE is None:return self.send(503,{'error':'胸牌未连接'})
    if self.path=='/api/action':
     # Like the real keys: long Up/Down do nothing on Home (the raw commands would open the hotspot / settings).
     result=0 if data['command'] in ('ap_on','settings') and DEVICE.state.get('app')==0 else DEVICE.command(data['command'])
@@ -439,10 +478,11 @@ class Handler(BaseHTTPRequestHandler):
    elif self.path=='/api/mac-open':result={'note':DEVICE.services.mac.open_path(data['path'])}
    else:return self.send(404,{'error':'not found'})
    return self.send(200,result)
+  except ValueError as error:return self.send(400 if self.path=='/api/assistant' else 500,{'error':str(error) if self.path in ('/api/menu','/api/assistant') else 'ValueError'})
   except Exception as error:return self.send(500,{'error':str(error) if self.path=='/api/menu' else type(error).__name__})
 if __name__=='__main__':
- DEVICE=Device();SERVER=ThreadingHTTPServer(('127.0.0.1',DEVICE.config['ui_port']),Handler)
- print('PHYSICAL_PASSPORT_READY http://127.0.0.1:'+str(DEVICE.config['ui_port']),flush=True)
+ DEVICE=Device();SERVER=ThreadingHTTPServer(('127.0.0.1',UI_PORT),Handler)
+ print('PHYSICAL_PASSPORT_READY http://127.0.0.1:%d'%UI_PORT,flush=True)
  def stop(*_):threading.Thread(target=SERVER.shutdown,daemon=True).start()
  signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)
  try:SERVER.serve_forever()

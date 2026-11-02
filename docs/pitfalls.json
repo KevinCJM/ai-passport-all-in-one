@@ -275,6 +275,50 @@
         "C3模拟器xiaozhi_code_*截图",
         "Mac测试用arm64 Python"
       ]
+    },
+    {
+      "id": "P07",
+      "title": "assistant_platform_split_hidden_contracts",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "serial_port_left_open",
+        "windows_false_screen_lock",
+        "gbk_default_encoding",
+        "console_windows"
+      ],
+      "symptoms": [
+        "Windows 网关退出后重启失败：串口仍被上一个 SerialBridge 占着",
+        "Windows 读不到 RSSI，离座锁屏误以为离开而锁屏",
+        "Windows 默认 GBK，读 passport_menu.js 等 UTF-8 文件报错",
+        "窗口版 exe 每启动一个助手子进程就弹一个控制台窗口"
+      ],
+      "trigger_actions": [
+        "修改 passport_computer_link.SerialBridge、guard_rssi、打包选项或子进程启动方式"
+      ],
+      "related_paths": [
+        "scripts/passport_computer_link.py",
+        "scripts/passport_services.py",
+        "scripts/build_passport_assistant_windows.py",
+        "scripts/passport_assistant.py"
+      ],
+      "affected_modules": [
+        "computer_assistant"
+      ],
+      "blast_radius": [
+        "Windows 助手"
+      ],
+      "check_before_edit": [
+        "SerialBridge.poll 在任一端结束时都要关串口和网关",
+        "Windows 上 guard_rssi 返回 'usb'",
+        "打包时 --python-option 'X utf8'，源码运行设 PYTHONUTF8=1",
+        "main() 在 Windows 给 Popen 默认 CREATE_NO_WINDOW",
+        "Mac 仍由网关直接打开 /dev/cu.*（TIOCEXCL），桥接只在 Windows"
+      ],
+      "safe_observation_methods": [
+        "tests/test_passport_windows.py（pty 代替 COM 口）",
+        "Mac 真机上强制 bridge=True 跑 Controller"
+      ]
     }
   ]
 }

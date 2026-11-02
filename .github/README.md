@@ -80,7 +80,7 @@ AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个�
 
 不支持语音添加、删除或编辑指标；仍可语音打开宏观雷达。每次只更新当前页，换页会取消旧请求。断网可查看各页上次成功的数据和各页最近缓存的一条走势。日期表示数据所属期，12/60期表示有效观测点数；黄金、白银ETF显示持仓吨数。美国数据来自 FRED，中国与商品使用东方财富、金十公开端点。详细口径与验证记录见 [宏观雷达](../docs/macro-radar.md)。
 
-> **平台说明：** 编译、刷机和小助手目前只在 macOS 上测试过。小助手没有 Windows 版；依赖助手的 USB 联网、语音输入、AI 额度和电脑监控等功能需使用 Mac。胸牌的独立 WiFi 功能不受影响；PPT 翻页通过胸牌自身的蓝牙键盘连接，不需要小助手。
+> **平台说明：** 编译和刷机目前只在 macOS 上测试过。电脑助手源码已支持 Windows 10/11（x64，预览），但 Windows 版还没有在真机上验收，详见下文「Windows 版」。胸牌的独立 WiFi 功能不受影响；PPT 翻页通过胸牌自身的蓝牙键盘连接，不需要助手。
 
 ## 目录
 
@@ -95,11 +95,12 @@ scripts/build_passport_suite.sh 编译脚本（参数 device）
 scripts/fetch_deps.sh           下载固定版本的依赖到 deps/
 scripts/generate_passport_font.py  按用到的汉字重新生成字体（可选，需要 Pillow）
 data/international-cities.json  海外城市维护源（generate_passport_cities.py 同步生成固件及手机城市表）
-scripts/passport_menu.js        手机网页与 Mac 助手共用的离线菜单编辑器
-scripts/passport_*.py           Mac 助手（入口 passport_assistant.py）
-scripts/*.cpp                   Mac 助手的两个原生小工具：语音输入粘贴、USB PPP 网关
+scripts/passport_menu.js        手机网页与电脑助手共用的离线菜单编辑器
+scripts/passport_*.py           电脑助手（入口 passport_assistant.py；Windows 专用部分在 passport_windows.py）
+scripts/*.cpp                   助手的原生小工具：Mac 语音输入粘贴、USB PPP 网关（Mac / Windows 共用）
 scripts/build_passport_assistant.py  把 Mac 助手打包成 .app 和 .pkg
-tests/                          Mac 助手与固件数据解析的宿主测试
+scripts/build_passport_assistant_windows.py  把 Windows 助手打包成 zip（配合 build_windows_helpers.sh，在 CI 上跑）
+tests/                          电脑助手与固件数据解析的宿主测试
 ```
 
 ## 下载固件
@@ -174,9 +175,9 @@ python -m esptool --chip esp32c3 -p PORT -b 921600 write-flash \
 - 按屏幕提示用手机连上胸牌的配网热点，在网页里选择 WiFi；
 - 和电脑配合的 API token 由胸牌第一次开机时随机生成。
 
-## Mac 助手
+## 电脑助手（Mac / Windows）
 
-`scripts/passport_assistant.py` 是 Mac 上的配套程序，当前源码版本为 `0.1.8-preview`。运行后在菜单栏显示图标，设置页面在 http://127.0.0.1:8768/ 。
+`scripts/passport_assistant.py` 是电脑上的配套程序，当前源码版本为 `0.1.9-preview`。Mac 上在菜单栏显示图标；Windows 上在任务栏右下角托盘显示图标。设置页面都在 http://127.0.0.1:8768/ ，助手一启动就能打开，最上面的「电脑助手」一节可以配对、查看状态和改选项（Windows 版没有单独的窗口，这个网页就是它的界面）。
 
 窗口和菜单栏里的「网页设置」按钮会直接打开设置页面的对应部分。其中「模拟遥控」提供上、下、确认、长按上、长按下、长按确认六个按钮，效果和按胸牌上的键一样；「诊断」显示助手和胸牌的连接状态，可一键复制发给开发者。
 
@@ -189,8 +190,8 @@ python -m esptool --chip esp32c3 -p PORT -b 921600 write-flash \
 | 语音输入 | 胸牌录音，交给小智识别，再把文字粘贴到当前光标处（`mac_dictation_bridge.cpp`） |
 | AI 额度 | 显示 Codex 和 Claude Code 的用量，需要你自己安装并登录这两个工具 |
 | 电脑监控 | CPU、内存、磁盘、网速、电池 |
-| 离座锁屏 | 根据蓝牙信号强弱锁屏 |
-| 打开 Mac 程序 | 对胸牌说「打开 Mac 的微信」，口令可以在设置页自定义 |
+| 离座锁屏 | 根据蓝牙信号强弱锁屏（Windows 读不到信号强度，只有防锁屏和立即锁屏） |
+| 打开电脑程序 | 对胸牌说「打开电脑的微信」（Mac 上也可以说「打开 Mac 的微信」），口令可以在设置页自定义 |
 | USB 联网 | 插着 USB 线时，通过 PPP 共享电脑的网络（`passport_ppp_gateway.cpp`） |
 | 蓝牙连接 | 上面这些电脑功能在拔掉 USB 线后自动改走蓝牙 |
 
@@ -204,7 +205,9 @@ python -m esptool --chip esp32c3 -p PORT -b 921600 write-flash \
 
 **不需要助手：** 天气、财经、电台等通过胸牌自己的 WiFi 使用；时钟、计时、手电筒等本地工具无需网络。PPT 翻页是胸牌直接当蓝牙键盘连电脑，也不需要助手。
 
-助手只支持 macOS，没有 Windows 版。需要 macOS 15 以上、Apple Silicon、Xcode Command Line Tools，以及 Homebrew 装的 `opus` 和 `libslirp`。
+### Mac 版
+
+需要 macOS 15 以上、Apple Silicon、Xcode Command Line Tools，以及 Homebrew 装的 `opus` 和 `libslirp`。
 
 ```bash
 brew install opus libslirp
@@ -221,6 +224,21 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 **首次配对：** 用 USB 数据线连接胸牌，按助手的提示在胸牌上核对配对码，然后按确认键。配对信息、设置和日志都保存在 `~/Library/Application Support/AI Passport/`，不在仓库里。
 
+### Windows 版（预览）
+
+支持 Windows 10/11 x64。胸牌固件不用改，和 Mac 用同一套 USB / 蓝牙协议；在 Mac 上导出的 `device.json` 也可以在网页上「导入配对文件」。
+
+- **获取**：在 GitHub 的 Actions 里运行「Windows assistant」工作流（或推送 `assistant-v*` 标签），产物里有 zip。解压后双击 `AI Passport Assistant.exe`。程序没有代码签名，第一次运行时 SmartScreen 会提示，点「更多信息 › 仍要运行」。
+- **开机启动**：在网页或托盘菜单里勾选，写入当前用户的注册表启动项，不需要管理员权限。
+- **数据目录**：`%APPDATA%\AI Passport\`。
+- **语音输入**：用 Ctrl+V 粘贴到光标处，不用授权；以管理员身份运行的窗口收不到，这是 Windows 的限制。粘贴的内容不进入剪贴板历史。
+- **离座锁屏**：Windows 读不到蓝牙信号强度，所以只有防锁屏和立即锁屏，不会按距离自动锁屏。
+- **AI 额度**：Codex 需要在 PATH 上；Claude Code 读 `%USERPROFILE%\.claude\.credentials.json`。
+- **从源码运行**：装 Python 3.12，`pip install -r scripts/requirements-assistant-windows.txt`，在 MSYS2 UCRT64 里运行 `bash scripts/build_windows_helpers.sh` 编译 PPP 网关和 ffmpeg，再执行 `set PYTHONUTF8=1` 和 `python scripts\passport_assistant.py`。
+- **还没验证**：Windows 真机上的 USB 配对、蓝牙配对、语音输入粘贴。Windows 用的串口桥接通路已在 Mac 上用真机测过。
+
+设计说明见 [Windows 支持设计](../docs/windows-assistant.md)。
+
 测试：`cd tests && ../.venv/bin/python -m unittest`
 
 宏观数据解析与缓存回归：`python3 -m unittest discover -s tests -p 'test_passport_macro*.py' -v`，需要本机 C++ 编译器；测试使用 ASan/UBSan。
@@ -236,4 +254,4 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 - 状态图标：来自 Font Awesome 5
 - 城市坐标：GeoNames（CC BY 4.0），来源见 [海外城市支持](../docs/international-cities.md)
 - `deps/` 里的各个组件
-- 打包后的 Mac 助手里的 FFmpeg、LAME、libopus、libslirp 和各个 Python 包，许可证文件随安装包一起附带
+- 打包后的 Mac / Windows 助手里的 FFmpeg、LAME、libopus、libslirp（及 GLib 等依赖）和各个 Python 包，许可证文件随安装包一起附带

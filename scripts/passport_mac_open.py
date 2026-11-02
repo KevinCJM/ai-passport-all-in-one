@@ -3,12 +3,22 @@
 Names come from the bundles themselves (file name, CFBundleName/DisplayName, the Chinese InfoPlist names), plus a
 few spoken names the bundles lack (谷歌浏览器 -> Google Chrome) and the user's own words, set on the assistant's page
 and kept in settings.json "mac_app_aliases" ({"派查姆": "/Users/.../PyCharm Professional Edition.app"}; a program's
-name works as well as its path). What it heard and found is kept in details['mac_open'] to help add words."""
+name works as well as its path). What it heard and found is kept in details['mac_open'] to help add words.
+
+Windows: the Start menu's programs (Get-StartApps: desktop and Store apps, named as the menu shows them, 微信 on a
+Chinese system), opened through shell:AppsFolder by their app id, which takes the place of the path."""
+import json
+import os
 import plistlib
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
+
+WINDOWS = sys.platform == 'win32'
+HOST = '电脑' if WINDOWS else 'Mac'  # in the notes the badge shows
+SKIP = re.compile(r'uninstall|卸载|readme|帮助|说明|官网|website', re.I)  # Start-menu entries that are no program
 
 FOLDERS = [Path('/Applications'), Path('/Applications/Utilities'), Path('/System/Applications'),
            Path('/System/Applications/Utilities'), Path.home()/'Applications']
@@ -56,8 +66,27 @@ def chinese_names(app):
     return [n for n in names if isinstance(n, str) and n.strip()]
 
 
+def start_apps():
+    script = '[Console]::OutputEncoding=[Text.Encoding]::UTF8;Get-StartApps|ConvertTo-Json -Compress'
+    raw = subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', script], capture_output=True, timeout=30).stdout
+    items = json.loads(raw.decode('utf-8-sig') or '[]')
+    found = {}
+    for item in [items] if isinstance(items, dict) else items:
+        name, app = item.get('Name'), item.get('AppID')
+        if name and app and not SKIP.search(name): found.setdefault(app, (app, name, {norm(name)}))
+    return list(found.values())
+
+
+def open_app(path):
+    if WINDOWS:
+        try: os.startfile('shell:AppsFolder\\' + str(path)); return True
+        except OSError: return False
+    return subprocess.run(['open', str(path)], capture_output=True, timeout=10).returncode == 0
+
+
 def index():
     """[(path, shown name, {normalised names})] of every program found."""
+    if WINDOWS: return start_apps()
     found = []
     for app in bundles():
         names = [app.stem]
@@ -75,11 +104,13 @@ def find(spoken, apps, aliases=None):
     key = norm(spoken)
     if not key: return None
     mine = {norm(k): v for k, v in (aliases or {}).items()}
-    if str(mine.get(key, '')).startswith('/'):  # the user's word for one program
-        return next((a for a in apps if str(a[0]) == mine[key]), None)
+    chosen = next((a for a in apps if str(a[0]) == str(mine.get(key))), None)
+    if chosen or str(mine.get(key, '')).startswith('/'): return chosen  # the user's word for one program
+    # The built-in English name, then the words as spoken: a Chinese Windows names WeChat 微信 itself.
+    for name in dict.fromkeys(norm(n) for n in (mine.get(key), ALIASES.get(key), key) if n):
+        exact = [a for a in apps if name in a[2]]
+        if exact: return min(exact, key=lambda a: len(a[1]))
     target = norm(mine.get(key) or ALIASES.get(key) or key)
-    exact = [a for a in apps if target in a[2]]
-    if exact: return min(exact, key=lambda a: len(a[1]))
     if len(target) < 2: return None
     partial = [(min(len(n) for n in a[2] if target in n), a) for a in apps if any(target in n for n in a[2])]
     return min(partial, key=lambda p: p[0])[1] if partial else None
@@ -94,21 +125,21 @@ def cut(text, limit=60):
 class MacOpener:
     def __init__(self, aliases=lambda: {}, launch=None):
         self.aliases = aliases
-        self.launch = launch or (lambda path: subprocess.run(['open', str(path)], capture_output=True, timeout=10).returncode == 0)
+        self.launch = launch or open_app
         self.apps = None
         self.history = []
 
     def catalog(self):
         """Every program, freshly looked up, for the page's list: its shown name (with the file's when they differ)."""
         self.apps = index()
-        listed = {str(a[0]): a[1] if a[1] == a[0].stem else f'{a[1]} · {a[0].stem}' for a in self.apps}
+        listed = {str(a[0]): a[1] if WINDOWS or a[1] == a[0].stem else f'{a[1]} · {a[0].stem}' for a in self.apps}
         return sorted(({'path': p, 'label': l} for p, l in listed.items()), key=lambda a: a['label'].lower())
 
     def open_path(self, path):
         """The page's 试一下: only a program in the list."""
         app = next((a for a in self.apps or index() if str(a[0]) == path), None)
         if not app: return '没有这个程序'
-        return cut(f'已在 Mac 打开 {app[1]}' if self.launch(app[0]) else f'Mac 打不开 {app[1]}')
+        return cut(f'已在 {HOST} 打开 {app[1]}' if self.launch(app[0]) else f'{HOST} 打不开 {app[1]}')
 
     def open(self, spoken):
         """The note the badge shows."""
@@ -119,5 +150,5 @@ class MacOpener:
             if app: break
         ok = bool(app) and self.launch(app[0])
         self.history = (self.history + [{'heard': spoken, 'app': app[1] if app else None, 'ok': ok, 'at': int(time.time())}])[-10:]
-        if not app: return cut(f'Mac 上没找到「{spoken}」')
-        return cut(f'已在 Mac 打开 {app[1]}' if ok else f'Mac 打不开 {app[1]}')
+        if not app: return cut(f'{HOST} 上没找到「{spoken}」')
+        return cut(f'已在 {HOST} 打开 {app[1]}' if ok else f'{HOST} 打不开 {app[1]}')

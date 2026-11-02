@@ -268,6 +268,45 @@
         "subtree_only",
         "host_and_emulator_evidence"
       ]
+    },
+    {
+      "id": "R07",
+      "task_type": "computer_assistant_platforms",
+      "match_keywords": [
+        "助手",
+        "assistant",
+        "Windows",
+        "托盘",
+        "tray",
+        "配对",
+        "PPP",
+        "SerialBridge",
+        "语音输入粘贴",
+        "离座锁屏",
+        "打开电脑程序"
+      ],
+      "negative_keywords": [],
+      "route_priority": 80,
+      "first_read_modules": [
+        "computer_assistant"
+      ],
+      "expand_to_modules": [],
+      "pitfall_ids": [
+        "P07"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_reference_map_first"
+      ],
+      "scope_flags": [
+        "subtree_only",
+        "host_and_emulator_evidence"
+      ]
     }
   ]
 }
