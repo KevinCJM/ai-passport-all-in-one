@@ -89,7 +89,8 @@ def main():
               'official_apps_bundled':False,'private_config_bundled':False,'code_signed':False,'firmware_flashed_by_build':False,
               'self_test':result,'source_hashes':hashes,'files':{archive.name:{'bytes':archive.stat().st_size,'sha256':sha(archive)}}}
     (DIST/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-    (DIST/'SHA256SUMS').write_text(''.join(f'{sha(p)}  {p.name}\n' for p in sorted(DIST.iterdir()) if p.name!='SHA256SUMS'))
+    # LF line endings, so shasum -c works on any system (write_text would give CRLF on Windows).
+    (DIST/'SHA256SUMS').write_bytes(''.join(f'{sha(p)}  {p.name}\n' for p in sorted(DIST.iterdir()) if p.name!='SHA256SUMS').encode())
     print('ASSISTANT_WINDOWS_BUILT',DIST,flush=True)
 
 
