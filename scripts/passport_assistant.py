@@ -19,15 +19,15 @@ import certifi
 from passport_identity import paired_port
 from passport_paths import helper, user_data, codex_command, PACKAGED
 
-VERSION='0.1.2-preview'
+VERSION='0.1.3-preview'
 LABEL='local.ai-passport.assistant'
 
 
 def validate_config(config):
     if not isinstance(config,dict) or not re.fullmatch(r'(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}',config.get('mac','')):
-        raise ValueError('invalid device identity')
+        raise ValueError('配对信息无效，请重新配对')
     if not re.fullmatch('[0-9a-fA-F]{64}',config.get('api_token','')):
-        raise ValueError('invalid device credential')
+        raise ValueError('配对信息无效，请重新配对')
     # Imported development settings must not dictate executable paths or ports.
     result={k:config[k] for k in ('mac','api_token','xiaozhi') if k in config}
     result.update(http_forward=18763,audio_forward=19548,ui_port=8768)
@@ -73,7 +73,7 @@ class Controller:
         self.directory=Path(directory) if directory else user_data();self.directory.mkdir(parents=True,exist_ok=True,mode=0o700)
         self.path=self.directory/'device.json';self.factory=device_factory;self.device=None;self.http=None
         self.stop=threading.Event();self.enabled=True;self.lock=threading.Lock();self.pair_mac=None
-        self.status='等待连接 AI Passport';self.error='';self.code='';self.candidates=[];self.deps={};self.thread=None;self.paired_mac=None
+        self.status='正在启动';self.error='';self.code='';self.candidates=[];self.deps={};self.thread=None;self.paired_mac=None
         self.permission_state=None;self.permission_notified=False
         self.permission_polling=threading.Event();self.permission_refresh=threading.Event()
 
@@ -104,10 +104,11 @@ class Controller:
             choices=[dict(d,paired=d['mac']==self.paired_mac,transport='USB') for d in self.candidates]
             if self.paired_mac and not any(d['mac']==self.paired_mac for d in choices):choices.append({'mac':self.paired_mac,'port':None,'paired':True,'transport':'蓝牙'})
             return {'version':VERSION,'status':self.status,'error':self.error,'code':self.code,'enabled':self.enabled,
-                    'paired':self.path.exists(),'devices':choices,'dependencies':dict(self.deps)}
+                    'paired':self.path.exists(),'devices':choices,'dependencies':dict(self.deps),
+                    'connected':bool(self.device and time.monotonic()-self.device.last_seen<15),'web':self.http is not None}
 
     def import_config(self,path):
-        if Path(path).stat().st_size>16384:raise ValueError('configuration too large')
+        if Path(path).stat().st_size>16384:raise ValueError('配对文件无效')
         save_config(self.path,json.loads(Path(path).read_text()));self.error=''
 
     def allow_ip_location(self,allowed):
@@ -118,7 +119,7 @@ class Controller:
         if self.device:self.device.services.settings['ip_location_allowed']=bool(allowed)
 
     def pair(self,mac):
-        if not any(d['mac']==mac for d in self.candidates):raise ValueError('device not available')
+        if not any(d['mac']==mac for d in self.candidates):raise ValueError('没找到这台胸牌，请检查 USB 线')
         self.pair_mac=mac
 
     def pair_device(self,mac,ports):
@@ -126,7 +127,7 @@ class Controller:
         log=(self.directory/'gateway.log').open('a')
         try:
             gateway=subprocess.Popen([str(helper('passport-ppp')),'--serial',port,'--forward','18763','--audio-forward','19548'],stdout=log,stderr=subprocess.STDOUT)
-            nonce=secrets.token_hex(16);self.code=nonce[:6];self.status='请核对设备配对码，并按设备确认键'
+            nonce=secrets.token_hex(16);self.code=nonce[:6];self.status='正在配对，请在胸牌上确认'
             started=time.monotonic();begun=False
             while not self.stop.wait(.5) and time.monotonic()-started<65:
                 if gateway.poll() is not None:raise ConnectionError('PPP 配对连接失败')
@@ -164,19 +165,19 @@ class Controller:
             self.disconnect();self.status='助手已暂停';return
         if self.pair_mac:
             mac=self.pair_mac;self.pair_mac=None;self.disconnect();self.pair_device(mac,ports)
-        if not self.path.exists():self.status='请选择 AI Passport 并配对';return
+        if not self.path.exists():self.status='还没配对：用 USB 线连上胸牌，点「配对」';return
         config=validate_config(json.loads(self.path.read_text()))
         self.paired_mac=config['mac'].lower()
         if self.device:
             transport=getattr(self.device,'transport','none')
             label='USB' if transport=='usb' else '蓝牙' if transport=='ble' else '等待连接'
-            self.status=('AI Passport 已连接 · '+label if time.monotonic()-self.device.last_seen<15 else '等待已配对的 AI Passport · '+label)
-            if transport=='ble' and self.deps.get('bluetooth_denied'):self.status='请允许助手使用蓝牙'
+            self.status=('胸牌已连接 · '+label if time.monotonic()-self.device.last_seen<15 else '等待胸牌连接 · '+label)
+            if transport=='ble' and self.deps.get('bluetooth_denied'):self.status='需要蓝牙权限'
             hint='Mac 弹出蓝牙配对请求时，请点「连接」或「配对」'
             if transport=='ble' and time.monotonic()-self.device.last_seen>=15:self.error=hint
             elif self.error==hint:self.error=''
             return
-        self.status='正在连接 AI Passport · USB 优先 / 蓝牙备用'
+        self.status='正在连接胸牌 · USB 优先，蓝牙备用'
         if self.factory is None:
             from passport_device import Device
             self.factory=Device
@@ -190,7 +191,7 @@ class Controller:
             self.http=ThreadingHTTPServer(('127.0.0.1',8768),Handler)
             threading.Thread(target=self.http.serve_forever,daemon=True).start()
         except Exception:self.disconnect();raise
-        self.status='AI Passport 助手已启动 · 自动连接设备';self.error=''
+        self.status='助手已启动，正在连接胸牌';self.error=''
 
     def start(self):
         def run():
@@ -201,8 +202,8 @@ class Controller:
                     if time.monotonic()-last_deps>(2 if self.permission_polling.is_set() else 15):self.deps=dependencies();last_deps=time.monotonic()
                     self.step(list(list_ports.comports()));self.refresh_after_permission();retry=1
                 except Exception as error:
-                    self.disconnect();self.error=str(error) if isinstance(error,(ValueError,ConnectionError,TimeoutError)) else type(error).__name__
-                    self.status='连接未就绪，稍后重试';retry=min(retry*2,15)
+                    self.disconnect();self.error=str(error) if isinstance(error,(ValueError,ConnectionError,TimeoutError)) else '内部错误：'+type(error).__name__
+                    self.status='连接未就绪，%d 秒后重试'%min(retry*2,15);retry=min(retry*2,15)
                 self.stop.wait(retry)
             self.disconnect()
         self.thread=threading.Thread(target=run,daemon=True);self.thread.start()
@@ -228,100 +229,200 @@ def login_item(enable):
     subprocess.run(['/bin/launchctl','bootstrap',domain,str(target)],check=True,capture_output=True)
 
 
+HELP='''首次使用
+用 USB 数据线连上胸牌，在「设备」里选中它，点「配对」。核对胸牌和助手上的配对码一致，在胸牌上按确认。
+
+日常使用
+插着线走 USB；拔线后进入语音输入、AI 额度等电脑功能，助手会自动改用蓝牙（Mac 弹出蓝牙配对时点「连接」）。
+
+语音输入
+在胸牌「语音输入」页按确认开始说话，再按确认结束，文字粘贴到 Mac 当前光标处。需要授权辅助功能，不用装输入法。
+
+网页设置
+菜单排序、状态牌、倒数日、二维码和打开 Mac 程序的口令，都在「网页设置」里改，保存后写进胸牌。
+
+其他
+Codex、Claude Code 需要自己安装并登录。小智、天气、电台用胸牌自己的 WiFi；没 WiFi 时可通过 USB 借电脑上网。'''
+
+
 def gui(controller,background=False):
     import AppKit as A
     from Foundation import NSObject,NSTimer
+    from objc import python_method
+    WIDTH=500;WEB='http://127.0.0.1:8768/'
+    def text(value='',size=13,bold=False,color=None,wrap=False):
+        item=A.NSTextField.wrappingLabelWithString_(value) if wrap else A.NSTextField.labelWithString_(value)
+        item.setFont_(A.NSFont.boldSystemFontOfSize_(size) if bold else A.NSFont.systemFontOfSize_(size))
+        if color:item.setTextColor_(color)
+        if wrap:item.setPreferredMaxLayoutWidth_(WIDTH-80)
+        return item
+    def stack(views,vertical=False,spacing=8):
+        item=A.NSStackView.stackViewWithViews_(views);item.setSpacing_(spacing)
+        item.setOrientation_(A.NSUserInterfaceLayoutOrientationVertical if vertical else A.NSUserInterfaceLayoutOrientationHorizontal)
+        item.setAlignment_(A.NSLayoutAttributeLeading if vertical else A.NSLayoutAttributeCenterY);return item
+    def spacer():
+        item=A.NSView.alloc().init();item.setContentHuggingPriority_forOrientation_(1,0);return item
+    def symbol(name,color):
+        image=A.NSImage.imageWithSystemSymbolName_accessibilityDescription_(name,None)
+        view=A.NSImageView.imageViewWithImage_(image);view.setContentTintColor_(color);return view
+    def heading(value):return text(value,12,True,A.NSColor.secondaryLabelColor())
+    def open_url(url):A.NSWorkspace.sharedWorkspace().openURL_(A.NSURL.URLWithString_(url))
     class Delegate(NSObject):
+        @python_method
+        def button(self,title,selector,primary=False):
+            item=A.NSButton.buttonWithTitle_target_action_(title,self,selector)
+            if primary:item.setKeyEquivalent_('\r')
+            return item
+        @python_method
+        def switch(self,title,selector,on):
+            item=A.NSButton.checkboxWithTitle_target_action_(title,self,selector);item.setState_(int(on));return item
         def applicationDidFinishLaunching_(self,notification):
-            self.window=A.NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(((0,0),(540,570)),15,A.NSBackingStoreBuffered,False)
-            self.window.setTitle_('AI Passport 助手');self.window.center();self.labels={}
-            content=self.window.contentView()
-            def label(name,text,y,size=14):
-                item=A.NSTextField.labelWithString_(text);item.setFrame_(((24,y),(492,48 if name=='message' else 28)));item.setFont_(A.NSFont.systemFontOfSize_(size));content.addSubview_(item);self.labels[name]=item
-            def button(text,selector,x,y,w=150):
-                item=A.NSButton.buttonWithTitle_target_action_(text,self,selector);item.setFrame_(((x,y),(w,32)));content.addSubview_(item);return item
-            label('title','AI Passport',512,28);label('subtitle','设备连接与电脑功能',480)
-            label('status','正在检查',431,17);label('message','',379)
-            self.choices=A.NSPopUpButton.alloc().initWithFrame_pullsDown_(((24,335),(330,32)),False);self.choices.setTarget_(self);self.choices.setAction_('deviceSelected:');content.addSubview_(self.choices)
-            self.pairButton=button('配对设备','pair:',370,335,145)
-            for key,text,y in [('voice','语音输入',283),('codex','Codex',249),('permission','辅助功能与按键授权',215)]:label(key,text,y)
-            button('连接与按键授权','permissionGuide:',24,133,160);self.toggle=button('暂停助手','toggle:',204,133,145)
-            button('导入已有配对','import:',370,133,145)
-            self.login=button('登录后启动','login:',24,88,150);self.login.setButtonType_(A.NSSwitchButton);self.login.setState_(int((Path.home()/'Library/LaunchAgents'/f'{LABEL}.plist').exists()))
-            ip=button('允许 IP 定位天气','location:',194,88,170);ip.setButtonType_(A.NSSwitchButton)
-            settings=controller.directory/'live/settings.json'
-            try:ip.setState_(int(json.loads(settings.read_text()).get('ip_location_allowed',False)))
+            self.window=A.NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(((0,0),(WIDTH,560)),1|2|4,A.NSBackingStoreBuffered,False)
+            self.window.setTitle_('AI Passport 助手');self.window.setReleasedWhenClosed_(False)
+            # Header
+            icon=A.NSImageView.imageViewWithImage_(A.NSApplication.sharedApplication().applicationIconImage())
+            icon.widthAnchor().constraintEqualToConstant_(44).setActive_(True);icon.heightAnchor().constraintEqualToConstant_(44).setActive_(True)
+            header=stack([icon,stack([text('AI Passport 助手',20,True),text('胸牌连接 · 语音输入 · 电脑功能　版本 '+VERSION,12,color=A.NSColor.secondaryLabelColor())],True,2)],spacing=12)
+            # Status card: dot + one-line state, a detail line, and the pairing code in large digits.
+            self.dot=text('●',15);self.status=text('正在检查',15,True)
+            self.message=text('',12,color=A.NSColor.secondaryLabelColor(),wrap=True)
+            self.code=text('',30,True);self.code.setFont_(A.NSFont.monospacedDigitSystemFontOfSize_weight_(30,A.NSFontWeightSemibold));self.code.setHidden_(True)
+            self.card=A.NSBox.alloc().init();self.card.setBoxType_(A.NSBoxCustom);self.card.setCornerRadius_(10);self.card.setBorderColor_(A.NSColor.separatorColor())
+            self.card.setFillColor_(A.NSColor.quaternarySystemFillColor());self.card.setContentViewMargins_((14,12));self.card.setTitlePosition_(A.NSNoTitle)
+            inner=stack([stack([self.dot,self.status],spacing=6),self.message,self.code],True,6);inner.setTranslatesAutoresizingMaskIntoConstraints_(False)
+            holder=self.card.contentView();holder.addSubview_(inner)
+            for a,b in [(inner.topAnchor(),holder.topAnchor()),(inner.bottomAnchor(),holder.bottomAnchor()),(inner.leadingAnchor(),holder.leadingAnchor()),(inner.trailingAnchor(),holder.trailingAnchor())]:a.constraintEqualToAnchor_(b).setActive_(True)
+            # Device
+            self.choices=A.NSPopUpButton.alloc().initWithFrame_pullsDown_(((0,0),(300,28)),False);self.choices.setTarget_(self);self.choices.setAction_('deviceSelected:')
+            self.choices.setContentHuggingPriority_forOrientation_(1,0)
+            self.pairButton=self.button('配对','pair:',True)
+            device=stack([self.choices,self.pairButton])
+            importing=self.button('导入配对文件…','import:');importing.setBezelStyle_(A.NSBezelStyleInline);importing.setControlSize_(A.NSControlSizeSmall)
+            # Computer features: icon, name, detail, optional fix button.
+            self.rows={}
+            features=[]
+            for key,name in [('voice','语音输入'),('codex','Codex'),('permission','系统权限')]:
+                image=symbol('circle',A.NSColor.tertiaryLabelColor());detail=text('正在检查',13,color=A.NSColor.secondaryLabelColor())
+                label=text(name,13,True);label.widthAnchor().constraintEqualToConstant_(64).setActive_(True)
+                row=[image,label,detail,spacer()]
+                if key=='permission':self.fix=self.button('去授权','permissionGuide:');self.fix.setHidden_(True);row.append(self.fix)
+                features.append(stack(row));self.rows[key]=(image,detail)
+            # Options
+            self.login=self.switch('登录 Mac 后自动启动助手','login:',(Path.home()/'Library/LaunchAgents'/f'{LABEL}.plist').exists())
+            settings=controller.directory/'live/settings.json';allowed=False
+            try:allowed=bool(json.loads(settings.read_text()).get('ip_location_allowed',False))
             except (OSError,ValueError):pass
-            ip.setToolTip_('允许向 ipwho.is 提供当前公网 IP，以查询城市、天气和空气质量。')
-            button('使用说明','help:',370,88,145)
-            label('foot','语音输入用小智识别，无需安装输入法；Codex 请自行安装并登录。',6,12)
-            button('记账表格','ledger:',204,36,145);button('设备内容','statusLabels:',370,36,145)
-            self.item=A.NSStatusBar.systemStatusBar().statusItemWithLength_(A.NSVariableStatusItemLength);self.item.button().setTitle_('Passport')
-            menu=A.NSMenu.alloc().init();menu.addItemWithTitle_action_keyEquivalent_('打开助手','show:','').setTarget_(self)
-            menu.addItemWithTitle_action_keyEquivalent_('设备内容（状态牌 / 倒数日 / 二维码）','statusLabels:','').setTarget_(self)
-            menu.addItemWithTitle_action_keyEquivalent_('打开 Mac 程序的口令…','macApps:','').setTarget_(self)
-            menu.addItemWithTitle_action_keyEquivalent_('打开记账表格','ledger:','').setTarget_(self)
-            menu.addItemWithTitle_action_keyEquivalent_('退出','quit:','q').setTarget_(self);self.item.setMenu_(menu)
+            ip=self.switch('允许按 IP 定位城市（天气、空气质量）','location:',allowed)
+            ip_note=text('会向 ipwho.is 发送这台 Mac 的公网 IP。不开也可以在胸牌上说城市名。',11,color=A.NSColor.secondaryLabelColor(),wrap=True)
+            # Actions
+            self.web=self.button('网页设置','web:');self.web.setToolTip_('菜单排序、状态牌、倒数日、二维码、打开 Mac 程序的口令')
+            self.toggle=self.button('暂停助手','toggle:')
+            actions=stack([self.web,self.button('记账表格','ledger:'),self.button('使用说明','help:'),spacer(),self.toggle])
+            sections=[header,self.card,heading('设备'),device,importing,heading('电脑功能'),*features,heading('选项'),self.login,ip,ip_note,actions]
+            root=stack(sections,True,10);root.setEdgeInsets_((20,24,20,24))
+            for view in sections[1:]:
+                if view not in (importing,self.login,ip):view.widthAnchor().constraintEqualToConstant_(WIDTH-48).setActive_(True)
+            root.setCustomSpacing_afterView_(18,header);root.setCustomSpacing_afterView_(18,self.card);root.setCustomSpacing_afterView_(14,importing)
+            root.setCustomSpacing_afterView_(14,features[-1]);root.setCustomSpacing_afterView_(18,ip_note)
+            self.root=root;self.window.setContentView_(root);self.fit();self.window.center()
+            # Menu bar item
+            self.item=A.NSStatusBar.systemStatusBar().statusItemWithLength_(A.NSVariableStatusItemLength)
+            image=A.NSImage.imageWithSystemSymbolName_accessibilityDescription_('person.text.rectangle','AI Passport')
+            if image:image.setTemplate_(True);self.item.button().setImage_(image)
+            else:self.item.button().setTitle_('Passport')
+            menu=A.NSMenu.alloc().init();menu.setAutoenablesItems_(False)
+            def entry(title,selector,key=''):
+                item=menu.addItemWithTitle_action_keyEquivalent_(title,selector,key);item.setTarget_(self);return item
+            self.menuStatus=menu.addItemWithTitle_action_keyEquivalent_('正在检查','',"");self.menuStatus.setEnabled_(False)
+            menu.addItem_(A.NSMenuItem.separatorItem());entry('打开助手窗口','show:')
+            self.webItems=[entry('菜单自定义…','webMenu:'),entry('状态牌 · 倒数日 · 二维码…','statusLabels:'),entry('打开 Mac 程序的口令…','macApps:')]
+            entry('记账表格','ledger:');menu.addItem_(A.NSMenuItem.separatorItem())
+            self.menuToggle=entry('暂停助手','toggle:');entry('退出 AI Passport 助手','quit:','q');self.item.setMenu_(menu)
             self.timer=NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(1,self,'refresh:',None,True)
             self.current_choices=[];self.refresh_(None)
             if not background:self.show_(None)
+        @python_method
+        def fit(self):
+            # Keep the top edge still while the message line grows or shrinks.
+            size=self.root.fittingSize();frame=self.window.frame()
+            if abs(self.window.contentRectForFrameRect_(frame).size.height-size.height)<1:return
+            top=frame.origin.y+frame.size.height;self.window.setContentSize_(size)
+            frame=self.window.frame();self.window.setFrameTopLeftPoint_((frame.origin.x,top))
+        @python_method
+        def setRow(self,key,ok,detail):
+            image,label=self.rows[key]
+            name,color={True:('checkmark.circle.fill',A.NSColor.systemGreenColor()),False:('exclamationmark.circle.fill',A.NSColor.systemOrangeColor()),None:('circle',A.NSColor.tertiaryLabelColor())}[ok]
+            image.setImage_(A.NSImage.imageWithSystemSymbolName_accessibilityDescription_(name,None));image.setContentTintColor_(color);label.setStringValue_(detail)
         def refresh_(self,_):
-            state=controller.snapshot();self.labels['status'].setStringValue_(state['status']);self.labels['message'].setStringValue_(('配对码：'+state['code']) if state['code'] else state['error'])
+            state=controller.snapshot();deps=state['dependencies']
+            message=state['error']
+            if deps.get('bluetooth_denied'):message='请在系统设置中允许 AI Passport 助手使用蓝牙。'
+            if state['code']:message='核对胸牌屏幕上的配对码，一致就在胸牌上按确认。'
+            color=(A.NSColor.systemGrayColor() if not state['enabled'] else A.NSColor.systemGreenColor() if state['connected'] else
+                   A.NSColor.systemRedColor() if state['error'] and not state['code'] else A.NSColor.systemOrangeColor())
+            self.dot.setTextColor_(color);self.status.setStringValue_(state['status']);self.message.setStringValue_(message);self.message.setHidden_(not message)
+            self.code.setStringValue_(' '.join(state['code']));self.code.setHidden_(not state['code'])
+            self.menuStatus.setTitle_(state['status'])
             candidates=state['devices']
             if candidates!=self.current_choices:
                 old=self.choices.indexOfSelectedItem();selected=self.current_choices[old]['mac'] if 0<=old<len(self.current_choices) else None
-                self.current_choices=candidates;self.choices.removeAllItems();self.choices.addItemsWithTitles_([d['mac'].upper()+' · '+d['transport']+(' · 已配对' if d['paired'] else '') for d in candidates] or ['尚未发现 AI Passport'])
+                self.current_choices=candidates;self.choices.removeAllItems()
+                self.choices.addItemsWithTitles_([d['mac'].upper()+' · '+d['transport']+(' · 已配对' if d['paired'] else '') for d in candidates] or ['未发现胸牌，请用 USB 线连接'])
                 self.choices.selectItemAtIndex_(next((i for i,d in enumerate(candidates) if d['mac']==selected),0))
             self.deviceSelected_(None)
-            deps=state['dependencies']
-            if deps.get('bluetooth_denied'):self.labels['message'].setStringValue_('系统设置中允许 AI Passport Assistant 使用蓝牙。')
-            self.labels['voice'].setStringValue_('语音输入　'+('小智识别，文字粘贴到光标处' if deps.get('voice') else '编码组件不可用，请重新安装助手'))
-            self.labels['codex'].setStringValue_('Codex　'+('已找到；登录状态由功能页检查' if deps.get('codex') else '未安装，请自行安装'))
+            self.setRow('voice',bool(deps.get('voice')) if 'voice' in deps else None,'小智识别，文字粘贴到光标处' if deps.get('voice') else '编码组件不可用，请重新安装助手' if 'voice' in deps else '正在检查')
+            self.setRow('codex',True if deps.get('codex') else None,'已安装，可在胸牌「AI 额度」查看用量' if deps.get('codex') else '未安装（可选，需自行安装并登录）' if 'codex' in deps else '正在检查')
             checked=all(isinstance(deps.get(k),bool) for k in ('accessibility','post_event_access'))
-            permission_text='正在检查' if not checked else '已授权' if deps['accessibility'] and deps['post_event_access'] else '需要在系统设置中授权'
-            self.labels['permission'].setStringValue_('辅助功能与按键授权　'+permission_text)
-            self.toggle.setTitle_('暂停助手' if state['enabled'] else '启动助手')
+            missing=([] if not checked or (deps['accessibility'] and deps['post_event_access']) else ['辅助功能'])+(['蓝牙'] if deps.get('bluetooth_denied') else [])
+            self.setRow('permission',None if not checked else not missing,'正在检查' if not checked else '需要授权：'+'、'.join(missing) if missing else '辅助功能、蓝牙已授权')
+            self.fix.setHidden_(not missing)
+            self.web.setEnabled_(state['web'])
+            for item in self.webItems:item.setEnabled_(state['web'])
+            self.toggle.setTitle_('暂停助手' if state['enabled'] else '恢复助手');self.menuToggle.setTitle_(self.toggle.title())
             permission=controller.permission_event()
             if permission=='required':self.permissionGuide_(None)
             if permission=='granted':
-                self.labels['message'].setStringValue_('授权完成，语音输入页面将自动恢复。')
+                controller.error='授权完成，语音输入页面将自动恢复。'
                 alert=getattr(self,'permissionAlert',None)
                 if alert and alert.window().sheetParent():self.window.endSheet_(alert.window())
                 self.permissionAlert=None
+            self.fit()
+        @python_method
+        def selected(self):
+            index=self.choices.indexOfSelectedItem();return self.current_choices[index] if 0<=index<len(self.current_choices) else None
         def pair_(self,_):
-            if self.current_choices and self.current_choices[self.choices.indexOfSelectedItem()].get('port'):
-                try:controller.pair(self.current_choices[self.choices.indexOfSelectedItem()]['mac'])
+            item=self.selected()
+            if item and item.get('port'):
+                try:controller.pair(item['mac'])
                 except ValueError as error:controller.error=str(error)
         def deviceSelected_(self,_):
-            index=self.choices.indexOfSelectedItem();item=self.current_choices[index] if 0<=index<len(self.current_choices) else None
+            item=self.selected()
             self.pairButton.setEnabled_(bool(item and item.get('port')))
-            self.pairButton.setTitle_('蓝牙自动连接' if item and not item.get('port') else '配对设备')
+            self.pairButton.setTitle_('已配对' if item and item['paired'] and not item.get('port') else '重新配对' if item and item['paired'] else '配对')
         def import_(self,_):
             panel=A.NSOpenPanel.openPanel();panel.setCanChooseDirectories_(False);panel.setAllowsMultipleSelection_(False)
+            panel.setMessage_('选择从其他电脑导出的 device.json 配对文件')
             if panel.runModal()==A.NSModalResponseOK:
                 try:controller.import_config(panel.URL().path())
                 except Exception:controller.error='配对文件无效'
         def permissionGuide_(self,_):
             deps=controller.deps
-            if not all(isinstance(deps.get(k),bool) for k in ('accessibility','post_event_access')):
-                self.labels['message'].setStringValue_('正在检查权限，请稍候。');return
-            if deps['accessibility'] and deps['post_event_access'] and not deps.get('bluetooth_denied'):
-                self.labels['message'].setStringValue_('权限正常，无需重复授权。');return
+            if not all(isinstance(deps.get(k),bool) for k in ('accessibility','post_event_access')):return
+            if deps['accessibility'] and deps['post_event_access'] and not deps.get('bluetooth_denied'):return
             if self.window.attachedSheet():return
             self.show_(None)
-            alert=A.NSAlert.alloc().init();alert.setMessageText_('完成 AI Passport 电脑授权')
-            alert.setInformativeText_('蓝牙权限：用于设备与电脑传输。\n辅助功能：把识别出的文字粘贴到光标处。\n\n请在对应页面允许 AI Passport Assistant；完成后自动检测。\n\n若旧条目已开启仍无效，请移除旧条目，再添加 Finder 中的当前助手。')
+            alert=A.NSAlert.alloc().init();alert.setMessageText_('允许 AI Passport 助手使用电脑功能')
+            alert.setInformativeText_('辅助功能：把识别出的文字粘贴到光标处。\n蓝牙：拔线后和胸牌无线连接。\n\n在打开的系统设置页里打开 AI Passport Assistant 的开关，助手会自动检测。\n\n如果开关已打开仍无效：先用「－」移除旧条目，再点「在 Finder 显示助手」把当前助手拖进去。')
             options=[]
-            if controller.deps.get('bluetooth_denied'):options.append(('打开蓝牙权限','Privacy_Bluetooth'))
-            if not (controller.deps.get('accessibility') and controller.deps.get('post_event_access')):options.append(('打开辅助功能','Privacy_Accessibility'))
-            if not options:options.append(('查看辅助功能','Privacy_Accessibility'))
-            for text,_ in options:alert.addButtonWithTitle_(text)
-            for text in ['在 Finder 显示助手','稍后']:alert.addButtonWithTitle_(text)
+            if deps.get('bluetooth_denied'):options.append(('打开蓝牙设置','Privacy_Bluetooth'))
+            if not (deps.get('accessibility') and deps.get('post_event_access')):options.append(('打开辅助功能设置','Privacy_Accessibility'))
+            for title,_ in options:alert.addButtonWithTitle_(title)
+            for title in ['在 Finder 显示助手','稍后']:alert.addButtonWithTitle_(title)
             self.permissionAlert=alert
             def completed(response):
                 index=response-A.NSAlertFirstButtonReturn
                 if 0<=index<len(options):
-                    A.NSWorkspace.sharedWorkspace().openURL_(A.NSURL.URLWithString_('x-apple.systempreferences:com.apple.preference.security?'+options[index][1]));self.window.orderBack_(None)
+                    open_url('x-apple.systempreferences:com.apple.preference.security?'+options[index][1]);self.window.orderBack_(None)
                 elif index==len(options):
                     bundle=Path(sys.executable).resolve().parents[2] if PACKAGED else Path.home()/'Applications/AI Passport Assistant.app'
                     A.NSWorkspace.sharedWorkspace().selectFile_inFileViewerRootedAtPath_(str(bundle),'')
@@ -330,17 +431,21 @@ def gui(controller,background=False):
         def toggle_(self,_):controller.enabled=not controller.enabled
         def login_(self,sender):
             try:login_item(bool(sender.state()))
-            except Exception:controller.error='设置登录启动失败；请从应用程序文件夹打开助手'
+            except Exception as error:
+                sender.setState_(int(not sender.state()))
+                controller.error=str(error) if isinstance(error,ValueError) else '设置登录启动失败；请从应用程序文件夹打开助手'
         def help_(self,_):
-            alert=A.NSAlert.alloc().init();alert.setMessageText_('AI Passport 使用说明');alert.setInformativeText_('1. 首次通过 USB 配对，核对配对码后按设备确认。\n2. Codex、Claude Code 需自行安装并登录。语音输入由助手请小智识别，文字粘贴到当前光标处，无需安装输入法。\n3. 在系统设置中为 AI Passport 助手授权辅助功能。\n\n日常插线优先使用 USB；拔线后进入语音输入、AI 额度或电脑状态，助手自动改用蓝牙。小智、天气和电台使用 WiFi，没 WiFi 时可通过 USB PPP 联网。');alert.runModal()
-        def statusLabels_(self,_):A.NSWorkspace.sharedWorkspace().openURL_(A.NSURL.URLWithString_('http://127.0.0.1:8768/#status'))
+            alert=A.NSAlert.alloc().init();alert.setMessageText_('AI Passport 助手使用说明');alert.setInformativeText_(HELP);alert.runModal()
+        def web_(self,_):open_url(WEB)
+        def webMenu_(self,_):open_url(WEB+'#menu')
+        def statusLabels_(self,_):open_url(WEB+'#status')
+        def macApps_(self,_):open_url(WEB+'#mac')
         def ledger_(self,_):
             # 语音记账: the CSV passport_services keeps in sync with the badge, opened in Numbers or Excel.
             path=controller.directory/'记账.csv'
             if path.exists():A.NSWorkspace.sharedWorkspace().openURL_(A.NSURL.fileURLWithPath_(str(path)));return
             alert=A.NSAlert.alloc().init();alert.setMessageText_('还没有记账记录')
             alert.setInformativeText_('在胸牌「语音记账」记一笔，胸牌连上电脑后会自动同步到这里。');alert.runModal()
-        def macApps_(self,_):A.NSWorkspace.sharedWorkspace().openURL_(A.NSURL.URLWithString_('http://127.0.0.1:8768/#mac'))
         def show_(self,_):self.window.makeKeyAndOrderFront_(None);A.NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
         def quit_(self,_):A.NSApplication.sharedApplication().terminate_(None)
         def applicationShouldTerminateAfterLastWindowClosed_(self,_):return False

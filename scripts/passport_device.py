@@ -277,42 +277,101 @@ class Device:
    try:self.gateway.wait(4)
    except subprocess.TimeoutExpired:self.gateway.kill();self.gateway.wait()
   self.gateway_log.close()
-PAGE='''<!doctype html><html lang=zh-CN><meta charset=utf-8><title>AI Passport 实机</title><style>body{font:16px system-ui;background:#10191f;color:#e4ecee;margin:32px}button{padding:12px;margin:6px}pre{white-space:pre-wrap;max-width:1000px}</style><h1>AI Passport 实机</h1><p>USB / 蓝牙自动切换；设备麦克风、扬声器、屏幕与按键。确认进入功能，长按确认返回。</p><button onclick="act('up')">上</button><button onclick="act('down')">下</button><button onclick="act('ok')">确认</button><button onclick="act('back')">返回</button><button onclick="act('settings')">设置</button><h2>豆包输入结果</h2><p>在设备上按确认开始说话，再按确认结束。</p><textarea rows=5 cols=60 aria-label=豆包输入结果></textarea><h2 id=status>设备内容</h2><style>.row input,.row textarea{font-size:16px;padding:6px;margin:3px}.row{margin:4px 0}section{border-top:1px solid #2a3a44;padding:8px 0}</style>
-<section id=menu><h3>菜单自定义</h3><p>选择功能、分页方式和显示顺序，保存到已连接的胸牌。</p><div id=menu-editor></div></section>
-<section><h3>状态牌文字</h3><p>显示在「状态牌」页面，排在预设标签前面。最多 5 条，每条不超过 8 个字，留空表示不用。在胸牌状态牌页按确认说话也能添加，发送会替换胸牌上的全部自定义文字。</p><div id=labels class=row></div><button onclick="saveLabels()">发送到设备</button> <span id=labelResult></span></section>
-<section><h3>倒数日</h3><p>下班时间（留空表示不显示下班倒计时）：<input id=offwork type=time value="18:00"></p><p>自己的日子，最多 6 个；名称不超过 8 个字。勾「每年」按周年倒数，勾「农历」按农历月日。没勾「每年」且已过去的，显示「已经 N 天」。</p><div id=events></div><button onclick="saveEvents()">发送到设备</button> <span id=eventResult></span></section>
-<section><h3>二维码</h3><p>最多 4 个，内容可以是网址、微信 / 支付宝收款码里的链接、任意文字，不超过 300 个字节。WiFi 二维码由设备按已连接的 WiFi 自动生成。</p><div id=codes></div><button onclick="saveCodes()">发送到设备</button> <span id=codeResult></span></section>
-<section id=mac><h3>打开 Mac 程序</h3><p>对胸牌说「你好小智」，等它开始听，再说「打开 Mac 的 xxx」。下面自己设的口令优先，没设的按程序名自动找。胸牌上已有的功能名（计算器、日历、天气…）仍打开胸牌的，要开电脑上的请说「打开 Mac 的计算器」。最多 40 条，口令不超过 12 个字。</p><div id=macRows></div><datalist id=macApps></datalist><button onclick="macRow()">添加一条</button> <button onclick="saveMac()">保存</button> <span id=macResult></span><h4>胸牌最近听到的</h4><p>没打开对的，可以把听到的词设为口令。</p><div id=macHeard></div></section>
-<details><summary>连接诊断</summary><pre id=state></pre></details><script src="/menu-editor.js"></script><script>
-PassportMenu.mount(document.querySelector("#menu-editor"),"/api");
+PAGE=r'''<!doctype html><html lang=zh-CN><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>AI Passport 设置</title>
+<style>
+:root{color-scheme:dark;--bg:#10191f;--card:#172329;--line:#2a3a44;--text:#e4ecee;--muted:#94a8b0;--accent:#91e0b0;--warn:#f2c37a;--bad:#ff8f8f}
+*{box-sizing:border-box}body{font:15px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",system-ui,sans-serif;background:var(--bg);color:var(--text);margin:0}
+main{max-width:920px;margin:0 auto;padding:24px 20px 60px}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}h1{font-size:24px;margin:0}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:4px 12px;border-radius:99px;background:#1c2a32;border:1px solid var(--line);font-size:13px}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted)}.pill.ok::before{background:var(--accent)}.pill.bad::before{background:var(--warn)}
+.lead{color:var(--muted);margin:6px 0 14px}
+nav{position:sticky;top:0;z-index:2;background:var(--bg);display:flex;gap:4px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line)}
+nav a{color:var(--text);text-decoration:none;padding:5px 11px;border-radius:8px;font-size:14px}nav a:hover{background:#1c2a32}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:16px 0;scroll-margin-top:56px}
+h2{font-size:18px;margin:0 0 4px}h3{font-size:15px;margin:16px 0 6px}p{margin:4px 0 10px}.muted,.hint{color:var(--muted);font-size:13px}
+input,textarea,select{font:inherit;color:var(--text);background:#111c22;border:1px solid #49606c;border-radius:8px;padding:7px 9px;max-width:100%}
+input[type=checkbox]{accent-color:var(--accent);width:17px;height:17px;vertical-align:-3px}
+button{font:inherit;min-height:34px;padding:5px 12px;border-radius:9px;border:1px solid #49606c;background:#20343d;color:var(--text);cursor:pointer}
+button:hover{border-color:var(--accent)}button.primary{background:var(--accent);border-color:var(--accent);color:#10231a;font-weight:600}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.rows{margin:8px 0}
+.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.out{font-size:14px}.out.ok{color:var(--accent)}.out.err{color:var(--bad)}
+.note{font-size:13px;color:var(--warn);background:#2a2618;border-radius:8px;padding:6px 10px;margin:6px 0 10px}
+.count{font-size:12px;color:var(--muted)}.count.err{color:var(--bad)}
+.remote button{min-width:64px}pre{white-space:pre-wrap;font-size:12px;color:var(--muted);max-height:420px;overflow:auto}
+</style>
+<main>
+<header><h1>AI Passport 设置</h1><span id=conn class=pill>正在检查连接…</span></header>
+<p class=lead>这些内容保存在胸牌里。胸牌通过 USB 或蓝牙连着这台 Mac 时才能读取和保存。</p>
+<nav><a href="#menu">菜单</a><a href="#status">状态牌</a><a href="#countdown">倒数日</a><a href="#qr">二维码</a><a href="#mac">打开 Mac 程序</a><a href="#remote">遥控与诊断</a></nav>
+
+<section id=menu><h2>菜单自定义</h2><p class=muted>选择显示哪些功能、怎么分页和排序，保存后胸牌菜单马上更新。隐藏的功能仍可以用语音打开。</p><div id=menu-editor></div></section>
+
+<section id=status><h2>状态牌文字</h2><p class=muted>显示在胸牌「状态牌」页，排在预设标签前面。最多 5 条，每条最多 12 个字，留空表示不用。</p>
+<div class=note>保存会替换胸牌上全部自定义文字，包括在胸牌上说的。这里显示的是本浏览器上次保存的内容。</div>
+<div id=labels class=row></div><div class=actions><button class=primary onclick="saveLabels()">保存到胸牌</button><span id=labelResult class=out></span></div></section>
+
+<section id=countdown><h2>倒数日</h2><p class=muted>最多 6 个日子，名称最多 8 个字。勾「每年」按周年倒数；勾「农历」时，日期里的月和日按农历算。没勾「每年」且已经过去的，显示「已经 N 天」。</p>
+<div class=row><label>下班时间 <input id=offwork type=time value="18:00"></label><span class=hint>留空表示不显示下班倒计时</span></div>
+<div id=events class=rows></div><div class=actions><button class=primary onclick="saveEvents()">保存到胸牌</button><span id=eventResult class=out></span></div></section>
+
+<section id=qr><h2>二维码</h2><p class=muted>最多 4 个。内容可以是网址、微信或支付宝收款码里的链接、任意文字，最多 300 字节（约 100 个汉字）。WiFi 二维码由胸牌按已连接的 WiFi 自动生成。</p>
+<div id=codes class=rows></div><div class=actions><button class=primary onclick="saveCodes()">保存到胸牌</button><span id=codeResult class=out></span></div></section>
+
+<section id=mac><h2>打开 Mac 程序</h2><p class=muted>对胸牌说「你好小智」，等它开始听，再说「打开 Mac 的 xxx」。这里设的口令优先，没设的按程序名自动找。胸牌自带的功能名（计算器、日历、天气…）仍打开胸牌上的，要开电脑上的请说「打开 Mac 的计算器」。最多 40 条，口令最多 12 个字。</p>
+<div id=macRows class=rows></div><datalist id=macApps></datalist>
+<div class=actions><button onclick="macRow()">＋ 添加一条</button><button class=primary onclick="saveMac()">保存</button><span id=macResult class=out></span></div>
+<h3>胸牌最近听到的</h3><p class=hint>没打开对的程序，可以把听到的词设为口令。</p><div id=macHeard class=rows></div></section>
+
+<section id=remote><h2>遥控与诊断</h2><p class=muted>和胸牌按键一样：确认进入功能，返回等于长按确认。</p>
+<div class="row remote"><button onclick="act('up')">上</button><button onclick="act('down')">下</button><button onclick="act('ok')">确认</button><button onclick="act('back')">返回</button><button onclick="act('settings')">设置</button><span id=actResult class=out></span></div>
+<details id=diag><summary>连接诊断信息</summary><pre id=state></pre></details></section>
+</main>
+<script src="/menu-editor.js"></script><script>
+const $=s=>document.querySelector(s);
+PassportMenu.mount($('#menu-editor'),'/api');
 function load(key){try{return JSON.parse(localStorage[key]||'null')}catch(e){return null}}
 function keep(key,value){try{localStorage[key]=JSON.stringify(value)}catch(e){}}
-async function send(path,body,out){out.textContent='发送中…';try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error((await r.json()).error);out.textContent='已发送';return true}catch(e){out.textContent='发送失败：'+e.message+'（请确认设备已连接）';return false}}
-const box=document.querySelector('#labels');const savedLabels=load('labels')||[];
-for(let i=0;i<5;i++){const input=document.createElement('input');input.maxLength=8;input.placeholder='例如：蹲坑中';input.value=savedLabels[i]||'';input.style.width='140px';box.append(input)}
-async function saveLabels(){const labels=[...box.querySelectorAll('input')].map(i=>i.value.trim());if(await send('/api/status-labels',{labels},document.querySelector('#labelResult')))keep('labels',labels)}
-const events=document.querySelector('#events');const savedEvents=load('events')||[];const off=load('offwork');if(off!==null)document.querySelector('#offwork').value=off;
-for(let i=0;i<6;i++){const e=savedEvents[i]||{};const row=document.createElement('div');row.className='row';row.innerHTML='<input class=name maxlength=8 placeholder="例如：发工资" style="width:130px"><input class=date type=date><label><input class=yearly type=checkbox>每年</label><label><input class=lunar type=checkbox>农历</label>';row.querySelector('.name').value=e.name||'';row.querySelector('.date').value=e.date||'';row.querySelector('.yearly').checked=!!e.yearly;row.querySelector('.lunar').checked=!!e.lunar;events.append(row)}
-async function saveEvents(){const list=[...events.children].map(r=>({name:r.querySelector('.name').value.trim(),date:r.querySelector('.date').value,yearly:r.querySelector('.yearly').checked,lunar:r.querySelector('.lunar').checked}));const offwork=document.querySelector('#offwork').value;const out=document.querySelector('#eventResult');if(list.some(e=>e.name&&!e.date)){out.textContent='请为每个日子选择日期';return}if(await send('/api/countdowns',{events:list.filter(e=>e.name),offwork},out)){keep('events',list);keep('offwork',offwork)}}
-const codes=document.querySelector('#codes');const savedCodes=load('codes')||[];
-for(let i=0;i<4;i++){const c=savedCodes[i]||{};const row=document.createElement('div');row.className='row';row.innerHTML='<input class=title maxlength=12 placeholder="标题，例如：我的名片" style="width:170px"><br><textarea class=text rows=2 cols=48 placeholder="内容，例如：https://..."></textarea>';row.querySelector('.title').value=c.title||'';row.querySelector('.text').value=c.text||'';codes.append(row)}
-async function saveCodes(){const list=[...codes.children].map(r=>({title:r.querySelector('.title').value.trim(),text:r.querySelector('.text').value.trim()}));const out=document.querySelector('#codeResult');if(list.some(c=>new TextEncoder().encode(c.text).length>300)){out.textContent='有内容超过 300 个字节';return}if(await send('/api/qr-codes',{codes:list},out))keep('codes',list)}
-let macApps=[];const macRows=document.querySelector('#macRows'),macOut=document.querySelector('#macResult');
-async function post(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.error);return j}
-function macRow(word='',path=''){const row=document.createElement('div');row.className='row';row.innerHTML='<input class=word maxlength=12 placeholder="说的词，例如：浏览器" style="width:170px"> → <input class=app list=macApps placeholder="输入或选择程序" style="width:280px"> <button class=try>试一下</button> <button class=del>删除</button> <span class=note></span>';
+function say(out,text,kind=''){out.textContent=text;out.className='out '+kind}
+const bytes=s=>new TextEncoder().encode(s).length,chars=s=>[...s].length;
+async function post(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let j={};try{j=await r.json()}catch(e){}if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j}
+async function send(path,body,out){say(out,'正在保存…');try{await post(path,body);say(out,'✓ 已保存到胸牌','ok');return true}catch(e){say(out,'保存失败：请确认胸牌已连接后重试（'+e.message+'）','err');return false}}
+
+const box=$('#labels'),savedLabels=load('labels')||[];
+for(let i=0;i<5;i++){const input=document.createElement('input');input.maxLength=12;input.placeholder=['例如：开会中','午休勿扰','外出 3 点回','专注写代码','蹲坑中'][i];input.value=savedLabels[i]||'';input.style.width='150px';input.setAttribute('aria-label','状态牌文字 '+(i+1));box.append(input)}
+async function saveLabels(){const labels=[...box.querySelectorAll('input')].map(i=>i.value.trim()),out=$('#labelResult');if(labels.some(t=>chars(t)>12||bytes(t)>=40))return say(out,'每条最多 12 个字','err');if(await send('/api/status-labels',{labels},out))keep('labels',labels)}
+
+const events=$('#events'),savedEvents=load('events')||[],off=load('offwork');if(off!==null)$('#offwork').value=off;
+for(let i=0;i<6;i++){const e=savedEvents[i]||{},row=document.createElement('div');row.className='row';row.innerHTML='<input class=name maxlength=8 placeholder="例如：发工资" style="width:140px" aria-label="名称"><input class=date type=date min=1901-01-01 max=2099-12-31 aria-label="日期"><label><input class=yearly type=checkbox> 每年</label><label><input class=lunar type=checkbox> 农历</label>';row.querySelector('.name').value=e.name||'';row.querySelector('.date').value=e.date||'';row.querySelector('.yearly').checked=!!e.yearly;row.querySelector('.lunar').checked=!!e.lunar;events.append(row)}
+async function saveEvents(){const list=[...events.children].map(r=>({name:r.querySelector('.name').value.trim(),date:r.querySelector('.date').value,yearly:r.querySelector('.yearly').checked,lunar:r.querySelector('.lunar').checked})),offwork=$('#offwork').value,out=$('#eventResult');
+ for(const e of list){if(!e.name)continue;if(!e.date)return say(out,'「'+e.name+'」还没选日期','err');const y=+e.date.slice(0,4),d=+e.date.slice(8);if(y<1901||y>2099)return say(out,'「'+e.name+'」的年份要在 1901–2099 之间','err');if(e.lunar&&d>30)return say(out,'「'+e.name+'」是农历，日子最大 30','err')}
+ if(await send('/api/countdowns',{events:list.filter(e=>e.name),offwork},out)){keep('events',list);keep('offwork',offwork)}}
+
+const codes=$('#codes'),savedCodes=load('codes')||[];
+for(let i=0;i<4;i++){const c=savedCodes[i]||{},row=document.createElement('div');row.className='rows';row.innerHTML='<div class=row><input class=title maxlength=12 placeholder="标题，例如：我的名片" style="width:200px" aria-label="标题"><span class=count></span></div><textarea class=text rows=2 style="width:100%" placeholder="内容，例如：https://…" aria-label="内容"></textarea>';const t=row.querySelector('.text'),n=row.querySelector('.count');row.querySelector('.title').value=c.title||'';t.value=c.text||'';const count=()=>{const b=bytes(t.value.trim());n.textContent=b+' / 300 字节';n.className='count'+(b>300?' err':'')};t.oninput=count;count();codes.append(row)}
+async function saveCodes(){const list=[...codes.children].map(r=>({title:r.querySelector('.title').value.trim(),text:r.querySelector('.text').value.trim()})),out=$('#codeResult');if(list.some(c=>bytes(c.text)>300))return say(out,'有内容超过 300 字节','err');if(await send('/api/qr-codes',{codes:list},out))keep('codes',list)}
+
+let macApps=[];const macRows=$('#macRows'),macOut=$('#macResult');
+function macRow(word='',path=''){const row=document.createElement('div');row.className='row';row.innerHTML='<input class=word maxlength=12 placeholder="说的词，例如：浏览器" style="width:170px" aria-label="口令"> → <input class=app list=macApps placeholder="输入或选择程序" style="width:260px" aria-label="程序"> <button class=try>试一下</button><button class=del>删除</button> <span class=out></span>';
  row.querySelector('.word').value=word;const a=macApps.find(x=>x.path==path);row.querySelector('.app').value=a?a.label:'';
  row.querySelector('.del').onclick=()=>row.remove();
- row.querySelector('.try').onclick=async()=>{const note=row.querySelector('.note'),p=macPath(row);if(!p){note.textContent='请从列表里选程序';return}try{note.textContent=(await post('/api/mac-open',{path:p})).note}catch(e){note.textContent='失败：'+e.message}};
+ row.querySelector('.try').onclick=async()=>{const note=row.lastElementChild,p=macPath(row);if(!p)return say(note,'请从列表里选程序','err');try{say(note,(await post('/api/mac-open',{path:p})).note,'ok')}catch(e){say(note,'失败：'+e.message,'err')}};
  macRows.append(row);return row}
-function macPath(row){const v=row.querySelector('.app').value.trim();const a=macApps.find(x=>x.label==v);return a?a.path:''}
-async function macLoad(){try{const r=await (await fetch('/api/mac-apps')).json();macApps=r.apps;const list=document.querySelector('#macApps');list.replaceChildren(...macApps.map(a=>{const o=document.createElement('option');o.value=a.label;return o}));
+function macPath(row){const v=row.querySelector('.app').value.trim(),a=macApps.find(x=>x.label==v);return a?a.path:''}
+async function macLoad(){try{const r=await (await fetch('/api/mac-apps')).json();macApps=r.apps;$('#macApps').replaceChildren(...macApps.map(a=>{const o=document.createElement('option');o.value=a.label;return o}));
  macRows.replaceChildren();for(const [w,p] of Object.entries(r.aliases||{}))macRow(w,p);if(!macRows.children.length)macRow();
- const heard=document.querySelector('#macHeard');heard.replaceChildren(...(r.history||[]).slice().reverse().map(h=>{const d=document.createElement('div');d.className='row';const s=document.createElement('span');s.textContent='「'+h.heard+'」 → '+(h.app?(h.ok?h.app:h.app+'（打不开）'):'没找到')+' ';const b=document.createElement('button');b.textContent='设为口令';b.onclick=()=>macRow(h.heard).querySelector('.app').focus();d.append(s,b);return d}));
- if(!(r.history||[]).length)heard.textContent='还没有'}catch(e){macOut.textContent='读取失败：'+e.message}}
-async function saveMac(){const aliases={};const rows=[...macRows.children];for(let i=0;i<rows.length;i++){const w=rows[i].querySelector('.word').value.trim(),p=macPath(rows[i]);if(!w&&!rows[i].querySelector('.app').value.trim())continue;if(!w){macOut.textContent='第 '+(i+1)+' 条没填口令';return}if(!p){macOut.textContent='第 '+(i+1)+' 条请从列表里选程序';return}if(w in aliases){macOut.textContent='口令「'+w+'」重复了';return}aliases[w]=p}
- try{await post('/api/mac-apps',{aliases});macOut.textContent='已保存，马上生效'}catch(e){macOut.textContent='保存失败：'+e.message}}
+ const heard=$('#macHeard'),history=r.history||[];heard.replaceChildren(...history.slice().reverse().map(h=>{const d=document.createElement('div');d.className='row';const s=document.createElement('span');s.textContent='「'+h.heard+'」 → '+(h.app?(h.ok?h.app:h.app+'（打不开）'):'没找到');const b=document.createElement('button');b.textContent='设为口令';b.onclick=()=>macRow(h.heard).querySelector('.app').focus();d.append(s,b);return d}));
+ if(!history.length)heard.innerHTML='<span class=hint>还没有</span>'}catch(e){say(macOut,'读取失败：'+e.message,'err')}}
+async function saveMac(){const aliases={},rows=[...macRows.children];for(let i=0;i<rows.length;i++){const w=rows[i].querySelector('.word').value.trim(),p=macPath(rows[i]);if(!w&&!rows[i].querySelector('.app').value.trim())continue;if(!w)return say(macOut,'第 '+(i+1)+' 条没填口令','err');if(!p)return say(macOut,'第 '+(i+1)+' 条请从列表里选程序','err');if(w in aliases)return say(macOut,'口令「'+w+'」重复了','err');aliases[w]=p}
+ try{await post('/api/mac-apps',{aliases});say(macOut,'✓ 已保存，马上生效','ok')}catch(e){say(macOut,'保存失败：'+e.message,'err')}}
 macLoad();
-async function act(command){await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command})})}setInterval(async()=>{let r=await fetch('/api/state');document.querySelector('#state').textContent=JSON.stringify(await r.json(),null,2)},1500)</script></html>'''
+
+async function act(command){const out=$('#actResult');try{await post('/api/action',{command});say(out,'')}catch(e){say(out,'胸牌没有响应','err')}}
+async function poll(){try{const s=await (await fetch('/api/state')).json(),c=$('#conn');const ready=s.link_ready,via=s.transport=='usb'?'USB':s.transport=='ble'?'蓝牙':'';c.textContent=ready?'胸牌已连接 · '+via:'胸牌未连接'+(via?'（正在通过'+via+'连接）':'');c.className='pill '+(ready?'ok':'bad');if($('#diag').open)$('#state').textContent=JSON.stringify(s,null,2)}catch(e){$('#conn').textContent='助手未响应';$('#conn').className='pill bad'}}
+poll();setInterval(poll,2000);$('#diag').ontoggle=poll;
+</script></html>'''
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
  def send(self,code,data,kind='application/json'):
