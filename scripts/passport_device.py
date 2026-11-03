@@ -79,7 +79,12 @@ class Radio:
       await client.connect()
       # Reading the encrypted key starts pairing; leave time to accept the macOS pairing prompt.
       # Windows does not pair on its own when a read needs encryption: ask for it (bleak accepts the confirmation).
-      if sys.platform=='win32':await client.pair()
+      # The badge also asks for security as it connects, so Windows may already be pairing and refuse this one
+      # (in progress / failed): wait and let the encrypted read below decide instead of dropping the link.
+      if sys.platform=='win32':
+       for attempt in range(3):
+        try:await client.pair();break
+        except Exception as error:print('BLE pair attempt',attempt+1,'failed:',error,file=sys.stderr,flush=True);await asyncio.sleep(2)
       async with asyncio.timeout(60):
        await client.read_gatt_char(KEY)
        await client.read_gatt_char(RPC_READ)
