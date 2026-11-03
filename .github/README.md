@@ -205,7 +205,7 @@ python -m esptool --chip esp32c3 -p PORT -b 921600 write-flash \
 
 ### 1. 安装
 
-安装包在 [Releases › 电脑助手 0.1.9 预览版](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/assistant-v0.1.9-preview)：Mac 下载 `…-macos-arm64.pkg`，Windows 下载 `…-windows-x64.zip`，可用同页的 `SHA256SUMS` 校验。
+安装包在 [Releases › 电脑助手 0.1.10 预览版](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/assistant-v0.1.10-preview)：Mac 下载 `…-macos-arm64.pkg`，Windows 下载 `…-windows-x64.zip`，可用同页的 `SHA256SUMS` 校验。
 
 **Mac**：双击 `.pkg` 安装，助手会装进「应用程序」。安装包没有签名和 Apple 公证，双击安装包或第一次打开时如果提示无法验证，到「系统设置 › 隐私与安全性」点「仍要打开」。
 
