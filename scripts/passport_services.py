@@ -219,7 +219,7 @@ class Services:
     def __init__(self,simulator):
         self.sim=simulator; self.stop=threading.Event(); self.jobs=queue.Queue(4)
         self.metrics=[]; self.details={}; self.codex=CodexReader(); self.active=None
-        self.previous_net=(time.monotonic(),psutil.net_io_counters()); self.previous_tasks={}; self.seen_completions=set(); self.claude=(0,None);self.usage_cache={}
+        self.previous_net=(time.monotonic(),psutil.net_io_counters()); self.previous_tasks={}; self.seen_completions=set(); self.claude=(0,None,0);self.usage_cache={}
         self.audio=AudioBridge(); self.cloud=None; self.media=MediaPlayer(self.audio,HTTP); self.current_request=None
         self.requested_context=None
         self.dictation_ble=BluetoothDictation(self)
@@ -378,12 +378,17 @@ class Services:
                 f"{current['temperature_2m']:.1f}°C 低{minimum:.0f}° 高{maximum:.0f}°",f"湿度 {current['relative_humidity_2m']}% · AQI {aqi}"]}
 
     def claude_snapshot(self):
-        # One read a minute: the page polls every 10 seconds and these limits move slowly.
-        if time.monotonic()-self.claude[0]>=60:
-            try: data=claude_usage()
-            except Exception as error: data={'windows':[],'error':type(error).__name__}
-            self.claude=(time.monotonic(),data); self.details['claude']=data
-        return self.claude[1]['windows']
+        # One read a minute: the page polls every 10 seconds and these limits move slowly. A 429 (rate_limit_error)
+        # comes often while Claude Code runs, probably from the same account limit: keep the last good windows for 30 minutes and retry
+        # in 5, instead of blanking the card.
+        now=time.monotonic(); next_at,data,good_at=self.claude
+        if now>=next_at:
+            try: data=claude_usage(); good_at=now; next_at=now+60
+            except Exception as error:
+                next_at=now+300
+                if data is None or now-good_at>1800: data={'windows':[],'error':type(error).__name__}
+            self.claude=(next_at,data,good_at); self.details['claude']=data
+        return data['windows']
 
     def usage_snapshot(self,name,read):
         """Cursor and OpenCode Go like Claude Code: one read a minute, failures as no rows."""

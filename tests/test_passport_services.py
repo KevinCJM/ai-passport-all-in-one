@@ -5,9 +5,26 @@ from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import patch,Mock,MagicMock
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from passport_services import Services,CodexReader,cursor_usage,gemini_usage
+from passport_services import Services,CodexReader,cursor_usage,gemini_usage,claude_usage
+import passport_services
+from urllib.error import HTTPError
 
 class ServiceTests(TestCase):
+    def test_claude_429_keeps_last_good_windows_and_retries_later(self):
+        # ponytail: 429 from the shared usage endpoint must not blank the card; the 5-minute retry is the only backoff.
+        good={'windows':[{'usedPercent':40,'windowDurationMins':300,'resetsAt':1}]}
+        limited=HTTPError('url',429,'Too Many Requests',None,None)
+        service=Services.__new__(Services);service.claude=(0,None,0);service.details={}
+        clock=[1000.0]
+        with patch('passport_services.time.monotonic',side_effect=lambda:clock[0]):
+            with patch.object(passport_services,'claude_usage',return_value=good) as read:
+                self.assertEqual(service.claude_snapshot(),good['windows']);read.assert_called_once()
+            clock[0]+=61
+            with patch.object(passport_services,'claude_usage',side_effect=limited) as read:
+                self.assertEqual(service.claude_snapshot(),good['windows'])  # kept, not blanked
+                clock[0]+=60; self.assertEqual(service.claude_snapshot(),good['windows']); read.assert_called_once()  # within 5 min: no retry
+                clock[0]+=240; self.assertEqual(service.claude_snapshot(),good['windows']); self.assertEqual(read.call_count,2)
+                clock[0]+=1900; self.assertEqual(service.claude_snapshot(),[])  # last good is over 30 minutes old: blank
     def test_weather_returns_structured_values_for_home_cards(self):
         service=Services.__new__(Services);service.settings={'ip_location_allowed':True}
         service.details={'weather':{'retrieved':time.time(),'location':{'city':'杭州','region':'浙江','country':'中国'},'weather':{'temperature_2m':24.7,'relative_humidity_2m':85,'weather_code':51},'air':{'us_aqi':161},'daily':{'temperature_2m_min':[21],'temperature_2m_max':[31]}}}
