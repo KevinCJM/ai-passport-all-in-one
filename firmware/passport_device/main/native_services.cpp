@@ -253,6 +253,8 @@ void NativeServices::home(){
      const double temperature=num(current,"temperature_2m"),humidity=num(current,"relative_humidity_2m"),code=num(current,"weather_code");
      if(!std::isfinite(temperature)||!std::isfinite(humidity)||humidity<0||humidity>100||!std::isfinite(code)||!cJSON_IsNumber(low)||!cJSON_IsNumber(high)||low->valuedouble>high->valuedouble){publish(current_,"天气数据无效","ready");return;}
      if(!weatherReading_.update(city,weatherName(code),temperature,low->valuedouble,high->valuedouble,humidity,code,NAN)){publish(current_,"天气数据无效","ready");return;}
+     const double offset=!strcmp(prefs.country,"CN")?28800:num(forecast.value,"utc_offset_seconds");
+     if(std::isfinite(offset)&&std::fabs(offset)<=14*3600){CityZone zone,saved;zone.offset=int32_t(offset);applyCityZone(zone.offset);if(!mediaLoad("zone",saved)||saved.offset!=zone.offset)mediaSave("zone",zone);}
      snprintf(weather_[1],sizeof(weather_[1]),"%s %s",city,weatherName(code));snprintf(weather_[2],sizeof(weather_[2]),"%.1f°C 低%.0f° 高%.0f°",temperature,low->valuedouble,high->valuedouble);snprintf(weather_[3],sizeof(weather_[3]),"湿度 %.0f%% · AQI --",humidity);}
     data.reset();
     if(WeatherForecast reading{};air(latitude,longitude,reading)){const int aqi=reading.aqi[0];weatherReading_.aqi=aqi;weatherReading_.airKnown=true;char* start=strstr(weather_[3],"AQI --");if(start)snprintf(start,sizeof(weather_[3])-(start-weather_[3]),"AQI %d",aqi);}

@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <ctime>
 #include <cstring>
 #include <iterator>
 #include "../../passport_suite/main/radio_stations.hpp"
@@ -63,4 +65,11 @@ template<class T> bool mediaSave(const char* key,const T& value){
     nvs_close(h);return ok;
 }
 #endif
+// The clock follows the city: its UTC offset from Open-Meteo (timezone=auto), China fixed at UTC+8, saved so the
+// clock is right from boot. ponytail: one fixed offset, a DST change shows at the next weather refresh (10 min).
+struct CityZone{static constexpr uint32_t kVersion=1;uint32_t version{kVersion};int32_t offset{8*3600};};
+inline void applyCityZone(int32_t offset){
+    const int32_t minutes=(offset<0?-offset:offset)/60;char tz[16];  // POSIX: "LOC-8:00" is UTC+8
+    snprintf(tz,sizeof(tz),"LOC%c%d:%02d",offset>0?'-':'+',int(minutes/60),int(minutes%60));setenv("TZ",tz,1);tzset();
+}
 }

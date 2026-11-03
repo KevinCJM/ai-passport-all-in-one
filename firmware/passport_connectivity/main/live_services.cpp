@@ -80,6 +80,9 @@ void LiveServices::init(httpd_handle_t server) {
     endpoint.uri="/app_state"; endpoint.method=HTTP_GET; endpoint.handler=statusRoute;
     ESP_ERROR_CHECK(httpd_register_uri_handler(server,&endpoint));
     setenv("TZ",runtime_.settings().timezone,1); tzset();
+#ifdef PASSPORT_DEVICE
+    if(CityZone zone;mediaLoad("zone",zone))applyCityZone(zone.offset);  // the chosen city's, saved by the weather fetch
+#endif
 }
 esp_err_t LiveServices::snapshot(httpd_req_t* request) {
 #ifdef PASSPORT_DEVICE
