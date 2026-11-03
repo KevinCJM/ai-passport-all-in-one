@@ -132,6 +132,7 @@ class CodexReader:
         self.process=None
 
 
+CLAUDE_LIMITS=Path.home()/'.claude/passport-rate-limits.json'
 def claude_usage():
     """Claude Code plan limits, read with its own login (Mac keychain; on Windows its credentials file); the token is
     never refreshed or kept."""
@@ -381,6 +382,17 @@ class Services:
         # One read a minute: the page polls every 10 seconds and these limits move slowly. A 429 (rate_limit_error)
         # comes often while Claude Code runs, probably from the same account limit: keep the last good windows for 30 minutes and retry
         # in 5, instead of blanking the card.
+        # While Claude Code runs, /api/oauth/usage answers 429 but its status line gets these limits from every API reply.
+        # A status line script can save them:  jq -c 'select(.rate_limits)|.rate_limits+{saved:now}' > ~/.claude/passport-rate-limits.json
+        # A copy under 10 minutes old is used and the endpoint is not called.
+        try:
+            saved=json.loads(CLAUDE_LIMITS.read_text())
+            if time.time()-saved['saved']<600:
+                data={'windows':[{'usedPercent':w['used_percentage'],'windowDurationMins':minutes,'resetsAt':int(w['resets_at'])}
+                                 for name,minutes in (('five_hour',300),('seven_day',10080)) if (w:=saved.get(name))],
+                      'source':'Claude Code status line'}
+                self.details['claude']=data; return data['windows']
+        except (OSError,ValueError,KeyError,TypeError): pass
         now=time.monotonic(); next_at,data,good_at=self.claude
         if now>=next_at:
             try: data=claude_usage(); good_at=now; next_at=now+60

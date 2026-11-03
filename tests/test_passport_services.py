@@ -16,7 +16,7 @@ class ServiceTests(TestCase):
         limited=HTTPError('url',429,'Too Many Requests',None,None)
         service=Services.__new__(Services);service.claude=(0,None,0);service.details={}
         clock=[1000.0]
-        with patch('passport_services.time.monotonic',side_effect=lambda:clock[0]):
+        with patch('passport_services.time.monotonic',side_effect=lambda:clock[0]),patch.object(passport_services,'CLAUDE_LIMITS',Path('/nonexistent')):
             with patch.object(passport_services,'claude_usage',return_value=good) as read:
                 self.assertEqual(service.claude_snapshot(),good['windows']);read.assert_called_once()
             clock[0]+=61
@@ -25,6 +25,17 @@ class ServiceTests(TestCase):
                 clock[0]+=60; self.assertEqual(service.claude_snapshot(),good['windows']); read.assert_called_once()  # within 5 min: no retry
                 clock[0]+=240; self.assertEqual(service.claude_snapshot(),good['windows']); self.assertEqual(read.call_count,2)
                 clock[0]+=1900; self.assertEqual(service.claude_snapshot(),[])  # last good is over 30 minutes old: blank
+    def test_claude_prefers_fresh_status_line_limits_over_the_endpoint(self):
+        import tempfile
+        service=Services.__new__(Services);service.claude=(0,None,0);service.details={}
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'limits.json'
+            path.write_text(json.dumps({'five_hour':{'used_percentage':9,'resets_at':1793709600.0},'saved':time.time()}))
+            with patch.object(passport_services,'CLAUDE_LIMITS',path),patch.object(passport_services,'claude_usage') as read:
+                self.assertEqual(service.claude_snapshot(),[{'usedPercent':9,'windowDurationMins':300,'resetsAt':1793709600}])
+                read.assert_not_called()
+                path.write_text(json.dumps({'five_hour':{'used_percentage':9,'resets_at':1},'saved':time.time()-601}))
+                read.return_value={'windows':[]}; service.claude_snapshot(); read.assert_called_once()  # stale: endpoint
     def test_weather_returns_structured_values_for_home_cards(self):
         service=Services.__new__(Services);service.settings={'ip_location_allowed':True}
         service.details={'weather':{'retrieved':time.time(),'location':{'city':'杭州','region':'浙江','country':'中国'},'weather':{'temperature_2m':24.7,'relative_humidity_2m':85,'weather_code':51},'air':{'us_aqi':161},'daily':{'temperature_2m_min':[21],'temperature_2m_max':[31]}}}
