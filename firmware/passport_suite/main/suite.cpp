@@ -1196,8 +1196,8 @@ void Runtime::key(Key key, uint64_t now) {
         auto& t = model.page.typhoon;
         if (t.count && (key == Key::Up || key == Key::Down)) model.typhoonIndex = (model.typhoonIndex + (key == Key::Up ? t.count - 1 : 1)) % t.count;
     } else if (active_ == App::Codex) {
-        // AI 额度: Up/Down turn between Codex + Claude Code and Cursor + OpenCode Go; Confirm refreshes (LiveServices).
-        if (key == Key::Up || key == Key::Down) model.quotaPage ^= 1;
+        // AI 额度: Up/Down turn to the previous or next tool; Confirm refreshes (LiveServices).
+        if (key == Key::Up || key == Key::Down) model.quotaPage = (model.quotaPage + (key == Key::Up ? Model::kQuotaTools - 1 : 1)) % Model::kQuotaTools;
     } else if (active_ == App::Feishu) {
         // Up/Down pick a message, in the list or the open one; Confirm opens it, and in the open one reads it aloud
         // (LiveServices; confirmTaken keeps the opening Confirm from reading too). Back closes it.

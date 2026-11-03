@@ -191,6 +191,30 @@ def opencode_usage():
     return {'windows':[row('rolling',300),longer],'source':'OpenCode Go usage read-only'}
 
 
+def gemini_usage():
+    """Gemini's limits in Antigravity (the agy CLI's login, Mac keychain), with the token never refreshed or kept. Two
+    rows: Pro, then Flash, each at its most used model. Antigravity gives a reset time per model but no window length,
+    so the rows carry the 5-hour cadence it reports."""
+    import base64
+    if sys.platform=='win32':raise FileNotFoundError('Gemini usage is read on the Mac only')
+    raw=subprocess.run(['security','find-generic-password','-s','gemini','-a','antigravity','-w'],capture_output=True,text=True,timeout=10,check=True).stdout.strip()
+    token=json.loads(base64.b64decode(raw.split(':',1)[1]))['token']['access_token']
+    # The API answers only the Antigravity client: a plain Python request is refused with 403.
+    request=urllib.request.Request('https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',data=b'{}',headers={
+        'Authorization':'Bearer '+token,'Content-Type':'application/json','User-Agent':'antigravity/1.4.10'})
+    with urllib.request.urlopen(request,timeout=8) as response:models=json.loads(response.read(2_000_000))['models']
+    families={'Pro':[],'Flash':[]}
+    for name,model in models.items():
+        info=model.get('quotaInfo') or {}; fraction=info.get('remainingFraction')
+        if not name.startswith('gemini-') or 'image' in name or not isinstance(fraction,(int,float)):continue
+        families['Pro' if 'pro' in name else 'Flash'].append((fraction,iso_epoch(info.get('resetTime'))))
+    windows=[]
+    for family in ('Pro','Flash'):
+        if not families[family]:continue
+        fraction,resets=min(families[family])
+        windows.append({'usedPercent':round((1-fraction)*100,1),'windowDurationMins':300,'resetsAt':resets})
+    return {'windows':windows,'source':'Antigravity Gemini quota read-only'}
+
 class Services:
     def __init__(self,simulator):
         self.sim=simulator; self.stop=threading.Event(); self.jobs=queue.Queue(4)
@@ -375,8 +399,8 @@ class Services:
         try: data=self.codex.snapshot(); failure=None
         except Exception as error: data={'windows':[],'tasks':[]}; failure=error
         self.details['codex']=data; claude=self.claude_snapshot()
-        cursor=self.usage_snapshot('cursor',cursor_usage);opencode=self.usage_snapshot('opencode',opencode_usage)
-        if failure and not (claude or cursor or opencode): raise failure
+        gemini=self.usage_snapshot('gemini',gemini_usage);cursor=self.usage_snapshot('cursor',cursor_usage);opencode=self.usage_snapshot('opencode',opencode_usage)
+        if failure and not (claude or gemini or cursor or opencode): raise failure
         windows=sorted(data['windows'],key=lambda w:w.get('windowDurationMins') or 10**9)
         lines=[]
         completed=[t for t in data['tasks'] if t.get('event')=='task_complete' and (t['id'],t['event_id']) not in self.seen_completions]
@@ -386,10 +410,10 @@ class Services:
             self.seen_completions.update((t['id'],t['event_id']) for t in completed)
             data['notice_source']={'thread_id':task['id'],'event':'task_complete','at':task['event_at']}
         else: notice=''
-        # Eight fixed slots, two a tool: Codex short/long window, Claude Code 5 hours/7 days, Cursor plan/API, OpenCode
-        # Go 5 hours/week or month; missing ones read unknown.
+        # Ten fixed slots, two a tool: Codex short/long window, Claude Code 5 hours/7 days, Gemini Pro/Flash, Cursor
+        # plan/API, OpenCode Go 5 hours/week or month; missing ones read unknown.
         slots=lambda found:[{'used':round(w['usedPercent']),'minutes':w.get('windowDurationMins') or 0,'resets':w.get('resetsAt') or 0} for w in found[:2]]+[{'used':-1,'minutes':0,'resets':0}]*(2-len(found[:2]))
-        quotas=slots(windows)+slots(claude)+slots(cursor)+slots(opencode)
+        quotas=slots(windows)+slots(claude)+slots(gemini)+slots(cursor)+slots(opencode)
         return {'state':'额度已更新','value':'','windows':quotas,'lines':lines,'notice':notice}
 
     def push(self,payload,context=None):

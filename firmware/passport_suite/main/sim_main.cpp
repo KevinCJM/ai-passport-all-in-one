@@ -1473,10 +1473,16 @@ extern "C" void app_main() {
     runtime.switchTo(App::Home);
     // Explicit UI fixtures; none are reported as live account or sensor data.
     {const auto at=[](int seconds){return static_cast<uint32_t>(time(nullptr)+seconds);};auto& q=runtime.model.quotas;
-    q[0]={true,24,300,at(2*3600+10*60)};q[1]={true,11,10080,at(6*86400+3*3600)};q[2]={true,0,300,at(3600+30*60)};q[3]={true,74,10080,at(86400+15*3600)};
-    q[4]={true,38,43200,at(20*86400)};q[5]={true,12,43200,at(20*86400)};q[6]={true,5,300,at(4*3600)};q[7]={};}
+    q[0]={true,24,300,at(2*3600+10*60)};q[1]={true,11,10080,at(6*86400+3*3600)};        // Codex
+    q[2]={true,0,300,at(3600+30*60)};q[3]={true,74,10080,at(86400+15*3600)};              // Claude Code
+    q[4]={true,8,300,at(3*3600)};q[5]={true,0,300,at(3*3600)};                            // Gemini Pro, Flash
+    q[6]={true,38,43200,at(20*86400)};q[7]={true,12,43200,at(20*86400)};                  // Cursor
+    q[8]={true,5,300,at(4*3600)};q[9]={};}                                                 // OpenCode Go: its week unknown
     runtime.switchTo(App::Codex);runtime.model.quotaPage=0;uiRender(runtime);uiCapture("codex_quota");
-    runtime.key(Key::Down,0);CHECK(runtime.model.quotaPage==1);uiRender(runtime);uiCapture("codex_quota_page2");runtime.key(Key::Up,0);CHECK(runtime.model.quotaPage==0);
+    runtime.key(Key::Down,0);CHECK(runtime.model.quotaPage==1);uiRender(runtime);uiCapture("codex_quota_page2");
+    runtime.key(Key::Up,0);CHECK(runtime.model.quotaPage==0);runtime.key(Key::Up,0);CHECK(runtime.model.quotaPage==4);
+    runtime.key(Key::Down,0);CHECK(runtime.model.quotaPage==0);
+    runtime.model.quotaPage=2;uiRender(runtime);uiCapture("codex_quota_gemini");runtime.model.quotaPage=0;
     {   // Pomodoro fixture: third focus round, 18:23 left; then the same round paused.
         runtime.switchTo(App::Focus);auto& p=runtime.model;const auto saved=std::make_tuple(p.focusRunning,p.focusRemaining,p.focusRounds,p.focusDeadline);
         p.focusRounds=2;p.focusRemaining=1103;p.focusRunning=true;p.focusDeadline=~0ULL;

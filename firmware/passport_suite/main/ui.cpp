@@ -194,7 +194,7 @@ lv_obj_t *headingMark,*hero,*heroBadge,*heroIcon,*heroTrack,*heroFill,*detail;
 lv_obj_t *pomoRoot,*pomoArc,*pomoTime,*pomoState,*pomoPhase,*pomoRounds,*pomoAction,*pomoActionIcon,*pomoActionText,*pomoDots[4];
 lv_obj_t *pomoTabs[3],*pomoTabText[3];
 lv_obj_t *dashboard,*dashboardTitle,*cards[2],*cardTitles[2],*cardValues[2],*cardDetails[2],*cardBars[2],*cardTrends[2],*dashboardFoot;
-lv_obj_t *quotaNames[4],*quotaResets[4],*quotaValues[4],*quotaFills[4];App dashboardApp{};
+lv_obj_t *quotaNames[2],*quotaResets[2],*quotaValues[2],*quotaFills[2];App dashboardApp{};
 lv_point_precise_t trendPoints[24];
 lv_obj_t *tileTitles[4],*tileValues[4],*tileBars[4];
 lv_obj_t *connectionRoot,*connectionTitle,*connectionSpinner,*connectionMessage,*connectionHint,*connectionError;
@@ -326,18 +326,15 @@ void initDashboard(lv_obj_t* screen,App app) {
     dashboard=lv_obj_create(screen);box(dashboard,0,35,240,257,kBg);dashboardApp=app;
     titleMark(dashboard,12,10);dashboardTitle=label(dashboard,24,7,204,LV_FONT_DEFAULT,kText);
     for(unsigned i=0;i<2;++i){
-        cards[i]=lv_obj_create(dashboard);box(cards[i],12,32+i*101,216,95,kPanel,12);lv_obj_set_style_border_width(cards[i],1,0);lv_obj_set_style_border_color(cards[i],lv_color_hex(kBorder),0);
-        if(app==App::Codex){
-            // AI quota: one card per tool, a row per limit window with a remaining-share bar.
-            cardTitles[i]=label(cards[i],12,6,192,LV_FONT_DEFAULT,kText);
-            for(unsigned r=0;r<2;++r){
-                const unsigned n=i*2+r;const int y=31+r*32;
-                quotaNames[n]=label(cards[i],12,y,64,LV_FONT_DEFAULT,kText);lv_obj_set_height(quotaNames[n],20);
-                quotaResets[n]=label(cards[i],58,y,96,LV_FONT_DEFAULT,kMuted);lv_obj_set_height(quotaResets[n],20);
-                quotaValues[n]=label(cards[i],150,y-2,54,&lv_font_montserrat_20,kAccent);setTextAlign(quotaValues[n],LV_TEXT_ALIGN_RIGHT,0);
-                auto* track=lv_obj_create(cards[i]);box(track,12,y+22,192,4,kBorder,2);
-                quotaFills[n]=lv_obj_create(track);box(quotaFills[n],0,0,1,4,kAccent,2);
-            }
+        // AI quota: one tool a page, a card per window: its name, reset time, remaining share large, and a bar.
+        const bool quota=app==App::Codex;
+        cards[i]=lv_obj_create(dashboard);box(cards[i],12,quota?32+i*92:32+i*101,216,quota?84:95,kPanel,12);lv_obj_set_style_border_width(cards[i],1,0);lv_obj_set_style_border_color(cards[i],lv_color_hex(kBorder),0);
+        if(quota){
+            quotaNames[i]=label(cards[i],14,10,90,LV_FONT_DEFAULT,kText);lv_obj_set_height(quotaNames[i],20);
+            quotaResets[i]=label(cards[i],14,32,84,LV_FONT_DEFAULT,kMuted);lv_obj_set_height(quotaResets[i],20);
+            quotaValues[i]=label(cards[i],64,2,148,&lv_font_montserrat_48,kAccent);setTextAlign(quotaValues[i],LV_TEXT_ALIGN_RIGHT,0);
+            auto* track=lv_obj_create(cards[i]);box(track,14,66,190,6,kBorder,3);
+            quotaFills[i]=lv_obj_create(track);box(quotaFills[i],0,0,1,6,kAccent,3);
             continue;
         }
         break;
@@ -357,7 +354,7 @@ void initDashboard(lv_obj_t* screen,App app) {
             tileBars[n]=lv_obj_create(tile);box(tileBars[n],8,48,1,3,kAccent,1);
         }
     }
-    dashboardFoot=label(dashboard,12,app==App::Codex?232:234,216,LV_FONT_DEFAULT,kMuted);visible(dashboard,false);
+    dashboardFoot=label(dashboard,12,app==App::Codex?222:234,216,LV_FONT_DEFAULT,kMuted);visible(dashboard,false);
 }
 // Chat page: the text record fills the page bottom-up; older entries clip off the top.
 // It lives in the 12 KiB chat pool, so entries share two styles and point at the model's text.
@@ -2595,20 +2592,24 @@ void quotaLine(char* name,char* reset,size_t size,const Model::Quota& q){
     else snprintf(reset,size,"%lld:%02lld 重置",static_cast<long long>(left/3600),static_cast<long long>(left/60%60));
 }
 void renderQuotas(const Model& model){
-    char text[64],reset[64];const unsigned page=model.quotaPage&1;
-    setLabel(dashboardTitle,page?"AI 额度  ·  2/2":"AI 额度  ·  1/2");
-    setLabel(cardTitles[0],page?"Cursor":"Codex");setLabel(cardTitles[1],page?"OpenCode Go":"Claude Code");
-    for(unsigned n=0;n<4;++n){
-        const auto& q=model.quotas[page*4+n];const int left=q.known?100-q.used:0;
-        if(q.known)quotaLine(text,reset,sizeof(text),q);else{strcpy(text,"暂不可用");reset[0]=0;}
-        if(q.known&&page&&n<2)strcpy(text,n?"API":"本期");  // Cursor: the whole plan (its period may be a week), then the API-priced models
-        setLabel(quotaNames[n],text);setLabel(quotaResets[n],reset);
+    static const char* const tools[Model::kQuotaTools]={"Codex","Claude Code","Gemini","Cursor","OpenCode Go"};
+    const unsigned page=model.quotaPage%Model::kQuotaTools;
+    char text[64],name[64],reset[64];
+    snprintf(text,sizeof(text),"%s  ·  %u/%u",tools[page],page+1,static_cast<unsigned>(Model::kQuotaTools));
+    setLabel(dashboardTitle,text);
+    for(unsigned n=0;n<2;++n){
+        const auto& q=model.quotas[page*2+n];const int left=q.known?100-q.used:0;
+        reset[0]=0;
+        if(q.known)quotaLine(name,reset,sizeof(name),q);else strcpy(name,"暂不可用");
+        if(q.known&&page==2)strcpy(name,n?"Flash":"Pro");  // Gemini: the model families, each with its reset
+        if(q.known&&page==3)strcpy(name,n?"API":"本期");  // Cursor: the whole plan (its period may be a week), then the API-priced models
+        setLabel(quotaNames[n],name);setLabel(quotaResets[n],reset);
         if(q.known)snprintf(text,sizeof(text),"%d%%",left);else strcpy(text,"--");setLabel(quotaValues[n],text);
         const auto color=!q.known?kMuted:left<=10?kWarn:left<=30?0xffe08a:kAccent;
         setTextColor(quotaValues[n],lv_color_hex(color),0);setBgColor(quotaFills[n],lv_color_hex(color),0);
-        setWidth(quotaFills[n],std::max(1,left*192/100));
+        setWidth(quotaFills[n],std::max(1,left*190/100));
     }
-    setLabel(dashboardFoot,"百分比为剩余额度");
+    setLabel(dashboardFoot,"百分比为剩余额度 · 上下翻页");
 }
 void renderDashboard(App app,const Model& model) {
     if(app==App::Codex){renderQuotas(model);return;}

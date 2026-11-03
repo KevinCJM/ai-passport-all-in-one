@@ -3,9 +3,9 @@ import base64,json,sys,time,threading
 from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest import TestCase
-from unittest.mock import patch,Mock
+from unittest.mock import patch,Mock,MagicMock
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from passport_services import Services,CodexReader,cursor_usage
+from passport_services import Services,CodexReader,cursor_usage,gemini_usage
 
 class ServiceTests(TestCase):
     def test_weather_returns_structured_values_for_home_cards(self):
@@ -56,6 +56,24 @@ class ServiceTests(TestCase):
         request=opened.call_args.args[0]
         self.assertTrue(request.full_url.endswith('/api/dashboard/get-current-period-usage'))
         self.assertEqual(request.data,b'{}')
+
+    def test_gemini_usage_keeps_the_most_used_pro_and_flash_model(self):
+        envelope='go-keyring-base64:'+base64.b64encode(json.dumps({'token':{'access_token':'ya29.test'}}).encode()).decode()
+        models={'gemini-2.5-pro':{'quotaInfo':{'remainingFraction':0.75,'resetTime':'2026-11-03T13:21:07Z'}},
+                'gemini-3-flash':{'quotaInfo':{'remainingFraction':1,'resetTime':'2026-11-03T13:21:07Z'}},
+                'gemini-3.5-flash-lite':{'quotaInfo':{'remainingFraction':0.4,'resetTime':'2026-11-03T14:00:00Z'}},
+                'gemini-3.1-flash-image':{'quotaInfo':{'remainingFraction':0.1,'resetTime':'2026-11-03T13:21:07Z'}},
+                'claude-opus-5-5-high':{'quotaInfo':{'remainingFraction':0,'resetTime':'2026-11-03T13:21:07Z'}}}
+        response=MagicMock();response.read.return_value=json.dumps({'models':models}).encode()
+        response.__enter__.return_value=response
+        with patch('passport_services.subprocess.run',return_value=NS(stdout=envelope+'\n')) as keychain,\
+             patch('passport_services.urllib.request.urlopen',return_value=response) as opened:
+            data=gemini_usage()
+        self.assertEqual(keychain.call_args.args[0][:5],['security','find-generic-password','-s','gemini','-a'])
+        self.assertEqual(data['windows'][0]['usedPercent'],25.0)  # Pro
+        self.assertEqual(data['windows'][1]['usedPercent'],60.0)  # Flash: the lite model at 40% left
+        self.assertEqual(data['windows'][1]['resetsAt'],1793714400)
+        self.assertEqual(opened.call_args.args[0].get_header('Authorization'),'Bearer ya29.test')
 
     def test_codex_cache_avoids_restarting_or_refetching_on_reentry(self):
         reader=CodexReader();reader.start=Mock();reader.rpc=Mock(side_effect=[{'rateLimits':{'primary':{'usedPercent':12,'windowDurationMins':300}}},{'data':[]}])
