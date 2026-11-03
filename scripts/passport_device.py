@@ -318,7 +318,7 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 <main>
 <header><h1>AI Passport 设置</h1><span id=conn class=pill>正在检查连接…</span></header>
 <p class=lead>胸牌的设置保存在胸牌里，胸牌通过 USB 或蓝牙连着这台电脑时才能读取和保存。</p>
-<nav><a href="#assistant" class=assistant hidden>电脑助手</a><a href="#menu">菜单</a><a href="#status">状态牌</a><a href="#countdown">倒数日</a><a href="#qr">二维码</a><a href="#mac">打开电脑程序</a><a href="#remote">模拟遥控</a><a href="#diag">诊断</a></nav>
+<nav><a href="#assistant" class=assistant hidden>电脑助手</a><a href="#menu">菜单</a><a href="#status">状态牌</a><a href="#countdown">倒数日</a><a href="#qr">二维码</a><a href="#mac">打开电脑程序</a><a href="#feishu">飞书提醒</a><a href="#remote">模拟遥控</a><a href="#diag">诊断</a></nav>
 
 <section id=assistant class=assistant hidden><h2>电脑助手</h2>
 <div class=row><span id=aStatus class=pill>正在检查…</span></div><p id=aMessage class=hint></p><div id=aCode class=code hidden></div>
@@ -347,6 +347,14 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 <div id=macRows class=rows></div><datalist id=macApps></datalist>
 <div class=actions><button onclick="macRow()">＋ 添加一条</button><button class=primary onclick="saveMac()">保存</button><span id=macResult class=out></span></div>
 <h3>胸牌最近听到的</h3><p class=hint>没打开对的程序，可以把听到的词设为口令。</p><div id=macHeard class=rows></div></section>
+
+<section id=feishu><h2>飞书提醒</h2><p class=muted>电脑上的飞书来消息时，胸牌底部弹出「飞书 · 谁：消息开头」。不用申请飞书应用，助手读的是飞书发给电脑的系统通知。胸牌上的「飞书提醒」页可以看最近 6 条、朗读、切换提醒方式。</p>
+<p class=hint>要先做两件事：① 在「系统设置 › 隐私与安全性 › 完全磁盘访问权限」里打开 AI Passport Assistant；② 在飞书「设置 › 通知」里允许系统通知并显示消息详情。你正在看飞书窗口时，飞书不发通知。用 USB 连接时任何页面都能收到；用蓝牙时停在「飞书提醒」页才收得到。</p>
+<div class=row><span id=fsStatus class=pill>正在检查…</span></div>
+<label class=row>提醒方式 <select id=fsMode><option value=0>全部提醒</option><option value=1>只提醒特别关注</option><option value=2>不提醒</option></select></label>
+<label class=rows>特别关注（名字或关键词，用逗号分开；这些消息显示成红色、停留更久，番茄钟专注时也会提醒）<textarea id=fsVip rows=2 style="width:100%" placeholder="例如：老板, 张三, 紧急"></textarea></label>
+<label class=rows>不提醒（名字或群名，用逗号分开；胸牌页面里仍然列出）<textarea id=fsMute rows=2 style="width:100%" placeholder="例如：闲聊群"></textarea></label>
+<div class=actions><button class=primary onclick="fsSave()">保存</button><button onclick="fsTest()">发一条测试提醒</button><span id=fsResult class=out></span></div></section>
 
 <section id=remote><h2>模拟遥控</h2><p class=muted>点一下等于按一下胸牌上对应的键，长按也一样。</p>
 <div class="row remote"><button onclick="act('up')">上</button><button onclick="act('down')">下</button><button onclick="act('ok')">确认</button><button onclick="act('ap_on')">长按上</button><button onclick="act('settings')">长按下</button><button onclick="act('back')">长按确认</button><span id=actResult class=out></span></div></section>
@@ -404,6 +412,12 @@ async function saveMac(){const aliases={},rows=[...macRows.children];for(let i=0
  try{await post('/api/mac-apps',{aliases});say(macOut,'✓ 已保存，马上生效','ok')}catch(e){say(macOut,'保存失败：'+e.message,'err')}}
 macLoad();
 
+async function fsLoad(){try{const r=await (await fetch('/api/feishu')).json(),st=$('#fsStatus');$('#fsMode').value=r.mode;$('#fsVip').value=r.vip.join(', ');$('#fsMute').value=r.mute.join(', ');
+ st.textContent=r.error?r.error:r.reading?('正在读取飞书通知 · 今天 '+r.today+' 条'):'还没开始读取';st.className='pill'+(r.error?' bad':r.reading?' ok':'')}catch(e){say($('#fsResult'),'读取失败：'+e.message,'err')}}
+async function fsSave(){try{await post('/api/feishu',{mode:+$('#fsMode').value,vip:$('#fsVip').value,mute:$('#fsMute').value});say($('#fsResult'),'✓ 已保存，马上生效','ok');fsLoad()}catch(e){say($('#fsResult'),'保存失败：'+e.message,'err')}}
+async function fsTest(){try{await post('/api/feishu-test',{});say($('#fsResult'),'已发送，看胸牌底部','ok')}catch(e){say($('#fsResult'),'胸牌没有响应：请确认已连接','err')}}
+fsLoad();
+
 async function act(command){const out=$('#actResult');try{await post('/api/action',{command});say(out,'')}catch(e){say(out,'胸牌没有响应','err')}}
 async function copyDiag(){try{await navigator.clipboard.writeText($('#state').textContent);say($('#diagResult'),'已复制')}catch(e){say($('#diagResult'),'复制失败，请手动选中复制','err')}}
 // The badge connects after the page opened (or comes back): read the sections that could not be read yet.
@@ -454,6 +468,7 @@ class Handler(BaseHTTPRequestHandler):
    if self.path=='/api/app-state':return self.send(200,DEVICE.request('/app_state'))
    if self.path=='/api/device-info':return self.send(200,DEVICE.request('/wifi/status'))
    if self.path=='/api/mac-apps':return self.send(200,DEVICE.services.mac_config())
+   if self.path=='/api/feishu':return self.send(200,DEVICE.services.feishu.state())
    # What the badge has saved now (0.5.28+), so the page edits that instead of a stale browser copy.
    if self.path=='/api/status-labels':return self.send(200,DEVICE.request('/content/status'))
    if self.path=='/api/countdowns':return self.send(200,DEVICE.request('/content/countdowns'))
@@ -480,6 +495,8 @@ class Handler(BaseHTTPRequestHandler):
    elif self.path=='/api/countdowns':result=DEVICE.countdowns(data['events'],data['offwork'])
    elif self.path=='/api/qr-codes':result=DEVICE.qr_codes(data['codes'])
    elif self.path=='/api/mac-apps':result=DEVICE.services.set_mac_aliases(data['aliases'])
+   elif self.path=='/api/feishu':result=DEVICE.services.feishu.configure(int(data['mode']),data['vip'],data['mute'])
+   elif self.path=='/api/feishu-test':result=DEVICE.services.feishu_test()
    elif self.path=='/api/mac-open':result={'note':DEVICE.services.mac.open_path(data['path'])}
    else:return self.send(404,{'error':'not found'})
    return self.send(200,result)

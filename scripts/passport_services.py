@@ -23,6 +23,7 @@ from passport_dictation import BluetoothDictation
 from passport_guard import Guard
 from passport_ledger import Ledger
 from passport_mac_open import MacOpener
+from passport_feishu import Feishu,BUNDLE as FEISHU_BUNDLE
 from passport_computer_link import LinkBusy
 from passport_paths import live_data, user_data, helper, codex_command, PACKAGED, RESOURCES, ffmpeg
 
@@ -150,11 +151,51 @@ def claude_usage():
     return {'windows':windows,'source':'Claude usage read-only'}
 
 
+def iso_epoch(value):
+    return int(datetime.fromisoformat(value.replace('Z','+00:00')).timestamp()) if value else 0
+
+
+def cursor_usage():
+    """Cursor's included usage for the current period, read with the editor's own login (its state.vscdb) from the
+    dashboard endpoint the usage page uses; the token is never refreshed or kept. Two rows: the whole plan, then the
+    API-priced models. usage-summary still answers, but it keeps the old monthly pool at 0% used."""
+    import base64,sqlite3
+    base=Path(os.environ.get('APPDATA',''))/'Cursor' if sys.platform=='win32' else Path.home()/'Library/Application Support/Cursor'
+    with sqlite3.connect(f"file:{base/'User/globalStorage/state.vscdb'}?mode=ro",uri=True,timeout=2) as db:
+        row=db.execute("select value from ItemTable where key='cursorAuth/accessToken'").fetchone()
+    if not row:raise FileNotFoundError('Cursor not signed in')
+    token=row[0];claims=token.split('.')[1];claims=json.loads(base64.urlsafe_b64decode(claims+'='*(-len(claims)%4)))
+    user=claims['sub'].split('|')[-1]
+    request=urllib.request.Request('https://cursor.com/api/dashboard/get-current-period-usage',data=b'{}',headers={'Cookie':f'WorkosCursorSessionToken={user}%3A%3A{token}',
+        'Content-Type':'application/json','User-Agent':'Mozilla/5.0','Origin':'https://cursor.com','Referer':'https://cursor.com/dashboard'})
+    with urllib.request.urlopen(request,timeout=8) as response:data=json.loads(response.read(200_000))
+    plan=data.get('planUsage') or {}
+    def seconds(value):
+        if isinstance(value,str) and value.isdigit():value=int(value)
+        if isinstance(value,(int,float)):return int(value//1000) if value>10**11 else int(value)
+        return iso_epoch(value) if isinstance(value,str) else 0
+    start,end=seconds(data.get('billingCycleStart')),seconds(data.get('billingCycleEnd'))
+    minutes=max(1,(end-start)//60) if end>start else 10080
+    return {'windows':[{'usedPercent':plan[key],'windowDurationMins':minutes,'resetsAt':end} for key in ('totalPercentUsed','apiPercentUsed') if isinstance(plan.get(key),(int,float))],
+            'source':'Cursor current-period usage read-only'}
+
+
+def opencode_usage():
+    """OpenCode Go's limits (5 hours, week, month) with the key OpenCode saved; two rows: the 5 hours, then whichever
+    of the week and the month is further used."""
+    key=json.loads((Path.home()/'.local/share/opencode/auth.json').read_text())['opencode-go']['key']
+    request=urllib.request.Request('https://opencode.ai/zen/go/v1/usage',headers={'Authorization':'Bearer '+key,'User-Agent':'AI-Passport/1.0'})
+    with urllib.request.urlopen(request,timeout=8) as response:usage=json.loads(response.read(200_000))['usage']
+    row=lambda name,minutes:{'usedPercent':usage[name]['percent'],'windowDurationMins':minutes,'resetsAt':iso_epoch(usage[name].get('resetsAt'))}
+    longer=max((row('weekly',10080),row('monthly',43200)),key=lambda w:w['usedPercent'])
+    return {'windows':[row('rolling',300),longer],'source':'OpenCode Go usage read-only'}
+
+
 class Services:
     def __init__(self,simulator):
         self.sim=simulator; self.stop=threading.Event(); self.jobs=queue.Queue(4)
         self.metrics=[]; self.details={}; self.codex=CodexReader(); self.active=None
-        self.previous_net=(time.monotonic(),psutil.net_io_counters()); self.previous_tasks={}; self.seen_completions=set(); self.claude=(0,None)
+        self.previous_net=(time.monotonic(),psutil.net_io_counters()); self.previous_tasks={}; self.seen_completions=set(); self.claude=(0,None);self.usage_cache={}
         self.audio=AudioBridge(); self.cloud=None; self.media=MediaPlayer(self.audio,HTTP); self.current_request=None
         self.requested_context=None
         self.dictation_ble=BluetoothDictation(self)
@@ -169,7 +210,9 @@ class Services:
         DATA.mkdir(parents=True,exist_ok=True); DATA.chmod(0o700)
         self.settings={'ip_location_allowed':False}
         if (DATA/'settings.json').exists(): self.settings.update(json.loads((DATA/'settings.json').read_text()))
+        self.feishu=Feishu(self.settings,self.save_settings)
         threading.Thread(target=self.run,daemon=True).start()
+        if sys.platform=='darwin':threading.Thread(target=self.feishu_loop,daemon=True).start()
         threading.Thread(target=self.heartbeat,daemon=True).start()
 
     def heartbeat(self):
@@ -226,6 +269,38 @@ class Services:
         guest=getattr(self.sim,'guest',None) or ('http://127.0.0.1:18762' if self.sim.snapshot().get('ppp',{}).get('up') else GUEST)
         req=urllib.request.Request(guest+'/service',data=raw,headers=dict({'Content-Type':'application/json'},**getattr(self.sim,'headers',{})))
         with HTTP.open(req,timeout=5) as response: return json.load(response)
+
+    def feishu_loop(self):
+        """飞书提醒: every 2 s, new Feishu banners go to the badge on any page (it shows the alert in its footer); the
+        飞书 page reloads itself when told."""
+        while not self.stop.wait(2):
+            alert,new=self.feishu.poll()
+            if not new:continue
+            shown=self.sim.snapshot().get('app')==49
+            if not alert and not shown:continue
+            note={'alert':bool(alert),'today':self.feishu.today()}
+            if alert:note.update({'from':alert['from'],'text':alert['text'],'vip':alert['vip']})
+            try:self.post({'feishu':note})
+            except Exception:pass
+
+    def feishu_test(self):
+        """The settings page's 发一条测试提醒: an alert on the badge, and the message in its 飞书提醒 list."""
+        item=self.feishu.test()
+        self.post({'feishu':{'alert':True,'from':item['from'],'text':item['text'],'vip':False,'today':self.feishu.today()}})
+        return {'sent':True}
+
+    def feishu_page(self,op):
+        """The 飞书提醒 page: a long Down steps the alert mode, a long Up brings the Feishu app forward on the computer."""
+        note=''
+        if self.feishu.last is None:self.feishu.poll()  # before the loop's first read (and on Windows: the reason)
+        if op=='mode':
+            mode=(self.feishu.config()['mode']+1)%3;self.feishu.configure(mode=mode);note=('全部提醒','只提醒特别关注','已关闭提醒')[mode]
+        elif op=='open':
+            opened=sys.platform=='darwin' and subprocess.run(['open','-b',FEISHU_BUNDLE],capture_output=True,timeout=8).returncode==0
+            note='已在电脑上打开飞书' if opened else '电脑上没有找到飞书'
+        page=self.feishu.page(note)
+        if op=='enter':self.feishu.opened()
+        return {'state':'飞书提醒','value':'','lines':[],'feishu':page}
 
     def monitor(self):
         cpu=psutil.cpu_percent(interval=.15); memory=psutil.virtual_memory(); net=psutil.net_io_counters()
@@ -286,12 +361,22 @@ class Services:
             self.claude=(time.monotonic(),data); self.details['claude']=data
         return self.claude[1]['windows']
 
+    def usage_snapshot(self,name,read):
+        """Cursor and OpenCode Go like Claude Code: one read a minute, failures as no rows."""
+        at,data=self.usage_cache.get(name,(0,None))
+        if time.monotonic()-at>=60 or data is None:
+            try:data=read()
+            except Exception as error:data={'windows':[],'error':type(error).__name__}
+            self.usage_cache[name]=(time.monotonic(),data);self.details[name]=data
+        return data['windows']
+
     def codex_snapshot(self):
         # Codex and Claude Code fail independently; the page errors only when neither can be read.
         try: data=self.codex.snapshot(); failure=None
         except Exception as error: data={'windows':[],'tasks':[]}; failure=error
         self.details['codex']=data; claude=self.claude_snapshot()
-        if failure and not claude: raise failure
+        cursor=self.usage_snapshot('cursor',cursor_usage);opencode=self.usage_snapshot('opencode',opencode_usage)
+        if failure and not (claude or cursor or opencode): raise failure
         windows=sorted(data['windows'],key=lambda w:w.get('windowDurationMins') or 10**9)
         lines=[]
         completed=[t for t in data['tasks'] if t.get('event')=='task_complete' and (t['id'],t['event_id']) not in self.seen_completions]
@@ -301,9 +386,10 @@ class Services:
             self.seen_completions.update((t['id'],t['event_id']) for t in completed)
             data['notice_source']={'thread_id':task['id'],'event':'task_complete','at':task['event_at']}
         else: notice=''
-        # Four fixed slots: Codex short/long window, then Claude Code 5 hours/7 days; missing ones read unknown.
+        # Eight fixed slots, two a tool: Codex short/long window, Claude Code 5 hours/7 days, Cursor plan/API, OpenCode
+        # Go 5 hours/week or month; missing ones read unknown.
         slots=lambda found:[{'used':round(w['usedPercent']),'minutes':w.get('windowDurationMins') or 0,'resets':w.get('resetsAt') or 0} for w in found[:2]]+[{'used':-1,'minutes':0,'resets':0}]*(2-len(found[:2]))
-        quotas=slots(windows)+slots(claude)
+        quotas=slots(windows)+slots(claude)+slots(cursor)+slots(opencode)
         return {'state':'额度已更新','value':'','windows':quotas,'lines':lines,'notice':notice}
 
     def push(self,payload,context=None):
@@ -363,6 +449,7 @@ class Services:
         if app==5: return self.monitor()
         if app==3: return self.codex_snapshot()
         if app==4: return {'state':'本地计时','value':'','lines':[]}
+        if app==49: return self.feishu_page(op)
         if app==41:
             # 离座锁屏: the badge's settings come with every request; the loop runs while the page is open.
             if self.guard is None:self.guard=Guard(self.guard_rssi,self.settings,self.save_settings)

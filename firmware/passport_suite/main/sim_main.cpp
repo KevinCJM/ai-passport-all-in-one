@@ -115,7 +115,7 @@ void domainTests(Runtime& runtime) {
     puts("CASE_PASS foreground_only_timer_pause_notifications");
 }
 void settingsTests(Runtime& runtime){
-    CHECK(kFunctions.size()==44&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
+    CHECK(kFunctions.size()==45&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
     // Physical long-confirm emits Back: each step must follow the hierarchy.
     for(auto app:kFunctions){
         CHECK(runtime.switchTo(app)==Result::Ok);runtime.model.settingsPage=SettingsPage::List;
@@ -418,6 +418,27 @@ void calcTests(Runtime& runtime){
     // Leaving forgets them.
     CHECK(runtime.switchTo(App::Menu)==Result::Ok&&runtime.switchTo(App::Calc)==Result::Ok&&!m.calcCount);
     puts("CASE_PASS calc");
+}
+// 飞书提醒: the list, a message opened and closed, Up/Down through them, an empty page and a footer alert elsewhere.
+void feishuTests(Runtime& runtime){
+    auto& m=runtime.model;auto& v=m.page.feishu;
+    CHECK(runtime.switchTo(App::Feishu)==Result::Ok&&!v.count&&!m.feishuDetail);
+    const bool live=m.live;m.live=true;m.livePhase=LivePhase::Ready;uiRender(runtime);uiCapture("feishu_empty");
+    const char* rows[][2]{{"张三","明天上午十点在三楼会议室过一下发布计划，记得带上测试报告"},{"项目群","李四：构建已经通过了，可以合并"},{"老板","在吗？下午来我办公室一趟"},{"王五","收到"}};
+    v.count=4;v.mode=1;v.today=12;v.error[0]=v.note[0]=0;
+    for(unsigned i=0;i<4;++i){strcpy(v.items[i].from,rows[i][0]);strcpy(v.items[i].text,rows[i][1]);v.items[i].at=1793080800-i*600;v.items[i].vip=i==2;v.items[i].fresh=i<2;}
+    uiRender(runtime);uiCapture("feishu_list");
+    runtime.key(Key::Down,10);runtime.key(Key::Down,10);CHECK(m.feishuIndex==2&&!m.feishuDetail);
+    runtime.key(Key::Up,10);runtime.key(Key::Up,10);runtime.key(Key::Up,10);CHECK(m.feishuIndex==3);  // wraps
+    runtime.key(Key::Down,10);runtime.key(Key::Confirm,11);CHECK(m.feishuDetail&&m.feishuIndex==0);uiRender(runtime);uiCapture("feishu_detail");
+    runtime.key(Key::Confirm,12);CHECK(m.feishuDetail&&!m.confirmTaken);  // a second Confirm reads aloud (LiveServices), staying open
+    runtime.key(Key::Down,12);CHECK(m.feishuDetail&&m.feishuIndex==1);
+    runtime.key(Key::Back,13);CHECK(runtime.active()==App::Feishu&&!m.feishuDetail);  // back to the list first
+    runtime.key(Key::Back,14);CHECK(runtime.active()==App::Menu);
+    CHECK(runtime.switchTo(App::Feishu)==Result::Ok&&!v.count&&!m.feishuIndex);  // entering clears the old list
+    CHECK(runtime.switchTo(App::Stopwatch)==Result::Ok);strcpy(m.macNote,"飞书·老板：在吗？下午来我办公室一趟");m.feishuVip=true;
+    uiRender(runtime);uiCapture("feishu_footer_alert");m.macNote[0]=0;m.live=live;
+    puts("CASE_PASS feishu");
 }
 // 记分牌: Up/Down score, Confirm undoes, long Up changes the rule only before the first point, a second long Down
 // starts over; games, deuce, the serve and the match under 乒乓球, the 羽毛球 cap, 自由计分 past the record; kept on leaving.
@@ -1236,9 +1257,9 @@ static MenuLayout sampleCustomMenu(){
 }
 static void menuLayoutTests(Runtime& runtime){
     auto layout=defaultMenuLayout();CHECK(layout.valid());CHECK(runtime.configureMenu(layout));
-    CHECK(runtime.menuView().count==44&&runtime.menuView().pages==5);
+    CHECK(runtime.menuView().count==45&&runtime.menuView().pages==5);
     for(auto app:kFunctions)if(menuCategory(app)==0)layout.show(app,false);
-    CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==4&&runtime.menuView().count==35);
+    CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==4&&runtime.menuView().count==36);
     runtime.switchTo(App::Menu);runtime.key(Key::Confirm,0);CHECK(runtime.active()!=App::Chat);
     // Unpaged grid: nine a screen in the user's order, no page names; long Down jumps to the next screen.
     layout=defaultMenuLayout();layout.mode=MenuLayout::Continuous;std::reverse(layout.order[1],layout.order[1]+layout.catalogCount);
@@ -1246,15 +1267,15 @@ static void menuLayoutTests(Runtime& runtime){
     CHECK(runtime.menuPosition()==0&&runtime.menuWindowStart()==0);uiRender(runtime);uiCapture("menu_continuous_top");
     for(unsigned i=0;i<10;++i)runtime.key(Key::Down,0);
     CHECK(runtime.menuPosition()==10&&runtime.menuWindowStart()==9);uiRender(runtime);uiCapture("menu_continuous_scroll");
-    for(unsigned i=0;i<43;++i){const auto before=runtime.menuPosition();runtime.key(Key::Down,0);CHECK(runtime.menuPosition()==(before+1)%44);CHECK(runtime.menuWindowStart()==runtime.menuPosition()/9*9);}
+    for(unsigned i=0;i<44;++i){const auto before=runtime.menuPosition();runtime.key(Key::Down,0);CHECK(runtime.menuPosition()==(before+1)%45);CHECK(runtime.menuWindowStart()==runtime.menuPosition()/9*9);}
     CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==18);CHECK(runtime.longKey(true,0)&&runtime.longKey(true,0)&&runtime.longKey(true,0));CHECK(runtime.menuPosition()==36);
     // Compact list: the same order as the grid, seven rows that scroll with the selection.
-    layout.mode=MenuLayout::List;CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==1&&runtime.menuView().count==44);
+    layout.mode=MenuLayout::List;CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==1&&runtime.menuView().count==45);
     runtime.switchTo(App::Settings);runtime.switchTo(App::Menu);CHECK(runtime.menuPosition()==0&&runtime.menuWindowStart()==0);uiRender(runtime);uiCapture("menu_list_top");
     for(unsigned i=0;i<10;++i)runtime.key(Key::Down,0);
     CHECK(runtime.menuPosition()==10&&runtime.menuWindowStart()==4);uiRender(runtime);uiCapture("menu_list_scroll");
-    for(unsigned i=0;i<44;++i){runtime.key(Key::Up,0);CHECK(runtime.menuPosition()>=runtime.menuWindowStart()&&runtime.menuPosition()<runtime.menuWindowStart()+MenuLayout::kListRows&&runtime.menuWindowStart()<=37);}
-    const auto before=runtime.menuPosition();CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==(before+7)%44);
+    for(unsigned i=0;i<45;++i){runtime.key(Key::Up,0);CHECK(runtime.menuPosition()>=runtime.menuWindowStart()&&runtime.menuPosition()<runtime.menuWindowStart()+MenuLayout::kListRows&&runtime.menuWindowStart()<=38);}
+    const auto before=runtime.menuPosition();CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==(before+7)%45);
     layout.mode=MenuLayout::Continuous;CHECK(runtime.configureMenu(layout));uiRender(runtime);uiCapture("menu_continuous_after_list");
     layout.show(App::Macro,false);CHECK(runtime.configureMenu(layout));const auto selection=runtime.selection();
     CHECK(runtime.switchTo(App::Macro)==Result::Ok);runtime.key(Key::Back,0);CHECK(runtime.active()==App::Menu&&runtime.selection()==selection);
@@ -1451,9 +1472,11 @@ extern "C" void app_main() {
     }
     runtime.switchTo(App::Home);
     // Explicit UI fixtures; none are reported as live account or sensor data.
-    runtime.model.quotas[0]={true,24,300,time(nullptr)+2*3600+10*60};runtime.model.quotas[1]={true,11,10080,time(nullptr)+6*86400+3*3600};
-    runtime.model.quotas[2]={true,0,300,time(nullptr)+3600+30*60};runtime.model.quotas[3]={true,74,10080,time(nullptr)+86400+15*3600};
-    runtime.switchTo(App::Codex);uiRender(runtime);uiCapture("codex_quota");
+    {const auto at=[](int seconds){return static_cast<uint32_t>(time(nullptr)+seconds);};auto& q=runtime.model.quotas;
+    q[0]={true,24,300,at(2*3600+10*60)};q[1]={true,11,10080,at(6*86400+3*3600)};q[2]={true,0,300,at(3600+30*60)};q[3]={true,74,10080,at(86400+15*3600)};
+    q[4]={true,38,43200,at(20*86400)};q[5]={true,12,43200,at(20*86400)};q[6]={true,5,300,at(4*3600)};q[7]={};}
+    runtime.switchTo(App::Codex);runtime.model.quotaPage=0;uiRender(runtime);uiCapture("codex_quota");
+    runtime.key(Key::Down,0);CHECK(runtime.model.quotaPage==1);uiRender(runtime);uiCapture("codex_quota_page2");runtime.key(Key::Up,0);CHECK(runtime.model.quotaPage==0);
     {   // Pomodoro fixture: third focus round, 18:23 left; then the same round paused.
         runtime.switchTo(App::Focus);auto& p=runtime.model;const auto saved=std::make_tuple(p.focusRunning,p.focusRemaining,p.focusRounds,p.focusDeadline);
         p.focusRounds=2;p.focusRemaining=1103;p.focusRunning=true;p.focusDeadline=~0ULL;
@@ -1544,7 +1567,7 @@ extern "C" void app_main() {
     domainTests(runtime);
     settingsTests(runtime);
     powerTests(runtime);
-    slidesTests(runtime);alertTests(runtime);statusTests(runtime);wheelTests(runtime);translateTests(runtime);guardTests(runtime);todoTests(runtime);ledgerTests(runtime);calcTests(runtime);scoreTests(runtime);walkieTests(runtime);voiceCommandTests(runtime);voiceAddTests(runtime);toolPagesTests(runtime);
+    slidesTests(runtime);alertTests(runtime);statusTests(runtime);wheelTests(runtime);translateTests(runtime);guardTests(runtime);todoTests(runtime);ledgerTests(runtime);calcTests(runtime);scoreTests(runtime);feishuTests(runtime);walkieTests(runtime);voiceCommandTests(runtime);voiceAddTests(runtime);toolPagesTests(runtime);
     bleTests(runtime);
     identityUploadTests(runtime);
     failureTests(runtime);

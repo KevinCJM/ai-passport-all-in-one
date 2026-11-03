@@ -1,11 +1,11 @@
 """Service contracts without a microphone, account RPC or network calls."""
-import sys,time,threading
+import base64,json,sys,time,threading
 from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import patch,Mock
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from passport_services import Services,CodexReader
+from passport_services import Services,CodexReader,cursor_usage
 
 class ServiceTests(TestCase):
     def test_weather_returns_structured_values_for_home_cards(self):
@@ -31,11 +31,31 @@ class ServiceTests(TestCase):
         processes.assert_not_called();self.assertNotIn('top_processes',service.details['monitor'])
 
     def test_quota_keeps_real_windows_and_omits_task_names(self):
-        service=Services.__new__(Services);service.details={};service.seen_completions=set();service.claude_snapshot=lambda:[]
+        service=Services.__new__(Services);service.details={};service.seen_completions=set();service.claude_snapshot=lambda:[];service.usage_snapshot=lambda *a:[]
         service.codex=NS(snapshot=lambda:{'windows':[{'usedPercent':11,'windowDurationMins':10080,'resetsAt':123}], 'tasks':[{'id':'one','event':'task_complete','event_id':'event','title':'PRIVATE_TASK_TITLE','event_at':'now'}]})
         data=service.codex_snapshot()
         self.assertEqual(data['windows'][0],{'used':11,'minutes':10080,'resets':123})  # empty slots follow;self.assertNotIn('PRIVATE_TASK_TITLE',str(data));self.assertEqual(data['notice'],'任务已完成')
         self.assertEqual(service.codex_snapshot()['notice'],'')
+
+    def test_cursor_usage_reads_the_current_period(self):
+        payload=json.dumps({'billingCycleStart':'1793615007943','billingCycleEnd':'1794219807943',
+                            'planUsage':{'totalPercentUsed':5.027,'apiPercentUsed':0,'autoPercentUsed':5.027}}).encode()
+        token='h.'+base64.urlsafe_b64encode(json.dumps({'sub':'user_01ABC'}).encode()).decode().rstrip('=')+'.s'
+        class Open:
+            def __init__(self,body):self.body=body
+            def __enter__(self):return self
+            def __exit__(self,*a):return None
+            def read(self,n):return self.body
+            def execute(self,*a):return NS(fetchone=lambda:(token,))
+        response=Open(payload);db=Open(None)
+        with patch('passport_services.urllib.request.urlopen',return_value=response) as opened,patch('sqlite3.connect',return_value=db):
+            data=cursor_usage()
+        self.assertEqual([w['usedPercent'] for w in data['windows']],[5.027,0])
+        self.assertEqual(data['windows'][0]['windowDurationMins'],10080)
+        self.assertEqual(data['windows'][0]['resetsAt'],1794219807)
+        request=opened.call_args.args[0]
+        self.assertTrue(request.full_url.endswith('/api/dashboard/get-current-period-usage'))
+        self.assertEqual(request.data,b'{}')
 
     def test_codex_cache_avoids_restarting_or_refetching_on_reentry(self):
         reader=CodexReader();reader.start=Mock();reader.rpc=Mock(side_effect=[{'rateLimits':{'primary':{'usedPercent':12,'windowDurationMins':300}}},{'data':[]}])

@@ -54,7 +54,7 @@ using namespace passport;
 int main(int argc,char** argv){
     assert(argc==2);auto d=defaultMenuLayout();assert(d.valid());
     std::ofstream file(argv[1],std::ios::binary);file.write(reinterpret_cast<char*>(&d),sizeof(d));file.close();
-    MenuView view;view.build(d);assert(view.count==44&&view.pages==5);
+    MenuView view;view.build(d);assert(view.count==45&&view.pages==5);
     for(auto app:kFunctions)d.show(app,app==App::Settings);
     view.build(d);assert(d.valid()&&view.count==1&&view.pages==1&&kFunctions[view.items[0]]==App::Settings);
     auto bad=d;bad.show(App::Settings,false);assert(!bad.valid());bad=d;bad.order[0][0]=0;assert(!bad.valid());
@@ -62,9 +62,10 @@ int main(int argc,char** argv){
     bad=d;bad.names[0][0]=char(0xff);assert(!bad.valid());bad=d;memset(bad.names[0],'a',25);assert(!bad.valid());
     bad=defaultMenuLayout();memset(bad.assignment,0,sizeof(bad.assignment));assert(!bad.valid());
     bad=defaultMenuLayout();bad.pageCount=9;assert(!bad.valid());bad=d;bad.assignment[10]=8;assert(!bad.valid());
-    // A new firmware app is appended and shown when an older catalog record is loaded.
+    // A new firmware app is added before 系统设置 and shown when an older catalog record is loaded.
     auto old=defaultMenuLayout();for(auto& list:old.order){unsigned n=0;for(unsigned i=0;i<old.catalogCount;++i)if(list[i]!=unsigned(App::Macro))list[n++]=list[i];list[n]=255;}--old.catalogCount;
     assert(!old.valid()&&old.valid(true)&&old.upgrade()&&old.valid()&&old.shown(App::Macro));
+    for(auto& list:old.order)assert(list[old.catalogCount-1]==unsigned(App::Settings)&&list[old.catalogCount-2]==unsigned(App::Macro));
     std::mt19937 random(42);
     for(unsigned trial=0;trial<1000;++trial){
         d=defaultMenuLayout();d.mode=trial%4;
@@ -89,12 +90,12 @@ int main(int argc,char** argv){
             node = r'''
 const fs=require('fs'),vm=require('vm');vm.runInThisContext(fs.readFileSync(process.argv[1],'utf8'));
 const input=process.argv[2],decoded=PassportMenu.decode(input);
-if(decoded.orders[0].length!==44||decoded.names[0]!=='小智语音')throw Error('wrong layout');
+if(decoded.orders[0].length!==45||decoded.names[0]!=='小智语音')throw Error('wrong layout');
 if(PassportMenu.encode(decoded)!==input)throw Error('wire roundtrip mismatch');
 decoded.mode=2;decoded.names[0]='我的常用';decoded.orders[2].reverse();
 if(PassportMenu.decode(PassportMenu.encode(decoded)).names[0]!=='我的常用')throw Error('UTF8 mismatch');
 decoded.names[0]='a'.repeat(9);let rejected=false;try{PassportMenu.encode(decoded)}catch(e){rejected=true}if(!rejected)throw Error('name bound');
-console.log(JSON.stringify({bytes:481,apps:44,random_layouts:1000,wire_roundtrip:true}));
+console.log(JSON.stringify({bytes:481,apps:45,random_layouts:1000,wire_roundtrip:true}));
 '''
             subprocess.run(['node','-e',node,str(ROOT/'scripts/passport_menu.js'),base64.b64encode(raw).decode()],check=True)
 

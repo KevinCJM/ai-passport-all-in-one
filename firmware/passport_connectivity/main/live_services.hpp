@@ -71,6 +71,8 @@ public:
     void say();
     // 离座锁屏: a long Up takes the current signal as the at-desk level, a long Down locks the computer now.
     void guardCommand(bool calibrate) { if(runtime_.active()==App::Guard) request(calibrate?"cal":"lock"); }
+    // 飞书提醒: a long Up brings Feishu forward on the computer, a long Down steps the alert mode there.
+    void feishuCommand(bool open) { if(runtime_.active()==App::Feishu) request(open?"open":"mode"); }
     // Long press on Up/Down tunes the radio or steps a podcast's episodes; short presses change the volume.
     void station(bool next) { if(runtime_.active()==App::Radio||(runtime_.active()==App::Podcast&&runtime_.model.podcastPlayer)) request(next?"next":"prev"); }
     void hostSeen() { hostContact_=esp_timer_get_time()/1000000; }

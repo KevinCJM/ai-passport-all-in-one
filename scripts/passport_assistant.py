@@ -21,7 +21,7 @@ from passport_computer_link import start_gateway
 from passport_identity import paired_port
 from passport_paths import helper, user_data, codex_command, PACKAGED
 
-VERSION='0.1.9-preview'
+VERSION='0.1.10-preview'
 LABEL='local.ai-passport.assistant'
 WINDOWS=sys.platform=='win32'
 UI_PORT=8768

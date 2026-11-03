@@ -752,6 +752,7 @@ int execute(const char* name) {
     if (previous==App::Stock&&!strcmp(name,"settings")) {runtime.wake(now);live.dropStock();return 0;}
     // 离座锁屏: a long Up calibrates the at-desk signal, a long Down locks the computer now.
     if (previous==App::Guard&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {runtime.wake(now);live.guardCommand(!strcmp(name,"ap_on"));return 0;}
+    if (previous==App::Feishu&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {runtime.wake(now);live.feishuCommand(!strcmp(name,"ap_on"));return 0;}
     // 中英翻译: a long Up reads the translation aloud.
     if (previous==App::Translate&&!strcmp(name,"ap_on")) {runtime.wake(now);live.say();return 0;}
     // Long presses: the menu turns a page, the calendar steps a month, the sonar switches its filter,
@@ -1152,7 +1153,7 @@ extern "C" void app_main() {
         }
 #else
         // 状态牌 and 随机转盘 are local, but while what is spoken goes to the cloud it needs the memory BLE holds.
-        if((needsInternet(runtime.active())||((speaksOnce(runtime.active())||speaksToo(runtime.active()))&&live.nativeBusy()))&&!live.macWaiting()&&bt&&!board::provisioning()&&bleCompanion.drained()){if(bleStop()==0)restoreBleAfterAudio=false;}
+        if((needsInternet(runtime.active())||((speaksOnce(runtime.active())||speaksToo(runtime.active())||runtime.active()==App::Feishu)&&live.nativeBusy()))&&!live.macWaiting()&&bt&&!board::provisioning()&&bleCompanion.drained()){if(bleStop()==0)restoreBleAfterAudio=false;}
         if(bt&&!settings.bluetoothEnabled)bleStop();
         static int64_t nextBleStart=0;
         // 打开 Mac 程序 brings Bluetooth up on any page until the computer has answered.

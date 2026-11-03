@@ -48,6 +48,8 @@ class NativeServices {
     // 自选股 and 所在城市: the phrase heard, which this task looks up itself; what came of it goes out with the next
     // update as "notice" (and "select": the security added, "city": the city set).
     char spoken_[160]{},notice_[160]{},city_[80]{};int select_{-1};
+    char sayText_[256]{};  // 飞书提醒: the message to read aloud, set before its "say" request
+    void sayText();
     void addStock(const char*);void macro();void setCity(const char*);void locate();
     void work();void home();void chat();void media();void podcast();void words();void news();void rates();void history();void daily();void quake();void hacker();void quiz();void forecast();void stock();void typhoon();void hot();bool newsList();void memo();void translate();void sayTranslation();bool hotBoard();bool air(double,double,WeatherForecast&);bool warnings(const MediaPrefs&,WeatherWarning*,uint8_t&,unsigned);bool warningText(const char*,char*,size_t);
     bool playMp3(esp_http_client_handle_t client,uint8_t* bytes,size_t size,int count);
@@ -95,6 +97,7 @@ public:
     bool idle()const{return task_==nullptr;}
     const char* memoHeard()const{return memoHeard_.load();}  // "" when nothing was heard
     void memoTaken(){memoHeard_=nullptr;}
+    void speakText(const char* text);  // before LiveServices asks 飞书提醒's "say"
     const TranslationText* translated()const{return translated_.load()?&page_.translation:nullptr;}
     void translationTaken(){translated_=false;}
     bool busy()const{return task_||pendingReady_;}

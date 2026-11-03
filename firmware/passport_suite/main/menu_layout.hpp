@@ -61,7 +61,11 @@ struct MenuLayout {
             unsigned counts[kPages]{};for(unsigned i=0;i<catalogCount;++i)if(shown(static_cast<App>(order[0][i])))++counts[assignment[order[0][i]]];
             unsigned page=0;while(page<pageCount&&counts[page]>=9)++page;
             if(page==pageCount){if(pageCount==kPages)return false;pages[pageCount]=pageCount;strcpy(names[pageCount++],"新增功能");}
-            assignment[id]=page;show(app,true);for(auto& list:order)list[catalogCount]=id;++catalogCount;
+            // In every order it goes before 系统设置, which stays last.
+            assignment[id]=page;show(app,true);
+            for(auto& list:order){unsigned at=0;while(at<catalogCount&&list[at]!=static_cast<uint8_t>(App::Settings))++at;
+                std::memmove(list+at+1,list+at,catalogCount-at);list[at]=id;}
+            ++catalogCount;
         }
         return valid();
     }

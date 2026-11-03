@@ -2,6 +2,7 @@
 """Create an OFL bitmap subset for the actual firmware text, using bundled Pillow."""
 import hashlib
 import json
+import math
 import re
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
@@ -109,10 +110,22 @@ def cyclone(size, scale=8):
     return image.resize((size, size), Image.LANCZOS)
 
 
+def feishu(size, scale=8):
+    """飞书提醒: a bird like Feishu's own icon (an upper wing over a round body rising to its tip), drawn here."""
+    s = size * scale
+    image = Image.new('L', (s, s))
+    draw, points = ImageDraw.Draw(image), lambda pts: [(x * s / 100, y * s / 100) for x, y in pts]
+    draw.polygon(points([(24, 8), (60, 8), (82, 42), (64, 50)]), fill=255)
+    upper = [(8, 26), (22, 36), (38, 52), (54, 60), (68, 56), (96, 30)]
+    belly = [(52 + 40 * math.cos(math.radians(t)), 52 + 38 * math.sin(math.radians(t))) for t in range(20, 170, 10)]
+    draw.polygon(points(upper + belly + [(8, 40)]), fill=255)
+    return image.resize((size, size), Image.LANCZOS)
+
+
 def icon_fonts() -> str:
     """Menu and page icons LVGL's symbols lack: U+E001 robot, U+E003 cloud-sun, U+E004 clock, U+E005 wind, U+E006 chart-line,
-    U+E008 fire, U+E009 microphone, U+E00A wallet, U+E00B calculator, U+E00C trophy (Font Awesome 5 Free, CC BY 4.0), U+E002 torch and U+E007 tropical cyclone (drawn here). Everything else falls back to the Montserrat font of the same size."""
-    out = '\n// U+E001 robot, U+E003-E00B cloud-sun, clock, wind, chart-line, -, fire, microphone, wallet, calculator, trophy: Font Awesome 5 Free (CC BY 4.0). U+E002 torch, U+E007 cyclone: drawn by the generator.\n'
+    U+E008 fire, U+E009 microphone, U+E00A wallet, U+E00B calculator, U+E00C trophy (Font Awesome 5 Free, CC BY 4.0), U+E002 torch, U+E007 tropical cyclone and U+E00D Feishu bird (drawn here). Everything else falls back to the Montserrat font of the same size."""
+    out = '\n// U+E001 robot, U+E003-E00B cloud-sun, clock, wind, chart-line, -, fire, microphone, wallet, calculator, trophy: Font Awesome 5 Free (CC BY 4.0). U+E002 torch, U+E007 cyclone, U+E00D Feishu bird: drawn by the generator.\n'
     for size in (20, 24):
         font = ImageFont.truetype(str(AWESOME), size)
 
@@ -124,8 +137,9 @@ def icon_fonts() -> str:
         robot = awesome(0xF544)
         torch_icon = (torch(round(size * .8), robot[0].height), round(size * .8) + 2, robot[2], robot[3])
         cyclone_icon = (cyclone(robot[0].height), robot[0].height + 2, robot[2], robot[3])
+        feishu_icon = (feishu(robot[0].height), robot[0].height + 2, robot[2], robot[3])
         bitmaps, descriptors = [], ['{0, 0, 0, 0, 0, 0}']
-        for image, advance, x0, y1 in (robot, torch_icon, awesome(0xF6C4), awesome(0xF017), awesome(0xF72E), awesome(0xF201), cyclone_icon, awesome(0xF06D), awesome(0xF130), awesome(0xF555), awesome(0xF1EC), awesome(0xF091)):
+        for image, advance, x0, y1 in (robot, torch_icon, awesome(0xF6C4), awesome(0xF017), awesome(0xF72E), awesome(0xF201), cyclone_icon, awesome(0xF06D), awesome(0xF130), awesome(0xF555), awesome(0xF1EC), awesome(0xF091), feishu_icon):
             descriptors.append('{%d, %d, %d, %d, %d, %d}' % (len(bitmaps), advance * 16, image.width, image.height, x0, -y1))
             bitmaps.extend(compress([p >> 4 for p in image.getdata()], image.width, image.height, 4, True))
         metrics = (DONOR.parents[1] / f'src/font/lv_font_montserrat_{size}.c').read_text()
@@ -135,7 +149,7 @@ namespace {{
 static const uint8_t icon_bitmap_{size}[] = {{{','.join(map(str, bitmaps + [0]))}}};
 static const lv_font_fmt_txt_glyph_dsc_t icon_glyphs_{size}[] = {{{', '.join(descriptors)}}};
 static const lv_font_fmt_txt_cmap_t icon_cmaps_{size}[] = {{{{
-    .range_start = 0xE001, .range_length = 12, .glyph_id_start = 1, .unicode_list = nullptr,
+    .range_start = 0xE001, .range_length = 13, .glyph_id_start = 1, .unicode_list = nullptr,
     .glyph_id_ofs_list = nullptr, .list_length = 0, .type = LV_FONT_FMT_TXT_CMAP_FORMAT0_TINY
 }}}};
 static const lv_font_fmt_txt_dsc_t icon_description_{size} = {{

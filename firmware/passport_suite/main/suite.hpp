@@ -79,7 +79,9 @@ struct Model {
     // Settings > WiFi: the saved networks' names (last joined first). wifiRow 0 is 添加 WiFi, n the network n-1;
     // wifiArmed: a long Down asked to forget it.
     char wifiSaved[WifiList::kMax][33]{};uint8_t wifiSavedCount{},wifiRow{};bool wifiArmed{};
-    struct Quota { bool known{};uint8_t used{};uint32_t minutes{};int64_t resets{}; } quotas[4];  // Codex short/long window, then Claude Code 5 hours/7 days.
+    // AI 额度: two windows a tool (Codex short/long, Claude Code 5 hours/7 days, Cursor plan/API, OpenCode Go 5 hours/
+    // week or month), resets an epoch; quotaPage shows the first two tools (0) or the other two (1).
+    struct Quota { bool known{};uint8_t used{};uint16_t minutes{};uint32_t resets{}; } quotas[8];uint8_t quotaPage{};
     bool metricsKnown{};
     uint64_t memoryUsed{},memoryTotal{},netUp{},netDown{},diskFree{},uptime{};
     int disk{},battery{-1};bool charging{};float load{};uint8_t cores{};  // battery -1: a Mac without one
@@ -129,6 +131,10 @@ struct Model {
     static constexpr unsigned kMemoRows=4,kMemoLines=10;  // notes in the list, lines of an open note
     // What only its own page reads shares one block; each of these pages clears its count (or text) on entry,
     // so another page's leftovers are never read.
+    // 飞书提醒: the computer's newest Feishu banners (sender, the start of the message, epoch; vip: a 特别关注 match,
+    // fresh: since the page was last opened) and its alert mode (0 all, 1 特别关注 only, 2 off).
+    struct FeishuItem{char from[37];char text[150];bool vip,fresh;uint32_t at;};  // 12 and 48 characters
+    struct FeishuView{std::array<FeishuItem,6> items;uint8_t count,mode;uint16_t today;char error[48],note[48];};
     union PageData{
         // 财经新闻: the six headlines, and item textFor's text in full (255: none yet).
         struct{std::array<NewsItem,6> items;char text[720];uint8_t textFor;} news;
@@ -149,6 +155,7 @@ struct Model {
         // rows: the notes from memoTop on show (a line of each); note: the one memoDetail opens.
         struct{std::array<MemoRow,kMemoRows> rows;MemoNote note;} memo;
         WheelBoard wheel;
+        FeishuView feishu;
         ScoreBoard score;  // 记分牌, loaded on entry and saved on every point
         TodoList todo;
         LedgerBook ledger;
@@ -228,6 +235,10 @@ struct Model {
     uint64_t wheelSpunAt{};uint16_t wheelSteps{};uint8_t wheelFrom{},wheelPick{255};bool wheelArmed{};
     bool wheelSpinning() const { return wheelSpunAt&&uint64_t(esp_timer_get_time())-wheelSpunAt<kWheelSpin; }
     unsigned wheelLit() const;  // the option highlighted now
+    // 飞书提醒: page.feishu; feishuIndex the message picked, feishuDetail: it is open, feishuSaying: its reading was
+    // asked (liveState tells how it goes). A new message's alert takes macNote's place in the footer (from "飞书·"),
+    // red and longer for feishuVip.
+    uint8_t feishuIndex{};bool feishuDetail{},feishuSaying{},feishuVip{};
     // 记分牌: page.score; scoreArmed: a long Down asked to start over.
     bool scoreArmed{};
     // 待办提醒: page.todo while the page is open. todoNextAt/todoNext: the next reminder (epoch, 0 = none) and its text,

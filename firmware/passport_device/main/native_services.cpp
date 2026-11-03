@@ -197,8 +197,8 @@ void NativeServices::poll(){
         }else{pendingReady_=false;busy_=true;memoryWaiting_=false;error_=0;}
     }
 }
-void NativeServices::run(void* context){auto& self=*static_cast<NativeServices*>(context);self.work();self.closeSocket();if((self.current_.app==App::Chat&&strcmp(self.current_.operation,"probe"))||self.transcribing()||self.current_.app==App::Radio||self.current_.app==App::Podcast||self.current_.app==App::Words||self.current_.app==App::Daily)self.audio_.stop();self.ready_=self.listening_=self.speaking_=self.playing_=false;self.finished_=true;vTaskSuspend(nullptr);}
-void NativeServices::work(){if(cancelled())return;if(!strcmp(current_.operation,"speak"))memo();else if(!strcmp(current_.operation,"locate"))locate();else if(current_.app==App::Home)home();else if(current_.app==App::Chat)chat();else if(current_.app==App::Radio)media();else if(current_.app==App::Podcast)podcast();else if(current_.app==App::Words)words();else if(current_.app==App::News)news();else if(current_.app==App::Rate)rates();else if(current_.app==App::History)history();else if(current_.app==App::Daily)daily();else if(current_.app==App::Quake)quake();else if(current_.app==App::Quiz)quiz();else if(current_.app==App::Hacker)hacker();else if(current_.app==App::Forecast)forecast();else if(current_.app==App::Stock)stock();else if(current_.app==App::Macro)macro();else if(current_.app==App::Typhoon)typhoon();else if(current_.app==App::Hot)hot();else if(transcribing())memo();stackFree_=uxTaskGetStackHighWaterMark(nullptr);}
+void NativeServices::run(void* context){auto& self=*static_cast<NativeServices*>(context);self.work();self.closeSocket();if((self.current_.app==App::Chat&&strcmp(self.current_.operation,"probe"))||self.transcribing()||self.current_.app==App::Radio||self.current_.app==App::Podcast||self.current_.app==App::Words||self.current_.app==App::Daily||self.current_.app==App::Feishu)self.audio_.stop();self.ready_=self.listening_=self.speaking_=self.playing_=false;self.finished_=true;vTaskSuspend(nullptr);}
+void NativeServices::work(){if(cancelled())return;if(!strcmp(current_.operation,"speak"))memo();else if(!strcmp(current_.operation,"locate"))locate();else if(current_.app==App::Home)home();else if(current_.app==App::Chat)chat();else if(current_.app==App::Radio)media();else if(current_.app==App::Podcast)podcast();else if(current_.app==App::Words)words();else if(current_.app==App::News)news();else if(current_.app==App::Rate)rates();else if(current_.app==App::History)history();else if(current_.app==App::Daily)daily();else if(current_.app==App::Quake)quake();else if(current_.app==App::Quiz)quiz();else if(current_.app==App::Hacker)hacker();else if(current_.app==App::Forecast)forecast();else if(current_.app==App::Stock)stock();else if(current_.app==App::Macro)macro();else if(current_.app==App::Typhoon)typhoon();else if(current_.app==App::Hot)hot();else if(current_.app==App::Feishu)sayText();else if(transcribing())memo();stackFree_=uxTaskGetStackHighWaterMark(nullptr);}
 bool NativeServices::syncClock(){
     // Once per boot even when the clock is set: it drifts in deep sleep (internal RC oscillator), and the alarm
     // wakes the device early to correct it before ringing.
@@ -934,6 +934,20 @@ void NativeServices::sayTranslation(){
     const bool played=count>0&&playMp3(client,bytes.get(),1024,count);
     if(client&&count<=0){esp_http_client_close(client);esp_http_client_cleanup(client);}
     if(!cancelled())status(played?"朗读完毕":"朗读失败，长按上键重试");
+}
+void NativeServices::speakText(const char* text){copy(sayText_,text);}
+// 飞书提醒: one message read aloud with the same Baidu speech, then the task ends.
+void NativeServices::sayText(){
+    auto url=std::unique_ptr<char[]>(new(std::nothrow)char[1800]);auto bytes=std::unique_ptr<uint8_t[]>(new(std::nothrow)uint8_t[1024]);
+    if(!url||!bytes){publish(current_,"内存不足","error");return;}
+    publish(current_,"正在朗读","loading");
+    const int n=snprintf(url.get(),1800,"https://fanyi.baidu.com/gettts?lan=zh&spd=5&source=web&text=");
+    urlEncode(url.get()+n,1800-n,sayText_);
+    esp_http_client_handle_t client=openStream(url.get(),8000,0,true);
+    const int count=client?esp_http_client_read(client,reinterpret_cast<char*>(bytes.get()),1024):-1;
+    const bool played=count>0&&playMp3(client,bytes.get(),1024,count);
+    if(client&&count<=0){esp_http_client_close(client);esp_http_client_cleanup(client);}
+    if(!cancelled())publish(current_,played?"朗读完毕":"朗读失败，按确认重试",played?"ready":"error");
 }
 esp_http_client_handle_t NativeServices::openStream(const char* url,int timeoutMs,uint32_t offset,bool secure){
     esp_http_client_config_t config{};config.url=url;config.timeout_ms=timeoutMs;config.buffer_size=1024;config.buffer_size_tx=2048;config.addr_type=HTTP_ADDR_TYPE_INET;config.user_agent="AI-Passport/0.3";

@@ -1,6 +1,6 @@
 # 飞书消息：在胸牌上查看、朗读和语音回复（设计稿）
 
-状态：调研完成，**还没有开始实现**。调研时间是 2026-11-02，依据是飞书开放平台文档、官方 `larksuite/cli` 和 `oapi-sdk-python` 源码，以及 `lark-openapi-mcp` 的 README。标「未确认」的地方需要在真实租户里验证。
+状态：调研完成，**还没有开始实现**。不用审批的简易版（读 Mac 系统通知）已经在 0.5.31 做好，见 [feishu-notify.md](feishu-notify.md)；本文是用飞书开放平台的完整版设计。调研时间是 2026-11-02，依据是飞书开放平台文档、官方 `larksuite/cli` 和 `oapi-sdk-python` 源码，以及 `lark-openapi-mcp` 的 README。标「未确认」的地方需要在真实租户里验证。
 
 ## 1. 目标
 

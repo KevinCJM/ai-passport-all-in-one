@@ -39,6 +39,7 @@ extern const lv_font_t passport_ui_font, passport_status_font, passport_ui_font_
 #define ICON_WALLET "\xEE\x80\x8A"
 #define ICON_CALC "\xEE\x80\x8B"
 #define ICON_TROPHY "\xEE\x80\x8C"
+#define ICON_FEISHU "\xEE\x80\x8D"
 namespace {
 // Status sign fallback: the 16 px UI font drawn three times larger, so any GB2312 text typed on the
 // computer still shows at sign size. Softer than the 48 px preset glyphs, but needs no extra flash.
@@ -98,12 +99,12 @@ constexpr uint32_t kAccent = 0x4bffc4, kWarn = 0xffbf77;
 constexpr int kRows = kSettingsRows;  // settings list
 constexpr int kCells = 9;  // menu: a 3 x 3 page of icons
 constexpr unsigned kDrawRows = 20;
-struct Badge { const char* symbol; uint32_t color; };
+struct Badge { const char* symbol; uint32_t color; uint32_t ink{}; };  // ink: the icon on its tile (0: the page's dark)
 // Pages that draw their own title and body (no hero card, heading or notice line).
-constexpr bool ownPage(App app){return app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Score||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Voice||app==App::Walkie;}
+constexpr bool ownPage(App app){return app==App::Feishu||app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Score||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Voice||app==App::Walkie;}
 // Once these pages show content, a refresh or the next item loads behind it instead of under the loading screen.
 bool keepsContent(App app,const Model& m){
-    return (app==App::Podcast&&m.podcastCount)||(app==App::Daily&&*m.page.daily.en)||(app==App::Quiz&&m.quizCount)||(app==App::Quake&&m.quakeCount)||(app==App::Hacker&&m.storyCount)||(app==App::Forecast&&m.page.forecast.days)||(app==App::Stock&&m.stockCount)||app==App::Macro||(app==App::Typhoon&&m.page.typhoon.count)||(app==App::Hot&&m.hotCount)||app==App::Memo||app==App::Translate||app==App::Guard;
+    return (app==App::Podcast&&m.podcastCount)||(app==App::Daily&&*m.page.daily.en)||(app==App::Quiz&&m.quizCount)||(app==App::Quake&&m.quakeCount)||(app==App::Hacker&&m.storyCount)||(app==App::Forecast&&m.page.forecast.days)||(app==App::Stock&&m.stockCount)||app==App::Macro||(app==App::Typhoon&&m.page.typhoon.count)||(app==App::Hot&&m.hotCount)||app==App::Memo||app==App::Translate||app==App::Guard||(app==App::Feishu&&m.page.feishu.count);
 }
 // The footer: 0 the 录音 row, 1 a note in the list, 2 an open note, 3 its delete asked, 4 listening, 5 recognising.
 unsigned memoTab(const Model& m){return m.listening()?4:m.voiceBusy()?5:m.memoArmed?3:m.memoDetail?2:m.memoIndex?1:0;}
@@ -149,6 +150,7 @@ Badge appBadge(App app){
     case App::Memo: return {ICON_MIC,0x5eead4};
     case App::Wheel: return {LV_SYMBOL_SHUFFLE,0xffa94d};
     case App::Score: return {ICON_TROPHY,0xfbbf24};
+    case App::Feishu: return {ICON_FEISHU,0xffffff,0x3370ff};  // Feishu's blue bird on a white tile, like its app icon
     case App::Translate: return {"A",0x60a5fa};
     case App::Guard: return {LV_SYMBOL_EYE_CLOSE,0x22c55e};
     case App::Todo: return {LV_SYMBOL_OK,0xf5a524};
@@ -245,7 +247,7 @@ void visible(lv_obj_t* obj, bool show) {
 lv_obj_t* titleMark(lv_obj_t* parent,int x,int y){auto* mark=lv_obj_create(parent);box(mark,x,y,4,14,kAccent,2);return mark;}
 void setBadge(lv_obj_t* badge,lv_obj_t* icon,Badge value,bool inverted){
     setBgColor(badge,lv_color_hex(inverted?kBg:value.color),0);
-    setTextColor(icon,lv_color_hex(inverted?value.color:kBg),0);setLabel(icon,value.symbol);
+    setTextColor(icon,lv_color_hex(inverted?(value.ink?value.ink:value.color):value.ink?value.ink:kBg),0);setLabel(icon,value.symbol);
 }
 void initChrome(lv_obj_t* screen){
     topBar=statusBarInit(screen);
@@ -261,7 +263,7 @@ void renderChrome(const Runtime& runtime){
     const bool alt=app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Stock?m.stockDetail:app==App::Macro?m.macroDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Walkie?m.walkieAuto:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
     const auto* hint=keyHint(app,m.settingsPage,m.focusRunning,*m.pairingCode,m.live&&m.livePhase==LivePhase::Loading,m.live&&m.livePhase==LivePhase::Error,alt,app==App::Wifi?m.wifiTab:app==App::Settings?(m.settingsPage==SettingsPage::City?dictationTab(m):m.settingsPage==SettingsPage::Idle?m.idleRow:m.wifiSetup?0u:m.wifiArmed?3u:m.wifiRow?2u:1u):
         app==App::Rate?voiceTab(m,m.rateArmed):app==App::Stock?voiceTab(m,m.stockArmed):app==App::Macro?0u:app==App::Countdown?voiceTab(m,m.countdownArmed):
-        app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:m.page.score.fresh()?0u:1u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:m.soundView);
+        app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:m.page.score.fresh()?0u:1u):app==App::Feishu?(m.feishuDetail?1u:m.page.feishu.count?0u:2u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:m.soundView);
     if(app==App::Menu&&runtime.menuLayout().mode==MenuLayout::List)hint="上下：选择 | 长按上下：快移 | 确认：进入";
     char text[256];
     // 打开 Mac 程序: what the computer is doing takes the key hints' place for a few seconds, on any page.
@@ -269,7 +271,7 @@ void renderChrome(const Runtime& runtime){
     else if(runtime.active()==App::Words&&!*m.pairingCode&&!m.wordSession.size)snprintf(text,sizeof(text),"确认：再学 10 个  |  长按确认：返回");
     else snprintf(text,sizeof(text),"%s",hint);
     if(strcmp(lv_label_get_text(footer),text)){
-        setLabel(footer,text);setTextColor(footer,lv_color_hex(*m.macNote?kAccent:kMuted),0);lv_point_t size{};
+        setLabel(footer,text);setTextColor(footer,lv_color_hex(!strncmp(m.macNote,"飞书·",8)?(m.feishuVip?0xff5a5a:0x5fb0ff):*m.macNote?kAccent:kMuted),0);lv_point_t size{};
         lv_text_get_size(&size,text,LV_FONT_DEFAULT,0,0,LV_COORD_MAX,LV_TEXT_FLAG_NONE);
         footerScrolling=size.x>222;
     }
@@ -2416,6 +2418,58 @@ void initWheel(lv_obj_t* screen){
     wheelView=lv_obj_create(wheelRoot);box(wheelView,8,2,224,255,kBg);lv_obj_add_event_cb(wheelView,drawWheel,LV_EVENT_DRAW_MAIN,nullptr);
 }
 void renderWheel(const Model& m){drawModel=&m;lv_obj_invalidate(wheelView);}
+// 飞书提醒: the computer's newest Feishu messages (a dot: new since the page was last opened; red: 特别关注), or one
+// open in full; Confirm opening it reads it aloud.
+lv_obj_t *feishuRoot,*feishuView;
+constexpr uint32_t kFeishu=0x3c8cff,kFeishuVip=0xff5a5a;
+void feishuWhen(char* out,size_t size,uint32_t at){
+    if(!at){*out=0;return;}
+    const time_t t=at,now=time(nullptr);tm d{},n{};localtime_r(&t,&d);localtime_r(&now,&n);
+    if(d.tm_year==n.tm_year&&d.tm_yday==n.tm_yday)snprintf(out,size,"%02d:%02d",d.tm_hour,d.tm_min);
+    else snprintf(out,size,"%d/%d %02d:%02d",d.tm_mon+1,d.tm_mday,d.tm_hour,d.tm_min);
+}
+void drawFeishu(lv_event_t* e){
+    const auto& m=*drawModel;auto p=painter(e);const auto& v=m.page.feishu;char text[96],when[32];
+    if(m.feishuDetail&&v.count){
+        const auto& r=v.items[m.feishuIndex%v.count];const uint32_t color=r.vip?kFeishuVip:kFeishu;
+        p.rect(0,2,4,18,color,2);p.text(r.from,12,0,128,r.vip?kFeishuVip:kText);
+        feishuWhen(when,sizeof(when),r.at);p.text(when,118,3,219,kMuted,LV_TEXT_ALIGN_RIGHT,&lv_font_montserrat_14);
+        p.rect(0,26,223,26,kBorder);
+        paragraph(p,r.text,34,9,kText);
+        snprintf(text,sizeof(text),"%u/%u",m.feishuIndex+1u,unsigned(v.count));
+        p.text(m.feishuSaying?m.liveState:"确认：朗读",0,234,180,m.feishuSaying&&m.livePhase==LivePhase::Error?kWarn:0x5f7f94);
+        p.text(text,180,237,223,0x5f7f94,LV_TEXT_ALIGN_RIGHT,&lv_font_montserrat_14);
+        return;
+    }
+    static const char* const modes[]{"全部提醒","只提醒特别关注","不提醒"};
+    if(*v.note)p.text(v.note,0,0,223,kAccent);
+    else{snprintf(text,sizeof(text),"今天 %u 条  ·  %s",unsigned(v.today),modes[v.mode%3]);p.text(text,0,0,223,v.mode==2?kWarn:kMuted);}
+    if(*v.error){
+        p.text(v.error,0,90,223,kWarn,LV_TEXT_ALIGN_CENTER);
+        if(strstr(v.error,"磁盘"))paragraph(p,"电脑上打开「系统设置 › 隐私与安全性 › 完全磁盘访问权限」，勾选 AI Passport Assistant",120,3,kMuted);
+        return;
+    }
+    if(!v.count){
+        p.text("还没有飞书消息",0,90,223,kText,LV_TEXT_ALIGN_CENTER);
+        paragraph(p,"电脑上的飞书来消息时显示在这里。要在飞书「设置 › 通知」里允许系统通知并显示消息详情。",120,4,kMuted);
+        return;
+    }
+    for(unsigned i=0;i<v.count;++i){
+        const auto& r=v.items[i];const int y=24+int(i)*38;const bool picked=i==m.feishuIndex;
+        p.rect(0,y,223,y+35,picked?kBorder:kPanel,8);
+        if(r.fresh)p.rect(3,y+8,8,y+13,kFeishu,3);
+        p.text(r.from,12,y+1,128,r.vip?kFeishuVip:kText);
+        feishuWhen(when,sizeof(when),r.at);p.text(when,118,y+4,217,kMuted,LV_TEXT_ALIGN_RIGHT,&lv_font_montserrat_14);
+        const char* end=lineEnd(r.text,205);const bool more=*end;if(more)end=lineEnd(r.text,205-lv_font_get_glyph_width(LV_FONT_DEFAULT,0x2026,0));
+        fitText(text,sizeof(text)-3,r.text,end-r.text);if(more)strcat(text,"…");
+        p.text(text,12,y+17,217,kMuted);
+    }
+}
+void initFeishu(lv_obj_t* screen){
+    feishuRoot=lv_obj_create(screen);box(feishuRoot,0,35,240,257,kBg);
+    feishuView=lv_obj_create(feishuRoot);box(feishuView,8,2,224,255,kBg);lv_obj_add_event_cb(feishuView,drawFeishu,LV_EVENT_DRAW_MAIN,nullptr);
+}
+void renderFeishu(const Model& m){drawModel=&m;lv_obj_invalidate(feishuView);}
 // 记分牌: 红方 on top (Up scores), 蓝方 below (Down), each score in large seven-segment digits that read across a table.
 lv_obj_t *scoreRoot,*scoreView;
 struct ScoreColors{uint32_t panel,dim,lit;};
@@ -2536,15 +2590,18 @@ void quotaLine(char* name,char* reset,size_t size,const Model::Quota& q){
     else snprintf(name,size,"%lu分钟",static_cast<unsigned long>(q.minutes));
     const auto left=std::max<int64_t>(0,q.resets-time(nullptr));
     if(!q.resets)reset[0]=0;
+    else if(left>=10*86400)snprintf(reset,size,"%lld天重置",static_cast<long long>(left/86400));  // a month's window: no room for hours
     else if(left>=86400)snprintf(reset,size,"%lld天%lld时重置",static_cast<long long>(left/86400),static_cast<long long>(left/3600%24));
     else snprintf(reset,size,"%lld:%02lld 重置",static_cast<long long>(left/3600),static_cast<long long>(left/60%60));
 }
 void renderQuotas(const Model& model){
-    char text[64],reset[64];setLabel(dashboardTitle,"AI 额度");
-    setLabel(cardTitles[0],"Codex");setLabel(cardTitles[1],"Claude Code");
+    char text[64],reset[64];const unsigned page=model.quotaPage&1;
+    setLabel(dashboardTitle,page?"AI 额度  ·  2/2":"AI 额度  ·  1/2");
+    setLabel(cardTitles[0],page?"Cursor":"Codex");setLabel(cardTitles[1],page?"OpenCode Go":"Claude Code");
     for(unsigned n=0;n<4;++n){
-        const auto& q=model.quotas[n];const int left=q.known?100-q.used:0;
+        const auto& q=model.quotas[page*4+n];const int left=q.known?100-q.used:0;
         if(q.known)quotaLine(text,reset,sizeof(text),q);else{strcpy(text,"暂不可用");reset[0]=0;}
+        if(q.known&&page&&n<2)strcpy(text,n?"API":"本期");  // Cursor: the whole plan (its period may be a week), then the API-priced models
         setLabel(quotaNames[n],text);setLabel(quotaResets[n],reset);
         if(q.known)snprintf(text,sizeof(text),"%d%%",left);else strcpy(text,"--");setLabel(quotaValues[n],text);
         const auto color=!q.known?kMuted:left<=10?kWarn:left<=30?0xffe08a:kAccent;
@@ -2686,6 +2743,7 @@ void uiInit() {
     else if(guiApp==App::Memo)initMemo(screen);
     else if(guiApp==App::Wheel)initWheel(screen);
     else if(guiApp==App::Score)initScore(screen);
+    else if(guiApp==App::Feishu)initFeishu(screen);
     else if(guiApp==App::Translate)initTranslate(screen);
     else if(guiApp==App::Guard)initGuard(screen);
     else if(guiApp==App::Todo)initTodo(screen);
@@ -2858,6 +2916,7 @@ void uiRender(const Runtime& runtime) {
     } else if(app==App::Dictation){renderDictation(model);
     } else if(app==App::Wheel){renderWheel(model);
     } else if(app==App::Score){renderScore(model);
+    } else if(app==App::Feishu){renderFeishu(model);
     } else if(app==App::Translate){renderTranslate(model);
     } else if(app==App::Guard){renderGuard(model);
     } else if(app==App::Todo){renderTodo(model);

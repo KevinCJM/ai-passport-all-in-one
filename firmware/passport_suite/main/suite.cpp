@@ -66,6 +66,7 @@ constexpr Profile kProfiles[] = {
     {"walkie", "对讲机", 0, true, false},
     {"macro", "宏观雷达", 0, false, false},
     {"score", "记分牌", 0, false, false},
+    {"feishu", "飞书提醒", 0, false, false},
 };
 static_assert(std::size(kProfiles) == static_cast<unsigned>(App::Count));
 }
@@ -890,6 +891,7 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
         m.memoMounted = MemoStore::mount(); if (!m.memoMounted) strcpy(m.lastNotice, "笔记存储无法打开");
         reloadMemo();
     }
+    if (target == App::Feishu) { auto& m = model; m.page.feishu.count = 0; m.feishuIndex = 0; m.feishuDetail = m.feishuSaying = false; }
     if (target == App::Hot) { auto& m = model; m.hotCount = m.hotIndex = 0; m.hotDetail = false; m.hotUpdated = 0; m.page.hot.detailFor = 255; }
     if (target == App::Quiz) { model.quizCount = 0; model.quizSerial = 0; model.quizShown = model.quizWant = false; model.quizRight = model.quizAsked = 0; }
     if (target == App::Wifi || target == App::Sound || target == App::Motion) { if (!SettingsStore::loadTools(model.tools)) model.tools = {}; }
@@ -916,6 +918,7 @@ void Runtime::key(Key key, uint64_t now) {
         if (active_ == App::Stock && model.stockDetail) { model.stockDetail = false; return; }
         if (active_ == App::Macro && model.macroDetail) { model.macroDetail = false; return; }
         if (active_ == App::Hot && model.hotDetail) { model.hotDetail = false; return; }
+        if (active_ == App::Feishu && model.feishuDetail) { model.feishuDetail = model.feishuSaying = false; return; }
         if (active_ == App::Memo && model.memoDetail && !model.voiceBusy()) { model.memoDetail = model.memoArmed = false; return; }
         if (active_ == App::Alarm && model.alarmRinging) { model.alarmRinging = false; return; }
         if (active_ == App::Alarm && model.alarmEdit && !model.voiceBusy()) { model.alarmEdit = false; return; }
@@ -1192,6 +1195,15 @@ void Runtime::key(Key key, uint64_t now) {
         // Up/Down pick a typhoon (LiveServices fetches its track); Confirm refreshes (LiveServices).
         auto& t = model.page.typhoon;
         if (t.count && (key == Key::Up || key == Key::Down)) model.typhoonIndex = (model.typhoonIndex + (key == Key::Up ? t.count - 1 : 1)) % t.count;
+    } else if (active_ == App::Codex) {
+        // AI 额度: Up/Down turn between Codex + Claude Code and Cursor + OpenCode Go; Confirm refreshes (LiveServices).
+        if (key == Key::Up || key == Key::Down) model.quotaPage ^= 1;
+    } else if (active_ == App::Feishu) {
+        // Up/Down pick a message, in the list or the open one; Confirm opens it, and in the open one reads it aloud
+        // (LiveServices; confirmTaken keeps the opening Confirm from reading too). Back closes it.
+        auto& m = model; const unsigned count = m.page.feishu.count;
+        if (count && (key == Key::Up || key == Key::Down)) { m.feishuIndex = (m.feishuIndex + (key == Key::Up ? count - 1 : 1)) % count; m.feishuSaying = false; }
+        if (key == Key::Confirm && count && !m.feishuDetail) { m.feishuDetail = true; m.feishuSaying = false; m.confirmTaken = true; }
     } else if (active_ == App::Hot) {
         // Up/Down move through the board, in the list or the detail; Confirm opens or closes the detail.
         auto& m = model;

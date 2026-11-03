@@ -217,7 +217,7 @@ void LiveServices::request(const char* operation) {
     if(voice)voiceJob_=pending_;
 #ifdef PASSPORT_DEVICE
     // 状态牌 and 随机转盘 are local pages; only what is spoken goes to the cloud (语音笔记's task).
-    if(needsInternet(runtime_.active())||voice||((speaksOnce(runtime_.active())||speaksToo(runtime_.active()))&&!strcmp(operation,"toggle"))){native_->network(networkReady_);if(!native_->request(runtime_.active(),pendingGeneration_,pending_,operation)){copy(runtime_.model.liveState,"操作太快，请重试");runtime_.model.livePhase=LivePhase::Error;}return;}
+    if(needsInternet(runtime_.active())||voice||(runtime_.active()==App::Feishu&&!strcmp(operation,"say"))||((speaksOnce(runtime_.active())||speaksToo(runtime_.active()))&&!strcmp(operation,"toggle"))){native_->network(networkReady_);if(!native_->request(runtime_.active(),pendingGeneration_,pending_,operation)){copy(runtime_.model.liveState,"操作太快，请重试");runtime_.model.livePhase=LivePhase::Error;}return;}
     if(!needsComputer(runtime_.active())){pending_=0;return;}
     board::event(operation,pending_,static_cast<unsigned>(runtime_.active()),pendingGeneration_);
 #endif
@@ -290,6 +290,15 @@ void LiveServices::action(Key key) {
     // task still runs: it may be showing an activation code), and Confirm then tries again.
     // 离座锁屏: Confirm changed a setting (Runtime::key); the computer gets it at once.
     if(active==App::Guard){if(key==Key::Confirm)request("cfg");return;}
+    // 飞书提醒: Confirm on an open message (not the one that opened it) reads it aloud on the badge (its own task, online).
+    if(active==App::Feishu&&key==Key::Confirm&&runtime_.model.feishuDetail&&!runtime_.model.confirmTaken){
+        auto& m=runtime_.model;const auto& r=m.page.feishu.items[m.feishuIndex%m.page.feishu.items.size()];
+#ifdef PASSPORT_DEVICE
+        if(!nativeIdle())return;
+        char text[256];snprintf(text,sizeof(text),"%s说：%s",r.from,r.text);native_->speakText(text);
+#endif
+        m.feishuSaying=true;copy(m.liveState,"正在连接朗读…");request("say");return;
+    }
     // 随机转盘 the same, except that Confirm spins (Runtime::key): speaking starts with a long Up (speak()).
     if(speaksOnce(active)){
         auto& m=runtime_.model;
@@ -439,6 +448,16 @@ bool LiveServices::tick(uint64_t now) {
         } else if(json&&cJSON_IsString(field(json,"mac"))) {
             // 打开 Mac 程序: what the computer did, whichever page is on screen by now.
             if(macRequest_&&number(json,"request")==macRequest_){copy(model.macNote,string(json,"mac"));model.macAt=now;macRequest_=0;}
+        } else if(json&&!message.native&&!field(json,"app")&&cJSON_IsObject(field(json,"feishu"))) {
+            // 飞书提醒: a new Feishu message on the computer, whichever page is on screen; during a 番茄钟 focus only a
+            // 特别关注 one. The 飞书提醒 page reloads its list.
+            const auto* f=field(json,"feishu");const bool vip=cJSON_IsTrue(field(f,"vip"));
+            if(cJSON_IsTrue(field(f,"alert"))&&(vip||!(model.focusRunning&&model.focusPhase==0))){
+                // The footer's note (打开 Mac 程序's): shown 8 s, 20 s for a 特别关注 one (cleared at macAt + 5).
+                char note[160];snprintf(note,sizeof(note),"飞书·%s：%s",string(f,"from"),string(f,"text"));
+                copy(model.macNote,note);model.macAt=now+(vip?15:3);model.feishuVip=vip;runtime_.wake(now);++noticeCount_;
+            }
+            if(active==App::Feishu&&!pending_)request("refresh");
         } else if(json &&
 #ifdef PASSPORT_DEVICE
                   (!needsInternet(active)||message.native)&&
@@ -462,6 +481,16 @@ bool LiveServices::tick(uint64_t now) {
             const auto* lines=field(json,"lines");
             for(unsigned i=0;i<4;++i) { const auto* line=cJSON_GetArrayItem(lines,i); copy(model.liveLines[i],cJSON_IsString(line) ? line->valuestring : ""); }
             if(message.native&&active==App::Chat&&turn>=0&&turn<=UINT32_MAX)model.chatRecord(static_cast<unsigned>(turn),model.liveLines[0],model.liveLines[1]);
+            if(active==App::Feishu&&!message.native&&cJSON_IsObject(field(json,"feishu"))){
+                const auto* o=field(json,"feishu");auto& v=model.page.feishu;v.count=0;const cJSON* item;
+                v.mode=std::clamp(number(o,"mode",0),0.0,2.0);v.today=std::clamp(number(o,"today",0),0.0,65535.0);copy(v.error,string(o,"error"));copy(v.note,string(o,"note"));
+                cJSON_ArrayForEach(item,field(o,"items")){
+                    if(v.count==v.items.size())break;
+                    auto& r=v.items[v.count++];copy(r.from,string(item,"f"));copy(r.text,string(item,"t"));
+                    r.at=std::clamp(number(item,"at",0),0.0,double(UINT32_MAX));r.vip=number(item,"v",0)>0;r.fresh=number(item,"n",0)>0;
+                }
+                if(model.feishuIndex>=v.count){model.feishuIndex=0;model.feishuDetail=false;}
+            }
             if(active==App::Guard){
                 const auto* g=field(json,"guard");const auto value=[&](const char* key,int low,int high){return static_cast<int>(std::clamp(number(g,key,0),double(low),double(high)));};
                 if(cJSON_IsObject(g)){model.guardPhase=value("phase",0,4);model.guardRssi=value("rssi",-127,0);model.guardLine=value("line",-127,0);model.guardBase=value("base",-127,0);model.guardLeft=value("left",0,60);}
@@ -664,9 +693,9 @@ bool LiveServices::tick(uint64_t now) {
                 }
             }
             if(active==App::Quiz&&model.livePhase!=LivePhase::Loading){quizAsked_=false;if(model.livePhase==LivePhase::Error)model.quizWant=false;}
-            if(active==App::Codex) for(unsigned i=0;i<4;++i){const auto* window=cJSON_GetArrayItem(field(json,"windows"),i);auto& quota=model.quotas[i];
+            if(active==App::Codex) for(unsigned i=0;i<std::size(model.quotas);++i){const auto* window=cJSON_GetArrayItem(field(json,"windows"),i);auto& quota=model.quotas[i];
                 const double used=number(window,"used",-1),minutes=number(window,"minutes",0);
-                quota.known=used>=0&&used<=100&&minutes>0;quota.used=quota.known?used:0;quota.minutes=quota.known?minutes:0;quota.resets=number(window,"resets",0);
+                quota.known=used>=0&&used<=100&&minutes>0&&minutes<=65535;quota.used=quota.known?used:0;quota.minutes=quota.known?minutes:0;quota.resets=std::clamp(number(window,"resets",0),0.0,double(UINT32_MAX));
             }
         } else ++stale_;
         cJSON_Delete(json); mbedtls_platform_zeroize(&message,sizeof(message)); renderLocal(now);
