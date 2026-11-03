@@ -80,7 +80,7 @@ struct Model {
     // wifiArmed: a long Down asked to forget it.
     char wifiSaved[WifiList::kMax][33]{};uint8_t wifiSavedCount{},wifiRow{};bool wifiArmed{};
     // AI 额度: two windows a tool, in this order: Codex (short/long), Claude Code (5 hours/7 days), Gemini (Pro/Flash),
-    // Cursor (plan/API), OpenCode Go (5 hours/week or month); resets an epoch. quotaPage is the tool on screen.
+    // Cursor (plan/API), OpenCode Go (5 hours/week or month); resets an epoch. quotaPage is the selected row.
     static constexpr uint8_t kQuotaTools{5};
     struct Quota { bool known{};uint8_t used{};uint16_t minutes{};uint32_t resets{}; } quotas[2*kQuotaTools];uint8_t quotaPage{};
     bool metricsKnown{};

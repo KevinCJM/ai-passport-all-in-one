@@ -1480,9 +1480,10 @@ extern "C" void app_main() {
     q[8]={true,5,300,at(4*3600)};q[9]={};}                                                 // OpenCode Go: its week unknown
     runtime.switchTo(App::Codex);runtime.model.quotaPage=0;uiRender(runtime);uiCapture("codex_quota");
     runtime.key(Key::Down,0);CHECK(runtime.model.quotaPage==1);uiRender(runtime);uiCapture("codex_quota_page2");
-    runtime.key(Key::Up,0);CHECK(runtime.model.quotaPage==0);runtime.key(Key::Up,0);CHECK(runtime.model.quotaPage==4);
+    runtime.key(Key::Up,0);CHECK(runtime.model.quotaPage==0);runtime.key(Key::Up,0);CHECK(runtime.model.quotaPage==4);uiRender(runtime);uiCapture("codex_quota_last");
     runtime.key(Key::Down,0);CHECK(runtime.model.quotaPage==0);
-    runtime.model.quotaPage=2;uiRender(runtime);uiCapture("codex_quota_gemini");runtime.model.quotaPage=0;
+    runtime.model.quotaPage=2;uiRender(runtime);uiCapture("codex_quota_gemini");
+    runtime.switchTo(App::Home);runtime.switchTo(App::Codex);CHECK(runtime.model.quotaPage==0);  // entering selects the first row
     {   // Pomodoro fixture: third focus round, 18:23 left; then the same round paused.
         runtime.switchTo(App::Focus);auto& p=runtime.model;const auto saved=std::make_tuple(p.focusRunning,p.focusRemaining,p.focusRounds,p.focusDeadline);
         p.focusRounds=2;p.focusRemaining=1103;p.focusRunning=true;p.focusDeadline=~0ULL;

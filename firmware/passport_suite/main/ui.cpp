@@ -194,7 +194,7 @@ lv_obj_t *headingMark,*hero,*heroBadge,*heroIcon,*heroTrack,*heroFill,*detail;
 lv_obj_t *pomoRoot,*pomoArc,*pomoTime,*pomoState,*pomoPhase,*pomoRounds,*pomoAction,*pomoActionIcon,*pomoActionText,*pomoDots[4];
 lv_obj_t *pomoTabs[3],*pomoTabText[3];
 lv_obj_t *dashboard,*dashboardTitle,*cards[2],*cardTitles[2],*cardValues[2],*cardDetails[2],*cardBars[2],*cardTrends[2],*dashboardFoot;
-lv_obj_t *quotaNames[2],*quotaResets[2],*quotaValues[2],*quotaFills[2];App dashboardApp{};
+lv_obj_t *quotaNames[2],*quotaResets[2],*quotaValues[2],*quotaFills[2],*quotaRows[5],*quotaRowNames[5],*quotaRowValues[5],*quotaDetail;int quotaShown{-1};App dashboardApp{};
 lv_point_precise_t trendPoints[24];
 lv_obj_t *tileTitles[4],*tileValues[4],*tileBars[4];
 lv_obj_t *connectionRoot,*connectionTitle,*connectionSpinner,*connectionMessage,*connectionHint,*connectionError;
@@ -325,19 +325,25 @@ void renderPomodoro(const Model& model) {
 void initDashboard(lv_obj_t* screen,App app) {
     dashboard=lv_obj_create(screen);box(dashboard,0,35,240,257,kBg);dashboardApp=app;
     titleMark(dashboard,12,10);dashboardTitle=label(dashboard,24,7,204,LV_FONT_DEFAULT,kText);
-    for(unsigned i=0;i<2;++i){
-        // AI quota: one tool a page, a card per window: its name, reset time, remaining share large, and a bar.
-        const bool quota=app==App::Codex;
-        cards[i]=lv_obj_create(dashboard);box(cards[i],12,quota?32+i*92:32+i*101,216,quota?84:95,kPanel,12);lv_obj_set_style_border_width(cards[i],1,0);lv_obj_set_style_border_color(cards[i],lv_color_hex(kBorder),0);
-        if(quota){
-            quotaNames[i]=label(cards[i],14,10,90,LV_FONT_DEFAULT,kText);lv_obj_set_height(quotaNames[i],20);
-            quotaResets[i]=label(cards[i],14,32,84,LV_FONT_DEFAULT,kMuted);lv_obj_set_height(quotaResets[i],20);
-            quotaValues[i]=label(cards[i],64,2,148,&lv_font_montserrat_48,kAccent);setTextAlign(quotaValues[i],LV_TEXT_ALIGN_RIGHT,0);
-            auto* track=lv_obj_create(cards[i]);box(track,14,66,190,6,kBorder,3);
-            quotaFills[i]=lv_obj_create(track);box(quotaFills[i],0,0,1,6,kAccent,3);
-            continue;
+    if(app==App::Codex){
+        // AI quota: a row a tool (name and its lowest remaining share); the selected row opens to both windows, each its
+        // name, reset time, remaining share and a bar. One detail block moves into the selected row (renderQuotas).
+        quotaShown=-1;
+        for(unsigned i=0;i<Model::kQuotaTools;++i){
+            quotaRows[i]=lv_obj_create(dashboard);box(quotaRows[i],12,32+i*26,216,24,kPanel,8);lv_obj_set_style_border_color(quotaRows[i],lv_color_hex(kAccent),0);
+            quotaRowNames[i]=label(quotaRows[i],12,2,130,LV_FONT_DEFAULT,kText);lv_obj_set_height(quotaRowNames[i],20);
+            quotaRowValues[i]=label(quotaRows[i],140,2,64,LV_FONT_DEFAULT,kAccent);setTextAlign(quotaRowValues[i],LV_TEXT_ALIGN_RIGHT,0);
         }
-        break;
+        quotaDetail=lv_obj_create(quotaRows[0]);box(quotaDetail,0,24,216,64,kPanel);lv_obj_set_style_bg_opa(quotaDetail,LV_OPA_TRANSP,0);
+        for(unsigned i=0;i<2;++i){
+            quotaNames[i]=label(quotaDetail,12,i*32,72,LV_FONT_DEFAULT,kMuted);lv_obj_set_height(quotaNames[i],20);
+            quotaResets[i]=label(quotaDetail,60,i*32,84,LV_FONT_DEFAULT,kMuted);lv_obj_set_height(quotaResets[i],20);
+            quotaValues[i]=label(quotaDetail,140,i*32-5,64,&lv_font_montserrat_24,kAccent);setTextAlign(quotaValues[i],LV_TEXT_ALIGN_RIGHT,0);
+            auto* track=lv_obj_create(quotaDetail);box(track,12,i*32+22,192,4,kBorder,2);
+            quotaFills[i]=lv_obj_create(track);box(quotaFills[i],0,0,1,4,kAccent,2);
+        }
+    } else {
+        cards[0]=lv_obj_create(dashboard);box(cards[0],12,32,216,95,kPanel,12);lv_obj_set_style_border_width(cards[0],1,0);lv_obj_set_style_border_color(cards[0],lv_color_hex(kBorder),0);
     }
     if(app==App::Monitor){
         // Computer status: a CPU card with its trend, then memory, disk, battery and network tiles.
@@ -354,7 +360,7 @@ void initDashboard(lv_obj_t* screen,App app) {
             tileBars[n]=lv_obj_create(tile);box(tileBars[n],8,48,1,3,kAccent,1);
         }
     }
-    dashboardFoot=label(dashboard,12,app==App::Codex?222:234,216,LV_FONT_DEFAULT,kMuted);visible(dashboard,false);
+    dashboardFoot=label(dashboard,12,234,216,LV_FONT_DEFAULT,kMuted);visible(dashboard,false);
 }
 // Chat page: the text record fills the page bottom-up; older entries clip off the top.
 // It lives in the 12 KiB chat pool, so entries share two styles and point at the model's text.
@@ -2591,12 +2597,37 @@ void quotaLine(char* name,char* reset,size_t size,const Model::Quota& q){
     else if(left>=86400)snprintf(reset,size,"%lld天%lld时重置",static_cast<long long>(left/86400),static_cast<long long>(left/3600%24));
     else snprintf(reset,size,"%lld:%02lld 重置",static_cast<long long>(left/3600),static_cast<long long>(left/60%60));
 }
+// Rows slide and grow to the new selection over 150 ms on the badge; the simulator jumps so captures show the result.
+void quotaMove(lv_obj_t* row,int32_t y,int32_t h){
+#ifdef PASSPORT_DEVICE
+    const auto go=[row](lv_anim_exec_xcb_t set,int32_t from,int32_t to){
+        if(from==to){return;}
+        lv_anim_t a;lv_anim_init(&a);lv_anim_set_var(&a,row);lv_anim_set_exec_cb(&a,set);
+        lv_anim_set_values(&a,from,to);lv_anim_set_duration(&a,150);lv_anim_set_path_cb(&a,lv_anim_path_ease_out);lv_anim_start(&a);};
+    if(quotaShown>=0){
+        go([](void* o,int32_t v){lv_obj_set_y(static_cast<lv_obj_t*>(o),v);},lv_obj_get_y(row),y);
+        go([](void* o,int32_t v){lv_obj_set_height(static_cast<lv_obj_t*>(o),v);},lv_obj_get_height(row),h);return;
+    }
+#endif
+    lv_obj_set_y(row,y);lv_obj_set_height(row,h);
+}
 void renderQuotas(const Model& model){
     static const char* const tools[Model::kQuotaTools]={"Codex","Claude Code","Gemini","Cursor","OpenCode Go"};
     const unsigned page=model.quotaPage%Model::kQuotaTools;
     char text[64],name[64],reset[64];
-    snprintf(text,sizeof(text),"%s  ·  %u/%u",tools[page],page+1,static_cast<unsigned>(Model::kQuotaTools));
-    setLabel(dashboardTitle,text);
+    setLabel(dashboardTitle,"AI 额度");
+    const auto shade=[](bool known,int left){return !known?kMuted:left<=10?kWarn:left<=30?0xffe08a:kAccent;};
+    for(unsigned i=0;i<Model::kQuotaTools;++i){
+        // Collapsed rows show the tighter of the two windows.
+        int left=101;for(unsigned n=0;n<2;++n)if(model.quotas[i*2+n].known)left=std::min(left,100-model.quotas[i*2+n].used);
+        const bool known=left<=100,selected=i==page;
+        setLabel(quotaRowNames[i],tools[i]);setTextColor(quotaRowNames[i],lv_color_hex(selected?kText:kMuted),0);
+        if(known)snprintf(text,sizeof(text),"%d%%",left);else strcpy(text,"--");
+        setLabel(quotaRowValues[i],selected?"":text);setTextColor(quotaRowValues[i],lv_color_hex(shade(known,left)),0);
+        lv_obj_set_style_border_width(quotaRows[i],selected?1:0,0);
+        if(static_cast<int>(page)!=quotaShown)quotaMove(quotaRows[i],32+i*26+(i>page?64:0),selected?88:24);
+    }
+    if(static_cast<int>(page)!=quotaShown){lv_obj_set_parent(quotaDetail,quotaRows[page]);quotaShown=page;}
     for(unsigned n=0;n<2;++n){
         const auto& q=model.quotas[page*2+n];const int left=q.known?100-q.used:0;
         reset[0]=0;
@@ -2605,11 +2636,11 @@ void renderQuotas(const Model& model){
         if(q.known&&page==3)strcpy(name,n?"API":"本期");  // Cursor: the whole plan (its period may be a week), then the API-priced models
         setLabel(quotaNames[n],name);setLabel(quotaResets[n],reset);
         if(q.known)snprintf(text,sizeof(text),"%d%%",left);else strcpy(text,"--");setLabel(quotaValues[n],text);
-        const auto color=!q.known?kMuted:left<=10?kWarn:left<=30?0xffe08a:kAccent;
+        const auto color=shade(q.known,left);
         setTextColor(quotaValues[n],lv_color_hex(color),0);setBgColor(quotaFills[n],lv_color_hex(color),0);
-        setWidth(quotaFills[n],std::max(1,left*190/100));
+        setWidth(quotaFills[n],std::max(1,left*192/100));
     }
-    setLabel(dashboardFoot,"百分比为剩余额度 · 上下翻页");
+    setLabel(dashboardFoot,"百分比为剩余额度 · 上下选择");
 }
 void renderDashboard(App app,const Model& model) {
     if(app==App::Codex){renderQuotas(model);return;}

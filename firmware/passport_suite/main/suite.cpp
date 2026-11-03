@@ -884,6 +884,7 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
     if (target == App::History) model.eventCount = model.eventIndex = 0;
     if (target == App::Daily) { model.page.daily.en[0] = model.page.daily.cn[0] = 0; model.dailyBack = model.dailyWant = 0; }
     if (target == App::Quake) model.quakeIndex = 0;
+    if (target == App::Codex) model.quotaPage = 0;  // AI 额度 opens on the first row
     if (target == App::Hacker) model.storyIndex = 0;
     if (target == App::Typhoon) { model.typhoonIndex = 0; model.page.typhoon.count = 0; model.page.typhoon.shown = 255; }
     if (target == App::Memo) {
@@ -1196,7 +1197,7 @@ void Runtime::key(Key key, uint64_t now) {
         auto& t = model.page.typhoon;
         if (t.count && (key == Key::Up || key == Key::Down)) model.typhoonIndex = (model.typhoonIndex + (key == Key::Up ? t.count - 1 : 1)) % t.count;
     } else if (active_ == App::Codex) {
-        // AI 额度: Up/Down turn to the previous or next tool; Confirm refreshes (LiveServices).
+        // AI 额度: Up/Down select the previous or next tool's row; Confirm refreshes (LiveServices).
         if (key == Key::Up || key == Key::Down) model.quotaPage = (model.quotaPage + (key == Key::Up ? Model::kQuotaTools - 1 : 1)) % Model::kQuotaTools;
     } else if (active_ == App::Feishu) {
         // Up/Down pick a message, in the list or the open one; Confirm opens it, and in the open one reads it aloud

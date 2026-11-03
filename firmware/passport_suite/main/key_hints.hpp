@@ -82,7 +82,7 @@ inline const char* keyHint(App app,SettingsPage page,bool focusRunning,bool pair
     // tab: 0 the wheel, 1 listening, 2 recognising, 3 a mode's delete asked.
     // tab: 0 no point yet, 1 a match on, 2 starting over asked.
     if(app==App::Score){static const char* const hints[]{"上：红方 +1  |  下：蓝方 +1  |  长按上：换赛制","上：红方 +1 | 下：蓝方 +1 | 确认：撤销 | 长按下：重开","再长按下：清零重开  |  其他键：取消"};return hints[tab%3];}
-    if(app==App::Codex&&!loading&&!error)return "上下：翻页  |  确认：刷新  |  长按确认：返回";
+    if(app==App::Codex&&!loading&&!error)return "上下：选择  |  确认：刷新  |  长按确认：返回";
     // tab: 0 the list, 1 a message open, 2 none yet.
     if(app==App::Feishu&&!loading&&!error){static const char* const hints[]{"上下：选择 | 确认：查看 | 长按上：电脑打开飞书 | 长按下：提醒方式","上下：上一条/下一条 | 确认：朗读 | 长按确认：返回列表","长按上：电脑打开飞书 | 长按下：提醒方式 | 长按确认：返回"};return hints[tab%3];}
     if(app==App::Wheel){static const char* const hints[]{"上下：换模式  |  确认：转  |  长按上：说话添加  |  长按下：删除模式","确认：结束并添加  |  长按确认：放弃","正在识别，请稍候","再长按下：删除这个模式  |  其他键：取消"};return hints[tab%4];}
