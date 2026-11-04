@@ -245,10 +245,10 @@ struct Model {
     // asked (liveState tells how it goes). A new message's alert takes macNote's place in the footer (from "飞书·"),
     // red and longer for feishuVip.
     uint8_t feishuIndex{};bool feishuDetail{},feishuSaying{},feishuVip{};
-    // AI 控制器 (App::Codex): the first kAiTools rows (Codex, Claude Code) have conversations: aiRows their [replied and
-    // unread, running] counts. aiLevel 1: the conversations of row quotaPage (page.ai), aiIndex the picked one.
+    // AI 控制器 (App::Codex): every row (Codex, Claude Code, Gemini Agy, Cursor, OpenCode) has conversations: aiRows their
+    // [replied and unread, running] counts. aiLevel 1: the conversations of row quotaPage (page.ai), aiIndex the picked one.
     // aiDictation: 语音输入 was opened on one of them; it types there, and its Back comes back here.
-    static constexpr uint8_t kAiTools{2};
+    static constexpr uint8_t kAiTools{kQuotaTools};
     uint8_t aiRows[kAiTools][2]{},aiLevel{},aiIndex{};bool aiDictation{};
     // 记分牌: page.score; scoreArmed: a long Down asked to start over.
     bool scoreArmed{};

@@ -247,7 +247,8 @@ class Services:
         self.settings={'ip_location_allowed':False}
         if (DATA/'settings.json').exists(): self.settings.update(json.loads((DATA/'settings.json').read_text()))
         self.feishu=Feishu(self.settings,self.save_settings)
-        self.ai=AISessions(self.settings,self.save_settings,DATA/'ai-read.json',self.type_line)
+        self.ai=AISessions(DATA/'ai-read.json',self.type_line)
+        if sys.platform=='darwin':threading.Thread(target=self.ai.watch,daemon=True).start()
         threading.Thread(target=self.run,daemon=True).start()
         if sys.platform=='darwin':threading.Thread(target=self.feishu_loop,daemon=True).start()
         threading.Thread(target=self.heartbeat,daemon=True).start()

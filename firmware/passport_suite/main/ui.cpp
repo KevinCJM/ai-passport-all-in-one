@@ -2657,8 +2657,8 @@ void renderQuotas(const Model& model){
         const bool known=left<=100,selected=i==page;
         setLabel(quotaRowNames[i],tools[i]);setTextColor(quotaRowNames[i],lv_color_hex(selected?kText:kMuted),0);
         if(known)snprintf(text,sizeof(text),"%d%%",left);else strcpy(text,"--");
-        // Codex and Claude Code: 新回复 N (an AI finished and that is not opened yet) or 运行中 instead of the share.
-        const auto* ai=i<Model::kAiTools?model.aiRows[i]:nullptr;
+        // 新回复 N (an AI finished and that is not opened yet) or 运行中 instead of the share.
+        const auto* ai=model.aiRows[i];
         if(ai&&ai[0]){snprintf(text,sizeof(text),"新回复 %u",unsigned(ai[0]));setLabel(quotaRowValues[i],text);setTextColor(quotaRowValues[i],lv_color_hex(kAccent),0);}
         else if(ai&&ai[1]){setLabel(quotaRowValues[i],"运行中");setTextColor(quotaRowValues[i],lv_color_hex(0xffe08a),0);}
         else{setLabel(quotaRowValues[i],selected?"":text);setTextColor(quotaRowValues[i],lv_color_hex(shade(known,left)),0);}
@@ -2679,7 +2679,7 @@ void renderQuotas(const Model& model){
         setTextColor(quotaValues[n],lv_color_hex(color),0);setBgColor(quotaFills[n],lv_color_hex(color),0);
         setWidth(quotaFills[n],std::max(1,left*192/100));
     }
-    setLabel(dashboardFoot,page<Model::kAiTools?"确认：看对话 · 上下选择":"百分比为剩余额度 · 上下选择");
+    setLabel(dashboardFoot,"确认：看对话 · 上下选择");
 }
 void renderDashboard(App app,const Model& model) {
     if(app==App::Codex){renderQuotas(model);return;}

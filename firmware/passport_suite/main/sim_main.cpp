@@ -1485,7 +1485,7 @@ extern "C" void app_main() {
     runtime.model.quotaPage=2;uiRender(runtime);uiCapture("codex_quota_gemini");
     runtime.switchTo(App::Home);runtime.switchTo(App::Codex);CHECK(runtime.model.quotaPage==0);  // entering selects the first row
     {   // AI 控制器: row hints, a tool's conversations, 语音输入 opened on one and Back to them.
-        auto& m=runtime.model;m.aiRows[0][1]=1;m.aiRows[1][0]=2;  // Codex running; Claude Code: 2 new replies
+        auto& m=runtime.model;m.aiRows[0][1]=1;m.aiRows[1][0]=2;m.aiRows[3][0]=1;  // Codex running; Claude Code: 2 new replies; Cursor 1
         uiRender(runtime);uiCapture("ai_rows");
         runtime.key(Key::Down,0);runtime.key(Key::Confirm,0);CHECK(m.aiLevel==1&&m.confirmTaken&&m.page.ai.count==0&&!m.page.ai.loaded);
         uiRender(runtime);uiCapture("ai_list_loading");
@@ -1503,8 +1503,9 @@ extern "C" void app_main() {
         runtime.key(Key::Back,0);CHECK(runtime.active()==App::Codex&&m.aiLevel==1&&m.quotaPage==1&&!m.aiDictation);
         runtime.switchTo(App::Home);runtime.switchTo(App::Codex);CHECK(m.aiLevel==0&&m.quotaPage==0);
         m.aiDictation=true;runtime.switchTo(App::Dictation);runtime.switchTo(App::Home);CHECK(!m.aiDictation);  // left another way
-        runtime.switchTo(App::Codex);runtime.model.quotaPage=2;runtime.key(Key::Confirm,0);CHECK(m.aiLevel==0);  // quota-only rows
-        m.aiRows[0][1]=m.aiRows[1][0]=0;
+        runtime.switchTo(App::Codex);runtime.model.quotaPage=4;runtime.key(Key::Confirm,0);CHECK(m.aiLevel==1);  // every row lists (OpenCode)
+        runtime.key(Key::Back,0);CHECK(m.aiLevel==0&&m.quotaPage==4);
+        m.aiRows[0][1]=m.aiRows[1][0]=m.aiRows[3][0]=0;
     }
     {   // Pomodoro fixture: third focus round, 18:23 left; then the same round paused.
         runtime.switchTo(App::Focus);auto& p=runtime.model;const auto saved=std::make_tuple(p.focusRunning,p.focusRemaining,p.focusRounds,p.focusDeadline);

@@ -356,12 +356,9 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 <label class=rows>不提醒（名字或群名，用逗号分开；胸牌页面里仍然列出）<textarea id=fsMute rows=2 style="width:100%" placeholder="例如：闲聊群"></textarea></label>
 <div class=actions><button class=primary onclick="fsSave()">保存</button><button onclick="fsTest()">发一条测试提醒</button><span id=fsResult class=out></span></div></section>
 
-<section id=ai><h2>AI 控制器</h2><p class=muted>胸牌「AI 控制器」页列出 24 小时内的 Codex 和 Claude Code 对话，AI 回复完的那一行带提示。在胸牌上选中对话按确认，电脑就打开它，光标停在输入框，胸牌转到语音输入：确认说话，下键发送，上键删除。</p>
-<p class=hint>对话还开着时，助手会切到它所在的终端。Ghostty、系统终端、iTerm 能切到对应的标签；Warp 只能切到窗口。对话没在运行时，在下面选的终端里新开一个标签接着聊。</p>
-<label class=row>Codex 用 <select id=aiCodex><option value=app>Codex App</option><option value=terminal>终端（codex resume）</option></select></label>
-<label class=row>Claude Code 用 <select id=aiClaude><option value=terminal>终端（claude --resume）</option></select></label>
-<label class=row>新开对话用的终端 <select id=aiTerm></select></label>
-<div class=actions><button class=primary onclick="aiSave()">保存</button><span id=aiResult class=out></span></div>
+<section id=ai><h2>AI 控制器</h2><p class=muted>胸牌「AI 控制器」页列出 24 小时内 Codex、Claude Code、Gemini Agy、Cursor、OpenCode 的对话，AI 回复完的那一行带提示。在胸牌上选中对话按确认，电脑就打开它，光标停在输入框，胸牌转到语音输入：确认说话，下键发送，上键删除。</p>
+<p class=hint>不用设置：在 App 里开的对话回到 App；在终端里开的，还在跑就切到它所在的终端（Ghostty、系统终端、iTerm 能切到标签，Warp 只能切到窗口），已经退出就在它上次所在的终端新开一个标签接着聊。</p>
+<span id=aiResult class=out></span>
 <h3>最近的对话</h3><div id=aiList class=rows></div></section>
 <section id=remote><h2>模拟遥控</h2><p class=muted>点一下等于按一下胸牌上对应的键，长按也一样。</p>
 <div class="row remote"><button onclick="act('up')">上</button><button onclick="act('down')">下</button><button onclick="act('ok')">确认</button><button onclick="act('ap_on')">长按上</button><button onclick="act('settings')">长按下</button><button onclick="act('back')">长按确认</button><span id=actResult class=out></span></div></section>
@@ -425,11 +422,10 @@ async function fsSave(){try{await post('/api/feishu',{mode:+$('#fsMode').value,v
 async function fsTest(){try{await post('/api/feishu-test',{});say($('#fsResult'),'已发送，看胸牌底部','ok')}catch(e){say($('#fsResult'),'胸牌没有响应：请确认已连接','err')}}
 fsLoad();
 const aiStates=['','运行中','已回复','新回复'];
-async function aiLoad(){try{const r=await (await fetch('/api/ai')).json();$('#aiCodex').value=r.config.codex;$('#aiClaude').value=r.config.claude;
- $('#aiTerm').replaceChildren(...r.terminals.map(t=>{const o=document.createElement('option');o.value=t.name;o.textContent=t.name+(t.installed?'':'（未安装）');return o}));$('#aiTerm').value=r.config.terminal;
- $('#aiList').replaceChildren(...r.sessions.map(x=>{const d=document.createElement('div');d.className='row';const s=document.createElement('span');s.textContent=(x.tool=='codex'?'Codex':'Claude')+' · '+x.title+' · '+x.folder+(aiStates[x.state]?' · '+aiStates[x.state]:'');
+const aiNames={codex:'Codex',claude:'Claude',agy:'Agy',cursor:'Cursor',opencode:'OpenCode'};
+async function aiLoad(){try{const r=await (await fetch('/api/ai')).json();
+ $('#aiList').replaceChildren(...r.sessions.map(x=>{const d=document.createElement('div');d.className='row';const s=document.createElement('span');s.textContent=aiNames[x.tool]+' · '+x.title+' · '+x.folder+(aiStates[x.state]?' · '+aiStates[x.state]:'')+' → '+x.place;
   const b=document.createElement('button');b.textContent='在电脑打开';b.onclick=async()=>{try{say($('#aiResult'),(await post('/api/ai-go',{tool:x.tool,id:x.id})).note,'ok');aiLoad()}catch(e){say($('#aiResult'),'失败：'+e.message,'err')}};d.append(s,b);return d}))}catch(e){say($('#aiResult'),'读取失败：'+e.message,'err')}}
-async function aiSave(){try{await post('/api/ai',{codex:$('#aiCodex').value,claude:$('#aiClaude').value,terminal:$('#aiTerm').value});say($('#aiResult'),'✓ 已保存，马上生效','ok')}catch(e){say($('#aiResult'),'保存失败：'+e.message,'err')}}
 aiLoad();
 
 async function act(command){const out=$('#actResult');try{await post('/api/action',{command});say(out,'')}catch(e){say(out,'胸牌没有响应','err')}}
@@ -511,7 +507,6 @@ class Handler(BaseHTTPRequestHandler):
    elif self.path=='/api/qr-codes':result=DEVICE.qr_codes(data['codes'])
    elif self.path=='/api/mac-apps':result=DEVICE.services.set_mac_aliases(data['aliases'])
    elif self.path=='/api/feishu':result=DEVICE.services.feishu.configure(int(data['mode']),data['vip'],data['mute'])
-   elif self.path=='/api/ai':result=DEVICE.services.ai.configure(data)
    elif self.path=='/api/ai-go':result={'note':DEVICE.services.ai.open(str(data['tool']),str(data['id']))}
    elif self.path=='/api/feishu-test':result=DEVICE.services.feishu_test()
    elif self.path=='/api/mac-open':result={'note':DEVICE.services.mac.open_path(data['path'])}
