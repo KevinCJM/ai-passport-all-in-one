@@ -126,7 +126,7 @@ def packaged(out):
     data=tempfile.mkdtemp(prefix='passport-smoke-');env=dict(os.environ,PASSPORT_DATA_DIR=data)
     first=subprocess.Popen([str(APP),'--background'],env=env)
     try:
-        state=until(lambda:get('/api/assistant'),40)
+        state=until(lambda:(s:=get('/api/assistant')) and s['features'][0][1] is not None and s,40)
         check('web_assistant_api',state and state.get('platform')=='windows',state and state.get('status'))
         check('web_page','电脑助手' in get('/'))
         check('features_rows',state and [r[0] for r in state['features']]==['语音输入','Codex'],state and state.get('features'))
