@@ -196,8 +196,8 @@ def opencode_usage():
 def gemini_usage():
     """Gemini's limits in Antigravity (the agy CLI's login, Mac keychain). The token lasts an hour and only agy refreshes
     it, so an expired one is renewed by running `agy models`, which writes the new token back. Two
-    rows: Pro, then Flash, each at its most used model. Antigravity gives a reset time per model but no window length,
-    so the rows carry the 5-hour cadence it reports."""
+    rows: Gemini, then third-party (Claude/GPT), each at its most used model. Antigravity gives a reset time per model
+    but no window length, so the rows carry the 5-hour cadence it reports."""
     import base64
     if sys.platform=='win32':raise FileNotFoundError('Gemini usage is read on the Mac only')
     def read():
@@ -213,13 +213,14 @@ def gemini_usage():
     request=urllib.request.Request('https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',data=b'{}',headers={
         'Authorization':'Bearer '+token,'Content-Type':'application/json','User-Agent':'antigravity/1.4.10'})
     with urllib.request.urlopen(request,timeout=8) as response:models=json.loads(response.read(2_000_000))['models']
-    families={'Pro':[],'Flash':[]}
+    families={'Gemini':[],'third_party':[]}
     for name,model in models.items():
         info=model.get('quotaInfo') or {}; fraction=info.get('remainingFraction')
-        if not name.startswith('gemini-') or 'image' in name or not isinstance(fraction,(int,float)):continue
-        families['Pro' if 'pro' in name else 'Flash'].append((fraction,iso_epoch(info.get('resetTime'))))
+        if 'image' in name or not isinstance(fraction,(int,float)):continue
+        if name.startswith('gemini-'):families['Gemini'].append((fraction,iso_epoch(info.get('resetTime'))))
+        elif name.startswith(('claude-','gpt-')):families['third_party'].append((fraction,iso_epoch(info.get('resetTime'))))
     windows=[]
-    for family in ('Pro','Flash'):
+    for family in ('Gemini','third_party'):
         if not families[family]:continue
         fraction,resets=min(families[family])
         windows.append({'usedPercent':round((1-fraction)*100,1),'windowDurationMins':300,'resetsAt':resets})

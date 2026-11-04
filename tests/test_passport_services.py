@@ -85,21 +85,22 @@ class ServiceTests(TestCase):
         self.assertTrue(request.full_url.endswith('/api/dashboard/get-current-period-usage'))
         self.assertEqual(request.data,b'{}')
 
-    def test_gemini_usage_keeps_the_most_used_pro_and_flash_model(self):
+    def test_gemini_usage_keeps_the_most_used_gemini_and_third_party_model(self):
         envelope='go-keyring-base64:'+base64.b64encode(json.dumps({'token':{'access_token':'ya29.test'}}).encode()).decode()
         models={'gemini-2.5-pro':{'quotaInfo':{'remainingFraction':0.75,'resetTime':'2026-11-03T13:21:07Z'}},
-                'gemini-3-flash':{'quotaInfo':{'remainingFraction':1,'resetTime':'2026-11-03T13:21:07Z'}},
-                'gemini-3.5-flash-lite':{'quotaInfo':{'remainingFraction':0.4,'resetTime':'2026-11-03T14:00:00Z'}},
+                'gemini-3-flash':{'quotaInfo':{'remainingFraction':0.9,'resetTime':'2026-11-03T13:21:07Z'}},
                 'gemini-3.1-flash-image':{'quotaInfo':{'remainingFraction':0.1,'resetTime':'2026-11-03T13:21:07Z'}},
-                'claude-opus-5-5-high':{'quotaInfo':{'remainingFraction':0,'resetTime':'2026-11-03T13:21:07Z'}}}
+                'claude-opus-5-5-high':{'quotaInfo':{'remainingFraction':0.4,'resetTime':'2026-11-03T14:00:00Z'}},
+                'gpt-oss-120b-medium':{'quotaInfo':{'remainingFraction':1,'resetTime':'2026-11-03T14:00:00Z'}},
+                'chat_20706':{'quotaInfo':{'remainingFraction':0}}}
         response=MagicMock();response.read.return_value=json.dumps({'models':models}).encode()
         response.__enter__.return_value=response
         with patch('passport_services.subprocess.run',return_value=NS(stdout=envelope+'\n')) as keychain,\
              patch('passport_services.urllib.request.urlopen',return_value=response) as opened:
             data=gemini_usage()
         self.assertEqual(keychain.call_args.args[0][:5],['security','find-generic-password','-s','gemini','-a'])
-        self.assertEqual(data['windows'][0]['usedPercent'],25.0)  # Pro
-        self.assertEqual(data['windows'][1]['usedPercent'],60.0)  # Flash: the lite model at 40% left
+        self.assertEqual(data['windows'][0]['usedPercent'],25.0)  # Gemini
+        self.assertEqual(data['windows'][1]['usedPercent'],60.0)  # Third-party: Claude Opus at 40% left
         self.assertEqual(data['windows'][1]['resetsAt'],1793714400)
         self.assertEqual(opened.call_args.args[0].get_header('Authorization'),'Bearer ya29.test')
 

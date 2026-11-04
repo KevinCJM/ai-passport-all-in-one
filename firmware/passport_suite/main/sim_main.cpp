@@ -1475,7 +1475,7 @@ extern "C" void app_main() {
     {const auto at=[](int seconds){return static_cast<uint32_t>(time(nullptr)+seconds);};auto& q=runtime.model.quotas;
     q[0]={true,24,300,at(2*3600+10*60)};q[1]={true,11,10080,at(6*86400+3*3600)};        // Codex
     q[2]={true,0,300,at(3600+30*60)};q[3]={true,74,10080,at(86400+15*3600)};              // Claude Code
-    q[4]={true,8,300,at(3*3600)};q[5]={true,0,300,at(3*3600)};                            // Gemini Pro, Flash
+    q[4]={true,8,300,at(3*3600)};q[5]={true,0,300,at(3*3600)};                            // Gemini, 第三方
     q[6]={true,38,43200,at(20*86400)};q[7]={true,12,43200,at(20*86400)};                  // Cursor
     q[8]={true,5,300,at(4*3600)};q[9]={};}                                                 // OpenCode Go: its week unknown
     runtime.switchTo(App::Codex);runtime.model.quotaPage=0;uiRender(runtime);uiCapture("codex_quota");

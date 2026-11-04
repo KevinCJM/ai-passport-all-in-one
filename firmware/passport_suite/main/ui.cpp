@@ -2632,8 +2632,9 @@ void renderQuotas(const Model& model){
         const auto& q=model.quotas[page*2+n];const int left=q.known?100-q.used:0;
         reset[0]=0;
         if(q.known)quotaLine(name,reset,sizeof(name),q);else strcpy(name,"暂不可用");
-        if(q.known&&page==2)strcpy(name,n?"Flash":"Pro");  // Gemini: the model families, each with its reset
+        if(q.known&&page==2)strcpy(name,n?"第三方":"Gemini");  // Gemini Agy: Gemini pool, then third-party (Claude/GPT)
         if(q.known&&page==3)strcpy(name,n?"API":"本期");  // Cursor: the whole plan (its period may be a week), then the API-priced models
+        lv_obj_set_x(quotaResets[n],page==2?70:60);
         setLabel(quotaNames[n],name);setLabel(quotaResets[n],reset);
         if(q.known)snprintf(text,sizeof(text),"%d%%",left);else strcpy(text,"--");setLabel(quotaValues[n],text);
         const auto color=shade(q.known,left);
