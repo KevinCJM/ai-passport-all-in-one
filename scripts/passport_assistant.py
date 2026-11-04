@@ -21,7 +21,7 @@ from passport_computer_link import start_gateway
 from passport_identity import paired_port
 from passport_paths import helper, user_data, codex_command, PACKAGED
 
-VERSION='0.1.16-preview'
+VERSION='0.1.17-preview'
 LABEL='local.ai-passport.assistant'
 WINDOWS=sys.platform=='win32'
 UI_PORT=8768
@@ -86,7 +86,7 @@ def features(deps):
     rows=[('voice','语音输入',bool(deps.get('voice')) if 'voice' in deps else None,
            '小智识别，文字粘贴到光标处' if deps.get('voice') else '编码组件不可用，请重新安装助手' if 'voice' in deps else '正在检查'),
           ('codex','Codex',True if deps.get('codex') else None,
-           '已安装，可在胸牌「AI 额度」查看用量' if deps.get('codex') else '未安装（可选，需自行安装并登录）' if 'codex' in deps else '正在检查')]
+           '已安装，可在胸牌「AI 控制器」看用量和对话' if deps.get('codex') else '未安装（可选，需自行安装并登录）' if 'codex' in deps else '正在检查')]
     if WINDOWS:return rows
     checked=all(isinstance(deps.get(k),bool) for k in ('accessibility','post_event_access'))
     missing=([] if not checked or (deps['accessibility'] and deps['post_event_access']) else ['辅助功能'])+(['蓝牙'] if deps.get('bluetooth_denied') else [])
@@ -311,7 +311,7 @@ HELP='''首次使用
 用 USB 数据线连上胸牌，在「设备」里选中它，点「配对」。核对胸牌和助手上的配对码一致，在胸牌上按确认。
 
 日常使用
-插着线走 USB；拔线后进入语音输入、AI 额度等电脑功能，助手会自动改用蓝牙（Mac 弹出蓝牙配对时点「连接」）。
+插着线走 USB；拔线后进入语音输入、AI 控制器等电脑功能，助手会自动改用蓝牙（Mac 弹出蓝牙配对时点「连接」）。
 
 语音输入
 在胸牌「语音输入」页按确认开始说话，再按确认结束，文字粘贴到 Mac 当前光标处。需要授权辅助功能，不用装输入法。
@@ -325,7 +325,7 @@ if WINDOWS:HELP='''首次使用
 用 USB 数据线连上胸牌，在「设备」里选中它，点「配对」。核对胸牌和网页上的配对码一致，在胸牌上按确认。也可以导入在 Mac 上配对后导出的 device.json。
 
 日常使用
-助手在右下角托盘里运行，点图标打开这个网页。插着线走 USB；拔线后进入语音输入、AI 额度等电脑功能，助手会自动改用蓝牙（Windows 提示配对时点「允许」）。
+助手在右下角托盘里运行，点图标打开这个网页。插着线走 USB；拔线后进入语音输入、AI 控制器等电脑功能，助手会自动改用蓝牙（Windows 提示配对时点「允许」）。
 
 语音输入
 在胸牌「语音输入」页按确认开始说话，再按确认结束，文字粘贴到当前光标处。不用授权、不用装输入法；以管理员身份运行的窗口收不到。
