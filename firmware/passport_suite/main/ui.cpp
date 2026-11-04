@@ -2597,13 +2597,13 @@ void quotaLine(char* name,char* reset,size_t size,const Model::Quota& q){
     else if(left>=86400)snprintf(reset,size,"%lld天%lld时重置",static_cast<long long>(left/86400),static_cast<long long>(left/3600%24));
     else snprintf(reset,size,"%lld:%02lld 重置",static_cast<long long>(left/3600),static_cast<long long>(left/60%60));
 }
-// Rows slide and grow to the new selection over 150 ms on the badge; the simulator jumps so captures show the result.
+// Rows slide and grow to the new selection over 80 ms on the badge; the simulator jumps so captures show the result.
 void quotaMove(lv_obj_t* row,int32_t y,int32_t h){
 #ifdef PASSPORT_DEVICE
     const auto go=[row](lv_anim_exec_xcb_t set,int32_t from,int32_t to){
         if(from==to){return;}
         lv_anim_t a;lv_anim_init(&a);lv_anim_set_var(&a,row);lv_anim_set_exec_cb(&a,set);
-        lv_anim_set_values(&a,from,to);lv_anim_set_duration(&a,150);lv_anim_set_path_cb(&a,lv_anim_path_ease_out);lv_anim_start(&a);};
+        lv_anim_set_values(&a,from,to);lv_anim_set_duration(&a,80);lv_anim_set_path_cb(&a,lv_anim_path_ease_out);lv_anim_start(&a);};
     if(quotaShown>=0){
         go([](void* o,int32_t v){lv_obj_set_y(static_cast<lv_obj_t*>(o),v);},lv_obj_get_y(row),y);
         go([](void* o,int32_t v){lv_obj_set_height(static_cast<lv_obj_t*>(o),v);},lv_obj_get_height(row),h);return;
