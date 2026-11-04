@@ -72,6 +72,9 @@ class NativeServices {
             int chartFor;bool days;unsigned chartCount,chartTotal;int16_t chart[ChartPoints::kMax];float low,high;char from[8],mid[16],to[12];} stocks;} page_{};unsigned quakeCount_{},storyCount_{},podcastCount_{};
     // The radio or a podcast is playing; a podcast's player is open, at podcastPos_ of podcastDur_ seconds.
     bool playing_{},podcastPlayer_{};uint32_t podcastPos_{},podcastDur_{};
+    // 选期: episodesCount_ episodes (newest first) in page_.podcasts, from the episodesFirst_-th newest of episodesTotal_;
+    // episodesHeard_ is the row being heard, -1 = not on this page.
+    unsigned episodesCount_{},episodesFirst_{},episodesTotal_{};int episodesHeard_{-1};
     RateBoard rateBoard_{};double rates_[RateBoard::kTargets]{};uint32_t rateUpdated_{};
     // A sink takes the body as it arrives instead of a buffer (nullptr data first: start over); false ends the read.
     using Sink=bool(*)(void*,const char*,size_t);

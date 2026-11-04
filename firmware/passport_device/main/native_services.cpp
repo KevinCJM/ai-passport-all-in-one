@@ -73,7 +73,9 @@ void NativeServices::publish(const Job& job,const char* state,const char* phase,
     if(job.app==App::Radio){auto* m=cJSON_AddObjectToObject(j.value,"media");cJSON_AddNumberToObject(m,"index",mediaIndex_);cJSON_AddNumberToObject(m,"count",mediaCount_);}
     if(job.app==App::Radio||job.app==App::Podcast)cJSON_AddBoolToObject(j.value,"playing",playing_);
     if(job.app==App::Podcast){auto* p=cJSON_AddObjectToObject(j.value,"podcast");
-        if(podcastPlayer_){cJSON_AddNumberToObject(p,"pos",podcastPos_);cJSON_AddNumberToObject(p,"dur",podcastDur_);}
+        if(podcastPlayer_){cJSON_AddNumberToObject(p,"pos",podcastPos_);cJSON_AddNumberToObject(p,"dur",podcastDur_);
+            if(episodesCount_){auto* list=cJSON_AddArrayToObject(p,"eps");for(unsigned i=0;i<episodesCount_;++i){auto* o=cJSON_CreateObject();cJSON_AddStringToObject(o,"n",page_.podcasts[i].name);cJSON_AddStringToObject(o,"s",page_.podcasts[i].note);cJSON_AddItemToArray(list,o);}
+                cJSON_AddNumberToObject(p,"first",episodesFirst_);cJSON_AddNumberToObject(p,"total",episodesTotal_);cJSON_AddNumberToObject(p,"cur",episodesHeard_);}}
         else{auto* list=cJSON_AddArrayToObject(p,"items");for(unsigned i=0;i<podcastCount_;++i){auto* o=cJSON_CreateObject();cJSON_AddStringToObject(o,"n",page_.podcasts[i].name);cJSON_AddStringToObject(o,"s",page_.podcasts[i].note);cJSON_AddItemToArray(list,o);}}}
     if(job.app==App::Chat){cJSON_AddNumberToObject(j.value,"speech_turn",speechTurn_);}
     // A phrase spoken on 汇率 or 自选股 sends only its own state: what the page shows came from the last fetch.
@@ -1021,7 +1023,8 @@ void NativeServices::media(){
 // 播客: the program list, then one program's episodes, streamed like the radio (plain HTTP 64k MP3).
 // "list" shows the programs; "play:N" plays program N where it was left (else its newest episode);
 // "toggle" pauses and resumes from the byte reached (HTTP Range); "next"/"prev" step to the newer/older
-// episode, and a finished episode moves on to the newer one. The place is kept on pause, on leaving and
+// episode, and a finished episode moves on to the newer one. 选期: "eps:N" pauses and lists page N of the
+// episodes (0 = the page of the one being heard), "pick:N" plays episode N (oldest = 0). The place is kept on pause, on leaving and
 // once a minute, so switching the badge off loses at most a minute.
 void NativeServices::podcast(){
     static_assert(PodcastList::kMax==std::tuple_size_v<decltype(Model::PageData::podcasts)>);
@@ -1069,6 +1072,32 @@ void NativeServices::podcast(){
         if(!fetched||!found.track||!found.total||(!*found.url&&!*found.backup))return false;
         found.index=index<0?found.total-1:std::min(index,found.total-1);ep=found;return true;
     };
+    // 选期: page `page` of the episodes, newest first, into page_.podcasts.
+    const auto episodes=[&](unsigned page){
+        constexpr unsigned kPage=Model::kPodcastPage;static_assert(kPage<=PodcastList::kMax);
+        static constexpr const char* keys[]{"trackId","title","duration","createdAt","totalCount"};
+        struct Sink{JsonScan scan;PodcastRow* rows;unsigned count,total;uint32_t track[kPage],duration[kPage],created[kPage];};
+        constexpr JsonScan::Field onField=[](void* context,unsigned key,const char* v){
+            auto& s=*static_cast<Sink*>(context);
+            // Each episode starts with its trackId.
+            if(key==0&&s.count<kPage){const unsigned i=s.count++;s.rows[i]={};s.track[i]=strtoul(v,nullptr,10);s.duration[i]=s.created[i]=0;return;}
+            if(key==4){s.total=std::min(atol(v),65535L);return;}
+            if(!s.count)return;
+            const unsigned i=s.count-1;
+            if(key==1)copy(s.rows[i].name,v);else if(key==2)s.duration[i]=atol(v);else if(key==3)s.created[i]=strtoull(v,nullptr,10)/1000;};
+        auto sink=std::unique_ptr<Sink>(new(std::nothrow)Sink{JsonScan(keys,std::size(keys),"\"list\":[",onField,nullptr),page_.podcasts,0,0,{},{},{}});
+        if(!sink)return false;
+        sink->scan=JsonScan(keys,std::size(keys),"\"list\":[",onField,sink.get());
+        char url[112];podcastPageUrl(url,sizeof(url),album(),page,kPage);
+        if(!fetch(url,nullptr,0,[](void* context,const char* data,size_t size){auto& s=*static_cast<Sink*>(context);if(!data){s.scan.reset();s.count=s.total=0;}else s.scan.feed(data,size);return true;},sink.get())||!sink->count||!sink->total)return false;
+        auto& s=*sink;episodesCount_=s.count;episodesFirst_=(page-1)*kPage;episodesTotal_=s.total;episodesHeard_=-1;
+        for(unsigned i=0;i<s.count;++i){
+            char day[8]{};if(s.created[i]){const time_t at=s.created[i];tm date{};localtime_r(&at,&date);strftime(day,sizeof(day),"%m-%d",&date);}
+            snprintf(s.rows[i].note,sizeof(s.rows[i].note),"第 %u 期 · %s · %lu:%02lu",s.total-episodesFirst_-i,day,static_cast<unsigned long>(s.duration[i]/60),static_cast<unsigned long>(s.duration[i]%60));
+            if(ep.track&&s.track[i]==ep.track)episodesHeard_=i;
+        }
+        return true;
+    };
     const auto save=[&]{
         savedAt=esp_timer_get_time();if(!ep.track)return;
         if(auto* spot=podcastSpot(spots,list,album(),true)){spot->track=ep.track;spot->episode=ep.index;spot->offset=offset;mediaSave("pod_spots",spots);}
@@ -1087,7 +1116,18 @@ void NativeServices::podcast(){
         Job action{};
         if(xQueueReceive(actions_,&action,pdMS_TO_TICKS(playing_?0:20))==pdTRUE&&action.generation==current_.generation){
             current_.request=action.request;const char* op=action.operation;
-            if(!strncmp(op,"play:",5)){
+            if(strncmp(op,"eps:",4))episodesCount_=0;
+            if(!strncmp(op,"eps:",4)){
+                if(playing_){close();save();}
+                episodesCount_=0;copy(note,"正在获取期数…");show(ep.track?"已暂停":"选择节目");
+                unsigned page=atoi(op+4);if(!page)page=ep.track?(ep.total-1u-ep.index)/Model::kPodcastPage+1:1;
+                if(episodes(page))note[0]=0;else if(!cancelled())copy(note,"期数获取失败，长按确认返回");
+                show(ep.track?"已暂停":"选择节目");
+            }else if(!strncmp(op,"pick:",5)){
+                const int want=atoi(op+5);note[0]=0;
+                // The episode being heard goes on from where it was.
+                if(ep.track&&want==ep.index&&!ep.paid){playing_=restart=true;retries=0;}else start(want,0);
+            }else if(!strncmp(op,"play:",5)){
                 if(ep.track){close();save();}
                 program=std::min<unsigned>(atoi(op+5),list.count-1);ep={};note[0]=0;
                 // Where it was left, a few seconds back; a removed episode starts its successor from the top.

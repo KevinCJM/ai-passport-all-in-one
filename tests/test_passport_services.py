@@ -99,9 +99,10 @@ class ServiceTests(TestCase):
              patch('passport_services.urllib.request.urlopen',return_value=response) as opened:
             data=gemini_usage()
         self.assertEqual(keychain.call_args.args[0][:5],['security','find-generic-password','-s','gemini','-a'])
-        self.assertEqual(data['windows'][0]['usedPercent'],25.0)  # Gemini
-        self.assertEqual(data['windows'][1]['usedPercent'],60.0)  # Third-party: Claude Opus at 40% left
-        self.assertEqual(data['windows'][1]['resetsAt'],1793714400)
+        self.assertEqual(data['windows'][0]['usedPercent'],25.0)  # Gemini 4 / Pro: 25% used
+        self.assertEqual(data['windows'][1]['usedPercent'],10.0)  # Flash: 10% used
+        self.assertEqual(data['windows'][2]['usedPercent'],60.0)  # Third-party: Claude Opus at 40% left -> 60% used
+        self.assertEqual(data['windows'][2]['resetsAt'],1793714400)
         self.assertEqual(opened.call_args.args[0].get_header('Authorization'),'Bearer ya29.test')
 
     def test_gemini_usage_renews_an_expired_token_through_agy(self):

@@ -343,7 +343,8 @@ void LiveServices::action(Key key) {
     if(key==Key::Confirm&&runtime_.model.livePhase==LivePhase::Error&&active!=App::Macro) { request("enter");runtime_.model.livePhase=LivePhase::Loading;loadingAt_=requestedAt_=esp_timer_get_time()/1000000;return; }
     if(key==Key::Confirm&&active==App::Daily) { request("say"); return; }
     // Confirm on the list opens the player (tick asks for the program); in the player it plays or pauses.
-    if(key==Key::Confirm&&active==App::Podcast) { if(runtime_.model.podcastPlayer&&podcastAsked_>=0)request("toggle"); return; }
+    // 选期's Confirm picked an episode instead (tick plays it).
+    if(key==Key::Confirm&&active==App::Podcast) { const auto& m=runtime_.model;if(m.podcastPlayer&&!m.podcastEpisodes&&!m.podcastEpPick&&podcastAsked_>=0)request("toggle"); return; }
     // On the 预警 tab Confirm steps through the warnings' texts instead (Runtime::key).
     const bool warningsShown=active==App::Forecast&&runtime_.model.forecastView==3&&runtime_.model.page.forecast.warnings&&runtime_.model.page.forecast.warnings!=0xff;
     if(key==Key::Confirm&&!warningsShown&&(active==App::Home||active==App::Monitor||active==App::Codex||active==App::News||active==App::Rate||active==App::History||active==App::Quake||active==App::Hacker||active==App::Forecast||active==App::Typhoon))request("refresh");
@@ -528,6 +529,16 @@ bool LiveServices::tick(uint64_t now) {
                     m.podcastCount=0;const cJSON* item;
                     cJSON_ArrayForEach(item,field(p,"items")){if(m.podcastCount==m.page.podcasts.size())break;auto& r=m.page.podcasts[m.podcastCount++];copy(r.name,string(item,"n"));copy(r.note,string(item,"s"));}
                     if(m.podcastIndex>=m.podcastCount)m.podcastIndex=0;
+                }
+                // 选期: a page of episodes; a new page starts on the episode being heard, else at the end it came from.
+                const auto first=static_cast<uint16_t>(number(p,"first",0));
+                if(m.podcastEpisodes&&cJSON_IsArray(field(p,"eps"))&&(!m.podcastEpCount||first!=m.podcastEpFirst)){
+                    const bool top=!m.podcastEpCount||first>m.podcastEpFirst;m.podcastEpCount=0;const cJSON* item;
+                    cJSON_ArrayForEach(item,field(p,"eps")){if(m.podcastEpCount==Model::kPodcastPage)break;auto& r=m.page.podcasts[m.podcastEpCount++];copy(r.name,string(item,"n"));copy(r.note,string(item,"s"));}
+                    const int heard=number(p,"cur",-1);
+                    m.podcastEpIndex=heard>=0&&heard<m.podcastEpCount?heard:top||!m.podcastEpCount?0:m.podcastEpCount-1;
+                    m.podcastEpFirst=first;m.podcastEpTotal=static_cast<uint16_t>(number(p,"total",0));
+                    episodesAsked_=m.podcastEpPage=first/Model::kPodcastPage+1;
                 }
             }
             if(active==App::Home){
@@ -779,7 +790,11 @@ bool LiveServices::tick(uint64_t now) {
         dailyAsked_=model.dailyWant;char operation[12];snprintf(operation,sizeof(operation),"day:%u",model.dailyWant);request(operation);dirty=true;}
     // 播客: the device plays the program the page shows, or shows its list.
     if(active==App::Podcast&&!pending_){const int want=model.podcastPlayer?model.podcastIndex:-1;
-        if(want!=podcastAsked_){podcastAsked_=want;char operation[12];if(want<0)copy(operation,"list");else snprintf(operation,sizeof(operation),"play:%d",want);request(operation);dirty=true;}}
+        if(want!=podcastAsked_){podcastAsked_=want;char operation[12];if(want<0)copy(operation,"list");else snprintf(operation,sizeof(operation),"play:%d",want);request(operation);dirty=true;}
+        // 选期: the page wanted ("eps:0" = the one being heard), or the picked episode.
+        else if(model.podcastEpPick){char operation[16];snprintf(operation,sizeof(operation),"pick:%u",model.podcastEpPick-1u);model.podcastEpPick=0;request(operation);dirty=true;}
+        else if(!model.podcastEpisodes)episodesAsked_=-1;
+        else if(model.podcastEpPage!=episodesAsked_){episodesAsked_=model.podcastEpPage;char operation[16];snprintf(operation,sizeof(operation),"eps:%u",model.podcastEpPage);request(operation);dirty=true;}}
     // 定时关闭: the time left redraws each second; at zero a playing stream stops as Confirm would.
     if((active==App::Radio||active==App::Podcast)&&model.mediaUntil){
         if(now!=timerShown_){timerShown_=now;dirty=true;}

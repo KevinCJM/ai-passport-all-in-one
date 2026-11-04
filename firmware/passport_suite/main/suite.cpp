@@ -907,7 +907,7 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
         const Date d = today(); model.calendarView = 0;
         if (d.year > 2000) { model.calendarYear = d.year; model.calendarMonth = d.month; model.calendarDay = d.day; }
     }
-    if (target == App::Podcast) model.podcastPlayer = false;
+    if (target == App::Podcast) model.podcastPlayer = model.podcastEpisodes = false;
     if (target == App::Radio || target == App::Podcast) { model.mediaTimer = 0; model.mediaUntil = 0; }
     if (target == App::Chat) { model.chatCount = 0; model.chatTurn = 0; model.chatSentence[0] = 0; ++model.chatRevision; }
     return lastResult = Result::Ok;
@@ -918,6 +918,7 @@ void Runtime::key(Key key, uint64_t now) {
     if(active_==App::Settings){settingsKey(key);return;}
     if (key == Key::Back) {
         // The podcast player goes back to its program list first.
+        if (active_ == App::Podcast && model.podcastEpisodes) { model.podcastEpisodes = false; return; }
         if (active_ == App::Podcast && model.podcastPlayer) { model.podcastPlayer = false; return; }
         // So does a stock's detail; a ringing alarm stops first.
         if (active_ == App::Stock && model.stockDetail) { model.stockDetail = false; return; }
@@ -1261,8 +1262,13 @@ void Runtime::key(Key key, uint64_t now) {
     } else if (active_ == App::Podcast) {
         // The list: Up/Down pick a program, Confirm opens it (LiveServices asks the device to play it).
         // The player: Up/Down set the volume; Confirm plays or pauses (LiveServices).
+        // 选期: Up/Down past either end asks for the newer/older page; Confirm picks the episode.
         auto& m = model;
-        if (!m.podcastPlayer) {
+        if (m.podcastEpisodes) {
+            if (m.podcastEpCount && key == Key::Up) { if (m.podcastEpIndex) --m.podcastEpIndex; else if (m.podcastEpFirst) m.podcastEpPage = m.podcastEpFirst / Model::kPodcastPage; }
+            if (m.podcastEpCount && key == Key::Down) { if (m.podcastEpIndex + 1 < m.podcastEpCount) ++m.podcastEpIndex; else if (m.podcastEpFirst + m.podcastEpCount < m.podcastEpTotal) m.podcastEpPage = m.podcastEpFirst / Model::kPodcastPage + 2; }
+            if (m.podcastEpCount && key == Key::Confirm) { m.podcastEpPick = m.podcastEpTotal - m.podcastEpFirst - m.podcastEpIndex; m.podcastEpisodes = false; }
+        } else if (!m.podcastPlayer) {
             if (m.podcastCount && (key == Key::Up || key == Key::Down)) m.podcastIndex = (m.podcastIndex + (key == Key::Up ? m.podcastCount - 1 : 1)) % m.podcastCount;
             if (key == Key::Confirm && m.podcastCount) m.podcastPlayer = true;
         } else if (key == Key::Up || key == Key::Down) m.volume = static_cast<uint8_t>(std::clamp(int(m.volume) + (key == Key::Up ? 5 : -5), 0, 100));
@@ -1282,6 +1288,11 @@ void Runtime::walkieCall(uint64_t now) {
     wake(now);
     if (switchTo(App::Walkie) != Result::Ok) return;
     model.walkieBack = back; model.walkieAuto = true;
+}
+void Runtime::podcastEpisodes(uint64_t now) {
+    if (active_ != App::Podcast || !model.podcastPlayer || model.podcastEpisodes) return;
+    tick(now); lastInput_ = now;
+    model.podcastEpisodes = true; model.podcastEpCount = model.podcastEpIndex = 0; model.podcastEpPage = model.podcastEpPick = 0;
 }
 void Runtime::stepMediaTimer(uint64_t now) {
     if (active_ != App::Radio && active_ != App::Podcast) return;

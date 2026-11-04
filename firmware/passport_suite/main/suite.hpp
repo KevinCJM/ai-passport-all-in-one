@@ -79,10 +79,10 @@ struct Model {
     // Settings > WiFi: the saved networks' names (last joined first). wifiRow 0 is 添加 WiFi, n the network n-1;
     // wifiArmed: a long Down asked to forget it.
     char wifiSaved[WifiList::kMax][33]{};uint8_t wifiSavedCount{},wifiRow{};bool wifiArmed{};
-    // AI 控制器's quotas: two windows a tool, in this order: Codex (short/long), Claude Code (5 hours/7 days), Gemini (Gemini/第三方),
-    // Cursor (plan/API), OpenCode Go (5 hours/week or month); resets an epoch. quotaPage is the selected row.
-    static constexpr uint8_t kQuotaTools{5};
-    struct Quota { bool known{};uint8_t used{};uint16_t minutes{};uint32_t resets{}; } quotas[2*kQuotaTools];uint8_t quotaPage{};
+    // AI 控制器's quotas: up to three windows a tool, in this order: Codex (short/long), Claude Code (5 hours/7 days),
+    // Gemini (Gemini 4/Flash/第三方), Cursor (plan/API), OpenCode Go (5 hours/week or month); resets an epoch. quotaPage is the selected row.
+    static constexpr uint8_t kQuotaTools{5},kQuotaWindows{3};
+    struct Quota { bool known{};uint8_t used{};uint16_t minutes{};uint32_t resets{}; } quotas[kQuotaWindows*kQuotaTools];uint8_t quotaPage{};
     bool metricsKnown{};
     uint64_t memoryUsed{},memoryTotal{},netUp{},netDown{},diskFree{},uptime{};
     int disk{},battery{-1};bool charging{};float load{};uint8_t cores{};  // battery -1: a Mac without one
@@ -96,6 +96,11 @@ struct Model {
     // 播客: the program list (page.podcasts, sent by the device), or once one is opened its player.
     // podcastPos and podcastDur are the episode's place and length in seconds.
     uint8_t podcastCount{},podcastIndex{};bool podcastPlayer{};uint32_t podcastPos{},podcastDur{};
+    // 选期 (long Up in the player): pages of kPodcastPage episodes, newest first, in page.podcasts. Row 0 is the
+    // podcastEpFirst-th newest of podcastEpTotal; podcastEpPage is the page wanted (1-based, 0 = the one being heard);
+    // Confirm leaves podcastEpPick = the picked episode + 1, counted from the oldest, for LiveServices to play.
+    static constexpr unsigned kPodcastPage=10;
+    bool podcastEpisodes{};uint8_t podcastEpCount{},podcastEpIndex{};uint16_t podcastEpFirst{},podcastEpTotal{},podcastEpPage{},podcastEpPick{};
     WordDeck words; WordSession wordSession;
     // PPT page: the talk timer runs while the page is open; the device reports whether the key reached the computer.
     bool slidesPressed{},slidesFailed{},slidesReady{};uint64_t slidesStarted{};SlideKey slidesLast{};
@@ -377,6 +382,7 @@ public:
     // Long Up / long Down on the word page: known / not known.
     void gradeWord(bool known, uint64_t now);
     void stepMediaTimer(uint64_t now);
+    void podcastEpisodes(uint64_t now);  // 播客 player: long Up opens 选期
     // 对讲机: a call came in on another page; it opens 对讲机 at once (the page ends whatever it was doing).
     void walkieCall(uint64_t now);
     // A key on the PPT page (long Up / long Down: black screen / end show).

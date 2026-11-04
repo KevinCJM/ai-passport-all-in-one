@@ -195,7 +195,7 @@ lv_obj_t *pomoRoot,*pomoArc,*pomoTime,*pomoState,*pomoPhase,*pomoRounds,*pomoAct
 lv_obj_t *pomoTabs[3],*pomoTabText[3];
 lv_obj_t *aiView;  // AI 控制器's conversations (aiLevel 1), drawn over the quota rows
 lv_obj_t *dashboard,*dashboardTitle,*cards[2],*cardTitles[2],*cardValues[2],*cardDetails[2],*cardBars[2],*cardTrends[2],*dashboardFoot;
-lv_obj_t *quotaNames[2],*quotaResets[2],*quotaValues[2],*quotaFills[2],*quotaRows[5],*quotaRowNames[5],*quotaRowValues[5],*quotaDetail;int quotaShown{-1};App dashboardApp{};
+lv_obj_t *quotaNames[3],*quotaResets[3],*quotaValues[3],*quotaFills[3],*quotaRows[5],*quotaRowNames[5],*quotaRowValues[5],*quotaDetail;int quotaShown{-1};App dashboardApp{};
 lv_point_precise_t trendPoints[24];
 lv_obj_t *tileTitles[4],*tileValues[4],*tileBars[4];
 lv_obj_t *connectionRoot,*connectionTitle,*connectionSpinner,*connectionMessage,*connectionHint,*connectionError;
@@ -265,7 +265,7 @@ void renderChrome(const Runtime& runtime){
     const bool alt=app==App::Codex?m.aiLevel>0:app==App::Dictation?m.aiDictation:app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Stock?m.stockDetail:app==App::Macro?m.macroDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Walkie?m.walkieAuto:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
     const auto* hint=keyHint(app,m.settingsPage,m.focusRunning,*m.pairingCode,m.live&&m.livePhase==LivePhase::Loading,m.live&&m.livePhase==LivePhase::Error,alt,app==App::Wifi?m.wifiTab:app==App::Settings?(m.settingsPage==SettingsPage::City?dictationTab(m):m.settingsPage==SettingsPage::Idle?m.idleRow:m.wifiSetup?0u:m.wifiArmed?3u:m.wifiRow?2u:1u):
         app==App::Rate?voiceTab(m,m.rateArmed):app==App::Stock?voiceTab(m,m.stockArmed):app==App::Macro?0u:app==App::Countdown?voiceTab(m,m.countdownArmed):
-        app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:m.page.score.fresh()?0u:1u):app==App::Feishu?(m.feishuDetail?1u:m.page.feishu.count?0u:2u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:m.soundView);
+        app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:m.page.score.fresh()?0u:1u):app==App::Feishu?(m.feishuDetail?1u:m.page.feishu.count?0u:2u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:app==App::Podcast?unsigned(m.podcastEpisodes):m.soundView);
     if(app==App::Menu&&runtime.menuLayout().mode==MenuLayout::List)hint="上下：选择 | 长按上下：快移 | 确认：进入";
     char text[256];
     // 打开 Mac 程序: what the computer is doing takes the key hints' place for a few seconds, on any page.
@@ -337,13 +337,13 @@ void initDashboard(lv_obj_t* screen,App app) {
             quotaRowValues[i]=label(quotaRows[i],140,2,64,LV_FONT_DEFAULT,kAccent);setTextAlign(quotaRowValues[i],LV_TEXT_ALIGN_RIGHT,0);
         }
         aiView=lv_obj_create(dashboard);box(aiView,8,30,224,226,kBg);lv_obj_add_event_cb(aiView,drawAi,LV_EVENT_DRAW_MAIN,nullptr);
-        quotaDetail=lv_obj_create(quotaRows[0]);box(quotaDetail,0,24,216,64,kPanel);lv_obj_set_style_bg_opa(quotaDetail,LV_OPA_TRANSP,0);
-        for(unsigned i=0;i<2;++i){
-            quotaNames[i]=label(quotaDetail,12,i*32,72,LV_FONT_DEFAULT,kMuted);lv_obj_set_height(quotaNames[i],20);
-            quotaResets[i]=label(quotaDetail,60,i*32,84,LV_FONT_DEFAULT,kMuted);lv_obj_set_height(quotaResets[i],20);
-            quotaValues[i]=label(quotaDetail,140,i*32-5,64,&lv_font_montserrat_24,kAccent);setTextAlign(quotaValues[i],LV_TEXT_ALIGN_RIGHT,0);
-            auto* track=lv_obj_create(quotaDetail);box(track,12,i*32+22,192,4,kBorder,2);
-            quotaFills[i]=lv_obj_create(track);box(quotaFills[i],0,0,1,4,kAccent,2);
+        quotaDetail=lv_obj_create(quotaRows[0]);box(quotaDetail,0,24,216,84,kPanel);lv_obj_set_style_bg_opa(quotaDetail,LV_OPA_TRANSP,0);
+        for(unsigned i=0;i<3;++i){
+            quotaNames[i]=label(quotaDetail,12,i*28,72,LV_FONT_DEFAULT,kMuted);lv_obj_set_height(quotaNames[i],20);
+            quotaResets[i]=label(quotaDetail,60,i*28,84,LV_FONT_DEFAULT,kMuted);lv_obj_set_height(quotaResets[i],20);
+            quotaValues[i]=label(quotaDetail,140,i*28-3,64,&lv_font_montserrat_20,kAccent);setTextAlign(quotaValues[i],LV_TEXT_ALIGN_RIGHT,0);
+            auto* track=lv_obj_create(quotaDetail);box(track,12,i*28+20,192,3,kBorder,2);
+            quotaFills[i]=lv_obj_create(track);box(quotaFills[i],0,0,1,3,kAccent,2);
         }
     } else {
         cards[0]=lv_obj_create(dashboard);box(cards[0],12,32,216,95,kPanel,12);lv_obj_set_style_border_width(cards[0],1,0);lv_obj_set_style_border_color(cards[0],lv_color_hex(kBorder),0);
@@ -492,11 +492,13 @@ void initPodcast(lv_obj_t* screen){
 void renderPodcast(const Model& m){
     // Built-in sample until the device's first reply (the simulator has no device).
     static constexpr Model::PodcastRow kSample[]{{"声动早咖啡","从最新一期开始"},{"日谈公园","听到第 312 期 · 12:30"},{"BBC 随身英语","从最新一期开始"},{"TED 演讲精选","从最新一期开始"}};
-    const bool live=m.live,player=m.podcastPlayer;
-    const unsigned count=live?m.podcastCount:std::size(kSample),selected=count?m.podcastIndex%count:0;
+    // 选期 lists episodes in the same rows (newest first), numbered among all of them.
+    const bool live=m.live,episodes=m.podcastPlayer&&m.podcastEpisodes,player=m.podcastPlayer&&!episodes;
+    const unsigned count=!live?std::size(kSample):episodes?m.podcastEpCount:m.podcastCount,selected=count?(episodes?m.podcastEpIndex:m.podcastIndex)%count:0;
     const auto row=[&](unsigned i)->const Model::PodcastRow&{return live?m.page.podcasts[i]:kSample[i];};
     char text[96];
-    if(count)snprintf(text,sizeof(text),"%u / %u",selected+1,count);else text[0]=0;
+    if(episodes&&live)count?snprintf(text,sizeof(text),"%u / %u",m.podcastEpFirst+selected+1,m.podcastEpTotal):snprintf(text,sizeof(text),"...");
+    else if(count)snprintf(text,sizeof(text),"%u / %u",selected+1,count);else text[0]=0;
     setLabel(podPosition,text);setSleepLabel(podSleep,m);visible(podList,!player);visible(podPlayer,player);
     if(!player){
         const unsigned first=count>kPodcastRows?std::min(selected>2?selected-2:0,count-kPodcastRows):0;
@@ -507,6 +509,9 @@ void renderPodcast(const Model& m){
             setLabel(podNames[i],row(index).name);setTextColor(podNames[i],lv_color_hex(on?kBg:kText),0);
             setLabel(podNotes[i],row(index).note);setTextColor(podNotes[i],lv_color_hex(on?kBg:kMuted),0);
         }
+        // 选期 still loading (or failed): the device's note in the first row.
+        if(episodes&&!count){visible(podRows[0],true);setBgColor(podRows[0],lv_color_hex(kPanel),0);
+            setLabel(podNames[0],*m.liveLines[2]?m.liveLines[2]:"正在获取期数…");setTextColor(podNames[0],lv_color_hex(kText),0);setLabel(podNotes[0],m.liveLines[0]);setTextColor(podNotes[0],lv_color_hex(kMuted),0);}
         return;
     }
     setLabel(podTitle,live?m.liveValue:"示例节目");setLabel(podProgram,live?m.liveLines[0]:row(selected).name);
@@ -2651,9 +2656,11 @@ void renderQuotas(const Model& model){
     }
     setLabel(dashboardTitle,"AI 控制器");
     const auto shade=[](bool known,int left){return !known?kMuted:left<=10?kWarn:left<=30?0xffe08a:kAccent;};
+    const unsigned winCount=(page==2)?3:(model.quotas[page*3+2].known?3:2);
+    const int detailH=winCount==3?84:58,openH=24+detailH;
     for(unsigned i=0;i<Model::kQuotaTools;++i){
-        // Collapsed rows show the tighter of the two windows.
-        int left=101;for(unsigned n=0;n<2;++n)if(model.quotas[i*2+n].known)left=std::min(left,100-model.quotas[i*2+n].used);
+        // Collapsed rows show the tighter of the windows.
+        int left=101;for(unsigned n=0;n<3;++n)if(model.quotas[i*3+n].known)left=std::min(left,100-model.quotas[i*3+n].used);
         const bool known=left<=100,selected=i==page;
         setLabel(quotaRowNames[i],tools[i]);setTextColor(quotaRowNames[i],lv_color_hex(selected?kText:kMuted),0);
         if(known)snprintf(text,sizeof(text),"%d%%",left);else strcpy(text,"--");
@@ -2663,16 +2670,24 @@ void renderQuotas(const Model& model){
         else if(ai&&ai[1]){setLabel(quotaRowValues[i],"运行中");setTextColor(quotaRowValues[i],lv_color_hex(0xffe08a),0);}
         else{setLabel(quotaRowValues[i],selected?"":text);setTextColor(quotaRowValues[i],lv_color_hex(shade(known,left)),0);}
         lv_obj_set_style_border_width(quotaRows[i],selected?1:0,0);
-        if(static_cast<int>(page)!=quotaShown)quotaMove(quotaRows[i],32+i*26+(i>page?64:0),selected?88:24);
+        if(static_cast<int>(page)!=quotaShown)quotaMove(quotaRows[i],32+i*26+(i>page?detailH:0),selected?openH:24);
     }
     if(static_cast<int>(page)!=quotaShown){lv_obj_set_parent(quotaDetail,quotaRows[page]);quotaShown=page;}
-    for(unsigned n=0;n<2;++n){
-        const auto& q=model.quotas[page*2+n];const int left=q.known?100-q.used:0;
+    lv_obj_set_height(quotaDetail,detailH);
+    for(unsigned n=0;n<3;++n){
+        const auto& q=model.quotas[page*3+n];const int left=q.known?100-q.used:0;
+        const bool show=n<winCount;
+        visible(quotaNames[n],show);visible(quotaResets[n],show);visible(quotaValues[n],show);visible(lv_obj_get_parent(quotaFills[n]),show);
+        if(!show)continue;
         reset[0]=0;
         if(q.known)quotaLine(name,reset,sizeof(name),q);else strcpy(name,"暂不可用");
-        if(q.known&&page==2)strcpy(name,n?"第三方":"Gemini");  // Gemini Agy: Gemini pool, then third-party (Claude/GPT)
-        if(q.known&&page==3)strcpy(name,n?"API":"本期");  // Cursor: the whole plan (its period may be a week), then the API-priced models
-        lv_obj_set_x(quotaResets[n],page==2?70:60);
+        if(q.known&&page==2){
+            if(n==0)strcpy(name,"Gemini 4");
+            else if(n==1)strcpy(name,"Flash");
+            else strcpy(name,"第三方");
+        }
+        if(q.known&&page==3)strcpy(name,n?"API":"本期");
+        lv_obj_set_x(quotaResets[n],page==2?72:60);
         setLabel(quotaNames[n],name);setLabel(quotaResets[n],reset);
         if(q.known)snprintf(text,sizeof(text),"%d%%",left);else strcpy(text,"--");setLabel(quotaValues[n],text);
         const auto color=shade(q.known,left);

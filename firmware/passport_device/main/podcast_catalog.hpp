@@ -35,6 +35,10 @@ inline PodcastSpots::Spot* podcastSpot(PodcastSpots& s,const PodcastList& list,u
 inline void podcastTrackUrl(char* out,size_t size,uint32_t album,int episode){
     snprintf(out,size,"http://mobile.ximalaya.com/mobile/others/ca/album/track/%lu/%s/%d/1",static_cast<unsigned long>(album),episode<0?"true":"false",episode<0?1:episode+1);
 }
+// 选期: page N (1-based) of `count` episodes, newest first.
+inline void podcastPageUrl(char* out,size_t size,uint32_t album,unsigned page,unsigned count){
+    snprintf(out,size,"http://mobile.ximalaya.com/mobile/others/ca/album/track/%lu/true/%u/%u",static_cast<unsigned long>(album),page,count);
+}
 // Picks "key":value pairs out of a JSON stream without holding it, so a 15 KB reply needs no 15 KB buffer.
 // Each key in keys is reported at any depth once `after` has gone by: strings unescaped (cut at 191 bytes,
 // on a character boundary), numbers and literals as written; object and array values are skipped.

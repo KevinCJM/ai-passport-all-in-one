@@ -757,6 +757,17 @@ void toolPagesTests(Runtime& runtime){
     {const auto volume=m.volume;runtime.key(Key::Confirm,507);CHECK(m.podcastPlayer&&m.podcastIndex==1);
      runtime.key(Key::Down,507);CHECK(m.volume==volume-5&&m.podcastIndex==1);runtime.key(Key::Up,507);CHECK(m.volume==volume);}
     m.podcastPos=312;m.podcastDur=668;uiRender(runtime);uiCapture("podcast_player");
+    // 选期: long Up lists the episodes; Up/Down past a page's ends ask for the newer/older page, Confirm picks
+    // (counted from the oldest, + 1), Back returns to the player.
+    runtime.podcastEpisodes(507);CHECK(m.podcastEpisodes&&m.podcastEpPage==0&&!m.podcastEpCount);
+    m.podcastEpCount=2;m.podcastEpFirst=10;m.podcastEpTotal=25;
+    strcpy(m.page.podcasts[0].name,"羽毛球价格回落");strcpy(m.page.podcasts[0].note,"第 15 期 · 11-03 · 11:10");
+    strcpy(m.page.podcasts[1].name,"7-11 败走印度市场");strcpy(m.page.podcasts[1].note,"第 14 期 · 11-02 · 16:41");
+    uiRender(runtime);uiCapture("podcast_episodes");
+    runtime.key(Key::Up,507);CHECK(m.podcastEpPage==1&&m.podcastEpIndex==0);
+    runtime.key(Key::Down,507);runtime.key(Key::Down,507);CHECK(m.podcastEpIndex==1&&m.podcastEpPage==3);
+    runtime.key(Key::Confirm,507);CHECK(m.podcastEpPick==14&&!m.podcastEpisodes&&m.podcastPlayer);m.podcastEpPick=0;
+    runtime.podcastEpisodes(507);runtime.key(Key::Back,507);CHECK(!m.podcastEpisodes&&m.podcastPlayer);
     runtime.key(Key::Back,507);CHECK(runtime.active()==App::Podcast&&!m.podcastPlayer);
     runtime.key(Key::Back,507);CHECK(runtime.active()==App::Menu);
     // Menu: long Up/Down turn a page and land on its first entry.
@@ -1473,11 +1484,11 @@ extern "C" void app_main() {
     runtime.switchTo(App::Home);
     // Explicit UI fixtures; none are reported as live account or sensor data.
     {const auto at=[](int seconds){return static_cast<uint32_t>(time(nullptr)+seconds);};auto& q=runtime.model.quotas;
-    q[0]={true,24,300,at(2*3600+10*60)};q[1]={true,11,10080,at(6*86400+3*3600)};        // Codex
-    q[2]={true,0,300,at(3600+30*60)};q[3]={true,74,10080,at(86400+15*3600)};              // Claude Code
-    q[4]={true,8,300,at(3*3600)};q[5]={true,0,300,at(3*3600)};                            // Gemini, 第三方
-    q[6]={true,38,43200,at(20*86400)};q[7]={true,12,43200,at(20*86400)};                  // Cursor
-    q[8]={true,5,300,at(4*3600)};q[9]={};}                                                 // OpenCode Go: its week unknown
+    q[0]={true,24,300,at(2*3600+10*60)};q[1]={true,11,10080,at(6*86400+3*3600)};q[2]={};    // Codex
+    q[3]={true,0,300,at(3600+30*60)};q[4]={true,74,10080,at(86400+15*3600)};q[5]={};        // Claude Code
+    q[6]={true,8,300,at(3*3600)};q[7]={true,2,300,at(3*3600)};q[8]={true,0,300,at(3*3600)}; // Gemini 4, Flash, 第三方
+    q[9]={true,38,43200,at(20*86400)};q[10]={true,12,43200,at(20*86400)};q[11]={};          // Cursor
+    q[12]={true,5,300,at(4*3600)};q[13]={};q[14]={};}                                         // OpenCode Go
     runtime.switchTo(App::Codex);runtime.model.quotaPage=0;uiRender(runtime);uiCapture("codex_quota");
     runtime.key(Key::Down,0);CHECK(runtime.model.quotaPage==1);uiRender(runtime);uiCapture("codex_quota_page2");
     runtime.key(Key::Up,0);CHECK(runtime.model.quotaPage==0);runtime.key(Key::Up,0);CHECK(runtime.model.quotaPage==4);uiRender(runtime);uiCapture("codex_quota_last");

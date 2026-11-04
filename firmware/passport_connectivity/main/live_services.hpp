@@ -43,6 +43,7 @@ class LiveServices {
     int wordAsked_{-1};    // the 背单词 card whose IPA and meaning were last requested
     bool quizAsked_{};     // the next 知识问答 question requested and not yet answered
     int podcastAsked_{-1}; // the 播客 program the device was asked to play, -1 = its list
+    int episodesAsked_{-1}; // the 选期 page asked for (Model::podcastEpPage), -1 = none
     char stockAsked_[16]{}; // what 自选股 last asked for: "list" or "chart:<row>:<days>"
     char macroAsked_[16]{};
     uint8_t warnAsked_{};   // the 预警 detail (1-based) last asked for, 0 none
@@ -74,8 +75,8 @@ public:
     void guardCommand(bool calibrate) { if(runtime_.active()==App::Guard) request(calibrate?"cal":"lock"); }
     // 飞书提醒: a long Up brings Feishu forward on the computer, a long Down steps the alert mode there.
     void feishuCommand(bool open) { if(runtime_.active()==App::Feishu) request(open?"open":"mode"); }
-    // Long press on Up/Down tunes the radio or steps a podcast's episodes; short presses change the volume.
-    void station(bool next) { if(runtime_.active()==App::Radio||(runtime_.active()==App::Podcast&&runtime_.model.podcastPlayer)) request(next?"next":"prev"); }
+    // Long press on Up/Down tunes the radio; short presses change the volume.
+    void station(bool next) { if(runtime_.active()==App::Radio) request(next?"next":"prev"); }
     void hostSeen() { hostContact_=esp_timer_get_time()/1000000; }
     void transport(bool network,bool usb,bool ble) { networkReady_=network;usb_=usb;bleReady_=ble; }
     esp_err_t receive(httpd_req_t* request);

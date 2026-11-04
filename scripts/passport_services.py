@@ -196,8 +196,8 @@ def opencode_usage():
 
 def gemini_usage():
     """Gemini's limits in Antigravity (the agy CLI's login, Mac keychain). The token lasts an hour and only agy refreshes
-    it, so an expired one is renewed by running `agy models`, which writes the new token back. Two
-    rows: Gemini, then third-party (Claude/GPT), each at its most used model. Antigravity gives a reset time per model
+    it, so an expired one is renewed by running `agy models`, which writes the new token back. Three
+    rows: Gemini 4 / Pro, Flash, then third-party (Claude/GPT), each at its most used model. Antigravity gives a reset time per model
     but no window length, so the rows carry the 5-hour cadence it reports."""
     import base64
     if sys.platform=='win32':raise FileNotFoundError('Gemini usage is read on the Mac only')
@@ -214,14 +214,18 @@ def gemini_usage():
     request=urllib.request.Request('https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',data=b'{}',headers={
         'Authorization':'Bearer '+token,'Content-Type':'application/json','User-Agent':'antigravity/1.4.10'})
     with urllib.request.urlopen(request,timeout=8) as response:models=json.loads(response.read(2_000_000))['models']
-    families={'Gemini':[],'third_party':[]}
+    families={'gemini_4':[],'flash':[],'third_party':[]}
     for name,model in models.items():
         info=model.get('quotaInfo') or {}; fraction=info.get('remainingFraction')
         if 'image' in name or not isinstance(fraction,(int,float)):continue
-        if name.startswith('gemini-'):families['Gemini'].append((fraction,iso_epoch(info.get('resetTime'))))
-        elif name.startswith(('claude-','gpt-')):families['third_party'].append((fraction,iso_epoch(info.get('resetTime'))))
+        if '4' in name or 'argon' in name or ('pro' in name and name.startswith('gemini-')):
+            families['gemini_4'].append((fraction,iso_epoch(info.get('resetTime'))))
+        elif name.startswith('gemini-') and 'flash' in name:
+            families['flash'].append((fraction,iso_epoch(info.get('resetTime'))))
+        elif name.startswith(('claude-','gpt-')):
+            families['third_party'].append((fraction,iso_epoch(info.get('resetTime'))))
     windows=[]
-    for family in ('Gemini','third_party'):
+    for family in ('gemini_4','flash','third_party'):
         if not families[family]:continue
         fraction,resets=min(families[family])
         windows.append({'usedPercent':round((1-fraction)*100,1),'windowDurationMins':300,'resetsAt':resets})
@@ -463,9 +467,9 @@ class Services:
             self.seen_completions.update((t['id'],t['event_id']) for t in completed)
             data['notice_source']={'thread_id':task['id'],'event':'task_complete','at':task['event_at']}
         else: notice=''
-        # Ten fixed slots, two a tool: Codex short/long window, Claude Code 5 hours/7 days, Gemini Pro/Flash, Cursor
-        # plan/API, OpenCode Go 5 hours/week or month; missing ones read unknown.
-        slots=lambda found:[{'used':round(w['usedPercent']),'minutes':w.get('windowDurationMins') or 0,'resets':w.get('resetsAt') or 0} for w in found[:2]]+[{'used':-1,'minutes':0,'resets':0}]*(2-len(found[:2]))
+        # Fifteen fixed slots, three a tool: Codex (short/long/extra), Claude Code (5 hours/7 days/extra), Gemini
+        # (Gemini 4/Flash/第三方), Cursor (plan/API/extra), OpenCode Go (5 hours/week or month/extra); missing ones read unknown.
+        slots=lambda found:[{'used':round(w['usedPercent']),'minutes':w.get('windowDurationMins') or 0,'resets':w.get('resetsAt') or 0} for w in found[:3]]+[{'used':-1,'minutes':0,'resets':0}]*(3-len(found[:3]))
         quotas=slots(windows)+slots(claude)+slots(gemini)+slots(cursor)+slots(opencode)
         return {'state':'额度已更新','value':'','windows':quotas,'lines':lines,'notice':notice}
 
