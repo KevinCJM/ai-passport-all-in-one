@@ -22,6 +22,7 @@
 #include <tuple>
 #include <type_traits>
 #include "lvgl.h"
+#include "src/misc/lv_text_private.h"
 #include "esp_heap_caps.h"
 #include "mbedtls/base64.h"
 bool passport_ui_font_covers_all();
@@ -44,22 +45,29 @@ namespace {
 // Status sign fallback: the 16 px UI font drawn three times larger, so any GB2312 text typed on the
 // computer still shows at sign size. Softer than the 48 px preset glyphs, but needs no extra flash.
 // Twice as large it heads the 月相 view and the 转盘's pick.
-template<int kScale> bool scaledGlyph(const lv_font_t*,lv_font_glyph_dsc_t* g,uint32_t letter,uint32_t next){
+// 电子书's sizes scale by kNum/kDen (5/4, 3/2); each size rounds its glyphs' metrics on its own. One source buffer
+// serves every size (LVGL draws one glyph at a time).
+uint8_t scaledSource[32*32];
+template<int kNum,int kDen=1> bool scaledGlyph(const lv_font_t*,lv_font_glyph_dsc_t* g,uint32_t letter,uint32_t next){
     if(!lv_font_get_glyph_dsc_fmt_txt(&passport_ui_font,g,letter,next))return false;
-    g->adv_w*=kScale;g->box_w*=kScale;g->box_h*=kScale;g->ofs_x*=kScale;g->ofs_y*=kScale;
+    const auto scale=[](int v){return (v*kNum+(v<0?-kDen:kDen)/2)/kDen;};
+    g->adv_w=scale(g->adv_w);g->box_w=scale(g->box_w);g->box_h=scale(g->box_h);g->ofs_x=scale(g->ofs_x);g->ofs_y=scale(g->ofs_y);
     g->format=LV_FONT_GLYPH_FORMAT_A8;
     return true;
 }
-template<int kScale> const void* scaledBitmap(lv_font_glyph_dsc_t* g,lv_draw_buf_t* out){
-    static uint8_t small[32*32];lv_draw_buf_t source;
+template<int kNum,int kDen=1> const void* scaledBitmap(lv_font_glyph_dsc_t* g,lv_draw_buf_t* out){
+    auto& small=scaledSource;lv_draw_buf_t source;
     lv_font_glyph_dsc_t glyph=*g;glyph.resolved_font=&passport_ui_font;glyph.stride=0;
-    const int w=g->box_w/kScale,h=g->box_h/kScale,stride=lv_draw_buf_width_to_stride(w,LV_COLOR_FORMAT_A8);
+    // The 16 px glyph's own box (g holds the scaled one).
+    const auto& own=static_cast<const lv_font_fmt_txt_dsc_t*>(passport_ui_font.dsc)->glyph_dsc[g->gid.index];
+    glyph.box_w=own.box_w;glyph.box_h=own.box_h;
+    const int w=own.box_w,h=own.box_h,stride=lv_draw_buf_width_to_stride(w,LV_COLOR_FORMAT_A8);
     if(w*h>static_cast<int>(sizeof(small))||lv_draw_buf_init(&source,w,h,LV_COLOR_FORMAT_A8,stride,small,sizeof(small))!=LV_RESULT_OK
        ||!lv_font_get_bitmap_fmt_txt(&glyph,&source))return nullptr;
     // Bilinear: each output pixel samples the source at its centre, in 1/256 source pixels.
     const auto at=[&](int x,int y){return small[std::clamp(y,0,h-1)*stride+std::clamp(x,0,w-1)];};
     for(int y=0;y<g->box_h;++y)for(int x=0;x<g->box_w;++x){
-        const int sx=(x*2+1)*128/kScale-128,sy=(y*2+1)*128/kScale-128;
+        const int sx=(x*2+1)*128*kDen/kNum-128,sy=(y*2+1)*128*kDen/kNum-128;
         const int x0=sx>>8,y0=sy>>8,fx=sx&255,fy=sy&255;
         const int top=at(x0,y0)*(256-fx)+at(x0+1,y0)*fx,bottom=at(x0,y0+1)*(256-fx)+at(x0+1,y0+1)*fx;
         out->data[y*out->header.stride+x]=(top*(256-fy)+bottom*fy)>>16;
@@ -67,13 +75,13 @@ template<int kScale> const void* scaledBitmap(lv_font_glyph_dsc_t* g,lv_draw_buf
     return out;
 }
 }
-template<int kScale> constexpr lv_font_t scaledFont(){
+template<int kNum,int kDen=1> constexpr lv_font_t scaledFont(){
     lv_font_t f{};
-    f.get_glyph_dsc=scaledGlyph<kScale>;f.get_glyph_bitmap=scaledBitmap<kScale>;
-    f.line_height=20*kScale;f.base_line=4*kScale;f.underline_position=-2*kScale;f.underline_thickness=kScale;
+    f.get_glyph_dsc=scaledGlyph<kNum,kDen>;f.get_glyph_bitmap=scaledBitmap<kNum,kDen>;
+    f.line_height=20*kNum/kDen;f.base_line=4*kNum/kDen;f.underline_position=-2*kNum/kDen;f.underline_thickness=(kNum+kDen-1)/kDen;
     return f;
 }
-const lv_font_t passport_ui_font_x2=scaledFont<2>(),passport_ui_font_x3=scaledFont<3>();
+const lv_font_t passport_ui_font_x2=scaledFont<2>(),passport_ui_font_x3=scaledFont<3>(),passport_ui_font_x125=scaledFont<5,4>(),passport_ui_font_x15=scaledFont<3,2>();
 
 namespace passport {
 namespace {
@@ -101,7 +109,7 @@ constexpr int kCells = 9;  // menu: a 3 x 3 page of icons
 constexpr unsigned kDrawRows = 20;
 struct Badge { const char* symbol; uint32_t color; uint32_t ink{}; };  // ink: the icon on its tile (0: the page's dark)
 // Pages that draw their own title and body (no hero card, heading or notice line).
-constexpr bool ownPage(App app){return app==App::Feishu||app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Score||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Voice||app==App::Walkie;}
+constexpr bool ownPage(App app){return app==App::Book||app==App::Feishu||app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Score||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Voice||app==App::Walkie;}
 // Once these pages show content, a refresh or the next item loads behind it instead of under the loading screen.
 bool keepsContent(App app,const Model& m){
     return (app==App::Podcast&&m.podcastCount)||(app==App::Daily&&*m.page.daily.en)||(app==App::Quiz&&m.quizCount)||(app==App::Quake&&m.quakeCount)||(app==App::Hacker&&m.storyCount)||(app==App::Forecast&&m.page.forecast.days)||(app==App::Stock&&m.stockCount)||app==App::Macro||(app==App::Typhoon&&m.page.typhoon.count)||(app==App::Hot&&m.hotCount)||app==App::Memo||app==App::Translate||app==App::Guard||(app==App::Feishu&&m.page.feishu.count);
@@ -150,6 +158,7 @@ Badge appBadge(App app){
     case App::Memo: return {ICON_MIC,0x5eead4};
     case App::Wheel: return {LV_SYMBOL_SHUFFLE,0xffa94d};
     case App::Score: return {ICON_TROPHY,0xfbbf24};
+    case App::Book: return {LV_SYMBOL_COPY,0x34d399};
     case App::Feishu: return {ICON_FEISHU,0xffffff,0x3370ff};  // Feishu's blue bird on a white tile, like its app icon
     case App::Translate: return {"A",0x60a5fa};
     case App::Guard: return {LV_SYMBOL_EYE_CLOSE,0x22c55e};
@@ -713,11 +722,11 @@ void initQr(lv_obj_t* screen){
 }
 void renderQr(const Runtime& runtime){
     const auto& m=runtime.model;const unsigned count=runtime.qrCount();
-    visible(qrCode,count&&*m.qrText);
+    visible(qrCode,count&&*m.page.qr.text);
     // Encoding is the slow part: redo it only when the text changes.
-    uint32_t hash=2166136261u;for(const char* c=m.qrText;*c;++c)hash=(hash^static_cast<uint8_t>(*c))*16777619u;
-    if(*m.qrText&&hash!=qrShown){qrShown=hash;lv_qrcode_update(qrCode,m.qrText,strlen(m.qrText));}
-    setLabel(qrTitleLabel,count?m.qrTitle:"还没有二维码");
+    uint32_t hash=2166136261u;for(const char* c=m.page.qr.text;*c;++c)hash=(hash^static_cast<uint8_t>(*c))*16777619u;
+    if(*m.page.qr.text&&hash!=qrShown){qrShown=hash;lv_qrcode_update(qrCode,m.page.qr.text,strlen(m.page.qr.text));}
+    setLabel(qrTitleLabel,count?m.page.qr.title:"还没有二维码");
     char text[64];if(count)snprintf(text,sizeof(text),"%u / %u%s",m.qrIndex+1,count,m.qrBright?"  ·  已提亮":"");
     setLabel(qrInfo,count?text:"在电脑助手「设备内容」里添加");
 }
@@ -2512,6 +2521,28 @@ void drawScore(lv_event_t* e){
     if(!line&&s.fresh())line="长按上键：换赛制";
     if(line)p.text(line,0,236,223,*m.lastNotice||m.scoreArmed?kWarn:kMuted,LV_TEXT_ALIGN_CENTER);
 }
+// 电子书's sizes: the UI font and its 5/4, 3/2 and doubled copies. A page is 224 px wide and 222 px tall.
+const lv_font_t* bookFont(uint8_t size){static const lv_font_t* const fonts[]{&passport_ui_font,&passport_ui_font_x125,&passport_ui_font_x15,&passport_ui_font_x2};return fonts[std::min<unsigned>(size,kBookSizes-1)];}
+// 电子书: the title and place (how far into the book, in %) on top, then the page in the size chosen (Runtime::showBook
+// cut it to what bookFit says fits), or why there is none.
+lv_obj_t *bookRoot,*bookTitle,*bookPlace,*bookText;
+void initBook(lv_obj_t* screen){
+    bookRoot=lv_obj_create(screen);box(bookRoot,0,35,240,257,kBg);
+    bookTitle=label(bookRoot,8,4,150,LV_FONT_DEFAULT,kAccent);lv_label_set_long_mode(bookTitle,LV_LABEL_LONG_DOT);lv_obj_set_height(bookTitle,20);
+    bookPlace=label(bookRoot,160,7,72,&lv_font_montserrat_14,kMuted);setTextAlign(bookPlace,LV_TEXT_ALIGN_RIGHT,0);
+    bookText=label(bookRoot,8,32,224,LV_FONT_DEFAULT,kText);lv_label_set_long_mode(bookText,LV_LABEL_LONG_WRAP);lv_obj_set_height(bookText,222);
+}
+void renderBook(const Model& m){
+    const auto& b=m.page.book;char text[24];
+    setLabel(bookTitle,b.size?b.title:"电子书");
+    if(b.size){const auto tenths=static_cast<unsigned>(uint64_t(b.gap?b.at:b.next)*1000/b.size);snprintf(text,sizeof(text),"%u.%u%%",tenths/10,tenths%10);}else text[0]=0;
+    setLabel(bookPlace,text);
+    const char* why=!b.size?"还没有书。\n\n在电脑助手的「电子书」页上传 txt，胸牌连上电脑（USB 或蓝牙）后自动同步。"
+        :b.gap<0?"前面读过的部分已从胸牌清理，胸牌只留最近读过的一段。\n\n按下键回到刚才那页。"
+        :b.gap>0||!*b.text?"后面的内容还没同步到胸牌。\n\n胸牌连上电脑（USB 或蓝牙）后会自动补上，再按下键接着读":nullptr;
+    setLabel(bookText,why?why:b.text);setTextColor(bookText,lv_color_hex(why?kMuted:kText),0);
+    setTextFont(bookText,why?LV_FONT_DEFAULT:bookFont(b.font),0);
+}
 void initScore(lv_obj_t* screen){
     scoreRoot=lv_obj_create(screen);box(scoreRoot,0,35,240,257,kBg);
     scoreView=lv_obj_create(scoreRoot);box(scoreView,8,0,224,257,kBg);lv_obj_add_event_cb(scoreView,drawScore,LV_EVENT_DRAW_MAIN,nullptr);
@@ -2682,12 +2713,12 @@ void renderQuotas(const Model& model){
         reset[0]=0;
         if(q.known)quotaLine(name,reset,sizeof(name),q);else strcpy(name,"暂不可用");
         if(q.known&&page==2){
-            if(n==0)strcpy(name,"Gemini 4");
+            if(n==0)strcpy(name,"Pro");
             else if(n==1)strcpy(name,"Flash");
             else strcpy(name,"第三方");
         }
         if(q.known&&page==3)strcpy(name,n?"API":"本期");
-        lv_obj_set_x(quotaResets[n],page==2?72:60);
+        lv_obj_set_x(quotaResets[n],(page==2&&n==2)?64:58);
         setLabel(quotaNames[n],name);setLabel(quotaResets[n],reset);
         if(q.known)snprintf(text,sizeof(text),"%d%%",left);else strcpy(text,"--");setLabel(quotaValues[n],text);
         const auto color=shade(q.known,left);
@@ -2829,6 +2860,7 @@ void uiInit() {
     else if(guiApp==App::Memo)initMemo(screen);
     else if(guiApp==App::Wheel)initWheel(screen);
     else if(guiApp==App::Score)initScore(screen);
+    else if(guiApp==App::Book)initBook(screen);
     else if(guiApp==App::Feishu)initFeishu(screen);
     else if(guiApp==App::Translate)initTranslate(screen);
     else if(guiApp==App::Guard)initGuard(screen);
@@ -3001,6 +3033,7 @@ void uiRender(const Runtime& runtime) {
     } else if(app==App::Memo){renderMemo(model);
     } else if(app==App::Dictation){renderDictation(model);
     } else if(app==App::Wheel){renderWheel(model);
+    } else if(app==App::Book){renderBook(model);
     } else if(app==App::Score){renderScore(model);
     } else if(app==App::Feishu){renderFeishu(model);
     } else if(app==App::Translate){renderTranslate(model);
@@ -3158,3 +3191,11 @@ void uiShutdown() {
     heap_caps_free(draw); draw = nullptr;
 }
 } // namespace passport
+namespace passport {
+// 电子书 (suite.hpp): LVGL's own line breaking in a 224 px label, as bookText wraps.
+unsigned bookLines(uint8_t size){return std::min<unsigned>(kBookMaxLines,222/lv_font_get_line_height(bookFont(size)));}
+unsigned bookLine(const char* text,unsigned length,uint8_t size){
+    lv_text_attributes_t attributes{};attributes.max_width=224;attributes.text_flags=LV_TEXT_FLAG_NONE;
+    return lv_text_get_next_line(text,length,bookFont(size),nullptr,&attributes);
+}
+}

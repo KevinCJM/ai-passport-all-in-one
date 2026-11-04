@@ -21,12 +21,12 @@ from passport_computer_link import start_gateway
 from passport_identity import paired_port
 from passport_paths import helper, user_data, codex_command, PACKAGED
 
-VERSION='0.1.20-preview'
+VERSION='0.1.21-preview'
 LABEL='local.ai-passport.assistant'
 WINDOWS=sys.platform=='win32'
 UI_PORT=8768
 WEB=f'http://127.0.0.1:{UI_PORT}/'
-WEB_PAGES=[('菜单自定义','menu'),('状态牌','status'),('倒数日','countdown'),('二维码','qr'),*([] if WINDOWS else [('AI 控制器','ai')]),('打开 Mac 程序' if not WINDOWS else '打开电脑程序','mac'),('模拟遥控','remote'),('诊断','diag')]
+WEB_PAGES=[('菜单自定义','menu'),('状态牌','status'),('倒数日','countdown'),('二维码','qr'),*([] if WINDOWS else [('AI 控制器','ai')]),('电子书','book'),('打开 Mac 程序' if not WINDOWS else '打开电脑程序','mac'),('模拟遥控','remote'),('诊断','diag')]
 
 
 def validate_config(config):

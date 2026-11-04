@@ -81,6 +81,7 @@ inline const char* keyHint(App app,SettingsPage page,bool focusRunning,bool pair
     if(app==App::Status){static const char* const hints[]{"上下：切换  |  确认：说话  |  长按上下：常亮","确认：结束并显示  |  长按确认：放弃","正在识别，请稍候"};return hints[tab%3];}
     // tab: 0 the wheel, 1 listening, 2 recognising, 3 a mode's delete asked.
     // tab: 0 no point yet, 1 a match on, 2 starting over asked.
+    if(app==App::Book)return "上：上一页  |  下：下一页  |  长按上：字变大  |  长按下：字变小  |  长按确认：返回";
     if(app==App::Score){static const char* const hints[]{"上：红方 +1  |  下：蓝方 +1  |  长按上：换赛制","上：红方 +1 | 下：蓝方 +1 | 确认：撤销 | 长按下：重开","再长按下：清零重开  |  其他键：取消"};return hints[tab%3];}
     // AI 控制器; alt: a tool's conversations.
     if(app==App::Codex&&!loading&&!error)return alt?"上下：选择  |  确认：打开并说话  |  长按确认：返回":"上下：选择  |  确认：看对话  |  长按确认：返回";

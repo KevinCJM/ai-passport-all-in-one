@@ -125,6 +125,38 @@ public:
     static bool add(const char* text, uint32_t at);
     static bool remove(unsigned position);
 };
+// 电子书: the computer's assistant tidies a txt (one indented paragraph a line) and cuts its UTF-8 into 4 KiB chunks
+// (scripts/passport_books.py); the badge lays pages out itself, in the font size chosen. It keeps chunks lo..hi-1 of one
+// book in a ring of flash sectors, chunk c in sector c % slots: the first 1 MiB of the "storage" partition (the stock
+// firmware's files, unused since), "userdata" on the simulator. A chunk is a BookChunk header (its offset in the book
+// and length) and its text. BookMeta (size: the book's bytes) and the place read (a byte offset) live in NVS.
+struct BookMeta {
+    static constexpr uint32_t kVersion = 2;
+    uint32_t version{kVersion}, id{}, size{};
+    uint16_t chunks{}, lo{}, hi{}, slots{};
+    char title[64]{};
+};
+struct BookChunk { static constexpr uint32_t kMagic = 0x4b4f4f42; uint32_t magic, id; uint16_t chunk, count; uint32_t first; };
+static_assert(sizeof(BookChunk) == 16);
+class BookStore {
+public:
+    static constexpr size_t kSector = 4096, kText = 768;  // kText: more than a page holds, with its NUL
+    static constexpr unsigned kMaxSlots = 256;             // 1 MiB
+    static uint16_t slots();                               // 0: no flash for books
+    static void load(BookMeta& meta, uint32_t& place);     // id 0: no book
+    static bool savePlace(uint32_t place);
+    // The book's text from byte `at` on (NUL-ended, whole characters, as far as the window goes): its length, 0 when
+    // `at` is not in the window. start(): the offset the window begins at.
+    static size_t text(uint32_t at, char* out, size_t size);
+    static uint32_t start();
+    // The computer's requests (POST /book): a new book with an empty window at chunk `at`; forget chunks before lo;
+    // write text at byte `at` of chunk hi (at 0 erases its sector); its header, which moves hi past it.
+    static bool open(uint32_t id, const char* title, uint32_t size, uint16_t chunks, uint16_t at, uint32_t place);
+    static bool drop(uint16_t lo);
+    static bool write(uint16_t chunk, uint16_t at, const char* text, size_t size);
+    static bool finish(uint16_t chunk, uint32_t first, uint16_t length);
+    static unsigned revision();                            // changes with each open and finished chunk
+};
 class SettingsStore {
 public:
     uint32_t reads{}, writes{};

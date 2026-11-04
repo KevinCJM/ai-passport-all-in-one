@@ -128,6 +128,8 @@ void state(char* data, size_t size) {
 #endif
     {const size_t tail=strlen(data);if(tail+80<size)snprintf(data+tail-1,size-tail+1,",\"wifi_saved\":%u,\"wifi_scans\":%u,\"wifi_joins\":%u,\"wifi_connecting\":%s}",runtime.model.wifiSavedCount,wifiScans.load(),wifiJoins.load(),wifiConnecting?"true":"false");}
     {const auto l=ledgerStatus();const size_t tail=strlen(data);if(tail+32<size)snprintf(data+tail-1,size-tail+1,",\"ledger\":[%u,%u]}",l.pending,unsigned(l.monthKnown));}
+    // 电子书: [book, place read (a byte), window lo, hi] for the assistant's sync.
+    {BookMeta b;uint32_t place=0;BookStore::load(b,place);const size_t tail=strlen(data);if(tail+64<size)snprintf(data+tail-1,size-tail+1,",\"book\":[%lu,%lu,%u,%u]}",static_cast<unsigned long>(b.id),static_cast<unsigned long>(place),b.lo,b.hi);}
     {const uint64_t w=wordProgress.load();const size_t tail=strlen(data);if(tail+48<size)snprintf(data+tail-1,size-tail+1,",\"words\":[%u,%u,%u,%u]}",unsigned(w&255),unsigned(w>>8&255),unsigned(w>>16&65535),unsigned(w>>32&65535));}
     char battery[256];board::batteryDiagnostics(battery,sizeof(battery));
     const size_t batteryAt=strlen(data);if(batteryAt+strlen(battery)+12<size)snprintf(data+batteryAt-1,size-batteryAt+1,",\"battery\":%s}",battery);
@@ -600,6 +602,28 @@ int ledgerRequest(const cJSON* data,char* output,size_t size){
     ledgerExchange(acks,count,out,in,month,output,size);
     return 200;
 }
+// 电子书: the computer's assistant fills the badge's window of the book (scripts/passport_books.py has the protocol);
+// every answer is the window as it now stands.
+int bookRequest(const cJSON* data,char* output,size_t size){
+    const auto value=[](const cJSON* object,const char* key,double most)->int64_t{
+        const auto* v=cJSON_GetObjectItemCaseSensitive(object,key);return cJSON_IsNumber(v)&&v->valuedouble>=0&&v->valuedouble<=most?static_cast<int64_t>(v->valuedouble):-1;};
+    bool done=true;
+    if(const auto* o=cJSON_GetObjectItemCaseSensitive(data,"open")){
+        const auto* title=cJSON_GetObjectItemCaseSensitive(o,"title");
+        const auto id=value(o,"id",4294967295.0),bytes=value(o,"size",4294967295.0),chunks=value(o,"chunks",65535),chunk=value(o,"chunk",65535),place=value(o,"place",4294967295.0);
+        done=cJSON_IsString(title)&&id>0&&bytes>0&&chunks>0&&chunk>=0&&place>=0&&BookStore::open(id,title->valuestring,bytes,chunks,chunk,place);
+    }else if(cJSON_GetObjectItemCaseSensitive(data,"drop")){
+        const auto lo=value(data,"drop",65535);done=lo>=0&&BookStore::drop(lo);
+    }else if(const auto* p=cJSON_GetObjectItemCaseSensitive(data,"put")){
+        const auto* text=cJSON_GetObjectItemCaseSensitive(p,"text");const auto chunk=value(p,"chunk",65535),at=value(p,"at",BookStore::kSector);
+        done=cJSON_IsString(text)&&chunk>=0&&at>=0&&BookStore::write(chunk,at,text->valuestring,strlen(text->valuestring));
+        // The last piece carries the chunk's place in the book (offset, length): it is complete.
+        if(done&&cJSON_GetObjectItemCaseSensitive(p,"count")){const auto first=value(p,"first",4294967295.0),count=value(p,"count",65535);done=first>=0&&count>0&&BookStore::finish(chunk,first,count);}
+    }
+    BookMeta meta;uint32_t place=0;BookStore::load(meta,place);
+    snprintf(output,size,"{\"id\":%lu,\"place\":%lu,\"lo\":%u,\"hi\":%u,\"slots\":%u}",static_cast<unsigned long>(meta.id),static_cast<unsigned long>(place),meta.lo,meta.hi,unsigned(BookStore::slots()));
+    return done?200:400;
+}
 int companionRequest(const char* raw,char* output,size_t size){
     snprintf(output,size,"{}");
     if(!BleExchange::boundedJson(raw))return 400;
@@ -630,6 +654,7 @@ int companionRequest(const char* raw,char* output,size_t size){
     }
     auto* data=cJSON_GetObjectItemCaseSensitive(object,"data");if(!cJSON_IsObject(data))return 400;
     if(!strcmp(path->valuestring,"/ledger"))return ledgerRequest(data,output,size);
+    if(!strcmp(path->valuestring,"/book"))return bookRequest(data,output,size);
     if(!strcmp(path->valuestring,"/service")){
         char* body=cJSON_PrintUnformatted(data);if(!body)return 500;
         const bool accepted=live.enqueueComputer(body);free(body);
@@ -759,7 +784,7 @@ int execute(const char* name) {
     // Long presses: the menu turns a page, the calendar steps a month, the sonar switches its filter,
     // the WiFi toolbox and the sound page change tab, the motion monitor turns its alarm on or off.
     // 白噪音 sets the volume with them, 闹钟 the hour; 语音笔记 deletes the open note with a long Down; 状态牌 switches 常亮.
-    if ((previous==App::Menu||previous==App::Calendar||previous==App::Sonar||previous==App::Wifi||previous==App::Sound||previous==App::Motion||previous==App::Noise||previous==App::Alarm||previous==App::Memo||previous==App::Status||previous==App::Wheel||previous==App::Todo||previous==App::Ledger||previous==App::Calc||previous==App::Rate||previous==App::Countdown||previous==App::Walkie||previous==App::Score)&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {
+    if ((previous==App::Menu||previous==App::Calendar||previous==App::Sonar||previous==App::Wifi||previous==App::Sound||previous==App::Motion||previous==App::Noise||previous==App::Alarm||previous==App::Memo||previous==App::Status||previous==App::Wheel||previous==App::Todo||previous==App::Ledger||previous==App::Calc||previous==App::Rate||previous==App::Countdown||previous==App::Walkie||previous==App::Score||previous==App::Book)&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {
         runtime.longKey(!strcmp(name,"ap_on"),now);
 #ifdef PASSPORT_DEVICE
         if(previous==App::Noise&&!board::setVolume(runtime.model.volume)){runtime.model.volume=board::volume();return -10;}
@@ -926,7 +951,7 @@ extern "C" void app_main() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     // /app_state builds a bounded 2 KiB JSON snapshot; simulator and badge need the same stack budget.
     config.stack_size = 6144;
-    config.max_uri_handlers = 23;  // 22 + /content/*
+    config.max_uri_handlers = 24;  // 22 + /content/* + /book
     config.uri_match_fn=httpd_uri_match_wildcard;
 #ifdef PASSPORT_DEVICE
     config.lru_purge_enable=true;
@@ -956,6 +981,21 @@ extern "C" void app_main() {
         httpd_resp_set_type(request,"application/json");return httpd_resp_sendstr(request,out);
     };
     ESP_ERROR_CHECK(httpd_register_uri_handler(server,&ledger));
+    httpd_uri_t book{};book.uri="/book";book.method=HTTP_POST;
+    book.handler=[](httpd_req_t* request)->esp_err_t{
+        if(!board::authorized(request))return httpd_resp_send_err(request,HTTPD_401_UNAUTHORIZED,"unauthorized");
+        if(request->content_len<=0||request->content_len>2400)return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"size");
+        // The body is borrowed from the heap for the request, not kept in RAM for good.
+        std::unique_ptr<char[]> raw(new(std::nothrow)char[request->content_len+1]());char out[160];
+        if(!raw)return httpd_resp_send_err(request,HTTPD_500_INTERNAL_SERVER_ERROR,"memory");
+        for(int used=0;used<request->content_len;){const int n=httpd_req_recv(request,raw.get()+used,request->content_len-used);if(n<=0)return ESP_FAIL;used+=n;}
+        live.hostSeen();
+        auto* data=cJSON_Parse(raw.get());
+        const int status=cJSON_IsObject(data)?bookRequest(data,out,sizeof(out)):400;cJSON_Delete(data);
+        if(status!=200)return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"book");
+        httpd_resp_set_type(request,"application/json");return httpd_resp_sendstr(request,out);
+    };
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server,&book));
     httpd_uri_t events{};
     events.uri = "/events";
     events.method = HTTP_GET;

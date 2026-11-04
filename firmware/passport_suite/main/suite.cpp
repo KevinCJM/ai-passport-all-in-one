@@ -67,6 +67,7 @@ constexpr Profile kProfiles[] = {
     {"macro", "宏观雷达", 0, false, false},
     {"score", "记分牌", 0, false, false},
     {"feishu", "飞书提醒", 0, false, false},
+    {"book", "电子书", 0, false, false},
 };
 static_assert(std::size(kProfiles) == static_cast<unsigned>(App::Count));
 }
@@ -323,21 +324,27 @@ void Runtime::reloadQr() {
     m.qrMask = 0;
     for (unsigned i = 0; i < QrEntry::kCount; ++i) if (SettingsStore::loadQr(i, entry) && *entry.text) m.qrMask |= 1 << i;
     if (m.qrIndex >= qrCount()) m.qrIndex = 0;
-    m.qrTitle[0] = m.qrText[0] = 0;
+    m.page.qr.title[0] = m.page.qr.text[0] = 0;
     unsigned skip = m.qrIndex;
     for (unsigned i = 0; i < QrEntry::kCount; ++i)
-        if (m.qrMask >> i & 1 && !skip--) { SettingsStore::loadQr(i, entry); strcpy(m.qrTitle, entry.title); strcpy(m.qrText, entry.text); return; }
+        if (m.qrMask >> i & 1 && !skip--) { SettingsStore::loadQr(i, entry); strcpy(m.page.qr.title, entry.title); strcpy(m.page.qr.text, entry.text); return; }
     if (!*settings_->wifiSsid) return;
     // The phone camera's WiFi format; \ ; , : " in the name or password are escaped.
     const auto escape = [](char* out, const char* in) { for (; *in; ++in) { if (strchr("\\;,:\"", *in)) *out++ = '\\'; *out++ = *in; } *out = 0; };
     char ssid[65], password[129];
     escape(ssid, settings_->wifiSsid); escape(password, settings_->wifiPassword);
-    snprintf(m.qrTitle, sizeof(m.qrTitle), "WiFi · %s", settings_->wifiSsid);
-    snprintf(m.qrText, sizeof(m.qrText), "WIFI:T:%s;S:%s;P:%s;;", *password ? "WPA" : "nopass", ssid, password);
+    snprintf(m.page.qr.title, sizeof(m.page.qr.title), "WiFi · %s", settings_->wifiSsid);
+    snprintf(m.page.qr.text, sizeof(m.page.qr.text), "WIFI:T:%s;S:%s;P:%s;;", *password ? "WPA" : "nopass", ssid, password);
 }
 bool Runtime::longKey(bool up, uint64_t now) {
     tick(now); lastInput_ = now;
     auto& m = model;
+    // 电子书: long Up/Down make the text larger/smaller; the page starts where it did.
+    if (active_ == App::Book) {
+        auto& b = m.page.book; const auto size = static_cast<uint8_t>(std::clamp(int(b.font) + (up ? 1 : -1), 0, int(kBookSizes) - 1));
+        if (size != b.font) { b.font = size; if (!SettingsStore::saveByte("book_font", size)) strcpy(m.lastNotice, "保存失败"); }
+        showBook(0); return true;
+    }
     if (active_ == App::Menu) {
         if(menuLayout_.mode==MenuLayout::List)moveMenu(up?-int(MenuLayout::kListRows):int(MenuLayout::kListRows));
         else {const unsigned pages=menuView_.pages,page=menuView_.page(menuPosition());selection_=menuView_.items[menuView_.starts[(page+(up?pages-1:1))%pages]];ensureMenuSelection();}
@@ -653,6 +660,57 @@ void ledgerExchange(const LedgerAck* acks, unsigned count, int32_t monthOut, int
     book->pendingJson(out, size, 6);
     if (changed || month) ledgerTouched = true;
 }
+bool Runtime::showBook(int step) {
+    auto& m = model; auto& b = m.page.book; BookMeta meta; uint32_t place = 0;
+    BookStore::load(meta, place); b.revision = BookStore::revision();
+    memcpy(b.title, meta.title, sizeof(b.title)); b.size = meta.id ? meta.size : 0;
+    if (!meta.id) { b.gap = 0; b.at = b.next = 0; b.text[0] = 0; return false; }
+    // On a gap screen the other way goes back to the page.
+    if (b.gap && step && (step > 0) != (b.gap > 0)) step = 0;
+    uint32_t want = std::min(place, meta.size - 1);
+    if (step > 0) {
+        const auto length = BookStore::text(want, b.text, sizeof(b.text)); const auto fit = length ? bookFit(b.text, length, b.font) : 0;
+        if (fit && want + fit >= meta.size) step = 0; else want += fit;  // the last page stays
+    }
+    if (step < 0 && !want) step = 0;
+    if (step < 0) want = bookBack(want);
+    const auto length = want == UINT32_MAX ? 0 : BookStore::text(want, b.text, sizeof(b.text));
+    if (!length) { b.gap = step < 0 ? -1 : 1; b.at = b.next = place; b.text[0] = 0; return false; }
+    const auto fit = bookFit(b.text, length, b.font); b.text[fit] = 0;
+    b.gap = 0; b.at = want; b.next = want + fit;
+    if (want != place && !BookStore::savePlace(want)) strcpy(m.lastNotice, "进度保存失败");
+    return true;
+}
+unsigned bookFit(const char* text, unsigned length, uint8_t size) {
+    unsigned used = 0;
+    for (unsigned lines = bookLines(size); lines && used < length; --lines) { const auto n = bookLine(text + used, length - used, size); if (!n) break; used += n; }
+    return used;
+}
+uint32_t Runtime::bookBack(uint32_t at) {
+    // The lines before `at`, laid out from the first paragraph start in the buffer's worth of text before it (the
+    // window's start if that is nearer); the page before starts a page's lines back.
+    auto& t = model.page.book.text; const auto size = model.page.book.font; const auto start = BookStore::start();
+    if (start == UINT32_MAX || at <= start) return UINT32_MAX;
+    const uint32_t from = std::max<uint32_t>(start, at > sizeof(t) - 1 ? at - (sizeof(t) - 1) : 0);
+    const size_t length = BookStore::text(from, t, at - from + 1);
+    size_t line = 0;
+    if (from > start) {
+        while (line < length && t[line] != '\n') ++line;
+        if (line < length) ++line;
+        else for (line = 0; line < length && (static_cast<unsigned char>(t[line]) & 0xc0) == 0x80;) ++line;  // a whole character
+    }
+    uint32_t starts[kBookMaxLines]{}; unsigned count = 0; const unsigned lines = bookLines(size);
+    while (line < length) {
+        starts[count++ % lines] = line;
+        const auto n = bookLine(t + line, length - line, size); if (!n) break;
+        line += n;
+    }
+    return from + (count >= lines ? starts[(count - lines) % lines] : count ? starts[0] : 0);
+}
+bool Runtime::bookSynced() {
+    if (active_ != App::Book || BookStore::revision() == model.page.book.revision) return false;
+    showBook(0); return true;
+}
 bool Runtime::ledgerSynced() {
     if (!ledgerTouched.exchange(false)) return false;
     if (active_ != App::Ledger) return true;
@@ -871,6 +929,7 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
         m.wheelSpunAt = 0; m.wheelPick = 255; m.wheelArmed = false; m.listenAt = 0;
     }
     if (target == App::Score) { SettingsStore::loadScore(model.page.score); model.scoreArmed = false; model.lastNotice[0] = 0; }
+    if (target == App::Book) { auto& b = model.page.book; b.gap = 0; b.font = std::min<uint8_t>(SettingsStore::loadByte("book_font"), kBookSizes - 1); showBook(0); }
     if (target == App::Countdown) { reloadCountdown(); model.countdownArmed = false; model.listenAt = 0; }
     if (target == App::Alarm) { auto& m = model; m.alarmIndex = 0; m.alarmEdit = m.alarmArmed = false; m.listenAt = 0; }
     if (target == App::Qr) { model.qrBright = false; reloadQr(); }
@@ -1272,6 +1331,9 @@ void Runtime::key(Key key, uint64_t now) {
             if (m.podcastCount && (key == Key::Up || key == Key::Down)) m.podcastIndex = (m.podcastIndex + (key == Key::Up ? m.podcastCount - 1 : 1)) % m.podcastCount;
             if (key == Key::Confirm && m.podcastCount) m.podcastPlayer = true;
         } else if (key == Key::Up || key == Key::Down) m.volume = static_cast<uint8_t>(std::clamp(int(m.volume) + (key == Key::Up ? 5 : -5), 0, 100));
+    } else if (active_ == App::Book) {
+        // 电子书: Up/Down turn a page (long: the text size, Runtime::longKey).
+        if (key == Key::Up || key == Key::Down) showBook(key == Key::Up ? -1 : 1);
     } else if (active_ == App::Alert) {
         constexpr unsigned count = std::size(kAlertModes);
         if (key == Key::Up || key == Key::Down) { model.alertMode = (model.alertMode + (key == Key::Up ? count - 1 : 1)) % count; model.alertChanged = now; }

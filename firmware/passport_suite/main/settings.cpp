@@ -5,6 +5,7 @@
 #include "nvs_flash.h"
 #include "esp_partition.h"
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
@@ -390,5 +391,103 @@ bool MemoStore::remove(unsigned position) {
 bool SettingsStore::loadOrCreate(SystemSettings& settings, bool& created) {
     created = !load(settings);
     return !created || save(settings);
+}
+// 电子书 (BookStore in settings.hpp). Nothing is cached, to spare RAM: the meta is read from NVS each time. Only the
+// computer's requests write it (one at a time, over USB on the httpd task or Bluetooth on the main loop); the place read
+// has a key of its own, written by the page. A read racing a write sees a stale window at worst, and each chunk's header
+// names its book and number, so a sector reused meanwhile reads as missing, never as the wrong text.
+namespace {
+std::atomic<unsigned> bookRevision;
+const esp_partition_t* bookPartition() {
+#ifdef PASSPORT_DEVICE
+    static const esp_partition_t* part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "storage");
+#else
+    static const esp_partition_t* part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "userdata");
+#endif
+    return part;
+}
+void bookRead(BookMeta& meta, uint32_t& place) {
+    meta = {}; place = 0; Handle handle; size_t size = sizeof(meta);
+    if (nvs_open("book", NVS_READONLY, &handle.value) != ESP_OK) return;
+    if (nvs_get_blob(handle.value, "meta", &meta, &size) != ESP_OK || size != sizeof(meta) || meta.version != BookMeta::kVersion
+        || meta.slots != BookStore::slots() || meta.lo > meta.hi || meta.hi - meta.lo > meta.slots || meta.hi > meta.chunks) meta = {};
+    meta.title[sizeof(meta.title) - 1] = 0;
+    nvs_get_u32(handle.value, "place", &place);
+}
+bool bookWrite(const BookMeta* meta, const uint32_t* place) {
+    Handle handle;
+    return nvs_open("book", NVS_READWRITE, &handle.value) == ESP_OK
+        && (!meta || nvs_set_blob(handle.value, "meta", meta, sizeof(*meta)) == ESP_OK)
+        && (!place || nvs_set_u32(handle.value, "place", *place) == ESP_OK) && nvs_commit(handle.value) == ESP_OK;
+}
+// Chunk c's header, when its sector still holds it.
+bool bookHead(const esp_partition_t* part, const BookMeta& m, unsigned c, BookChunk& head) {
+    return esp_partition_read(part, (c % m.slots) * BookStore::kSector, &head, sizeof(head)) == ESP_OK
+        && head.magic == BookChunk::kMagic && head.id == m.id && head.chunk == c && head.count <= BookStore::kSector - sizeof(head);
+}
+}
+uint16_t BookStore::slots() { const auto* part = bookPartition(); return part ? static_cast<uint16_t>(std::min<size_t>(kMaxSlots, part->size / kSector)) : 0; }
+void BookStore::load(BookMeta& meta, uint32_t& place) { bookRead(meta, place); }
+unsigned BookStore::revision() { return bookRevision.load(); }
+bool BookStore::savePlace(uint32_t place) { return bookWrite(nullptr, &place); }
+uint32_t BookStore::start() {
+    BookMeta m; uint32_t place; bookRead(m, place); BookChunk head{};
+    const auto* part = bookPartition();
+    return part && m.id && m.lo < m.hi && bookHead(part, m, m.lo, head) ? head.first : UINT32_MAX;
+}
+size_t BookStore::text(uint32_t at, char* out, size_t size) {
+    BookMeta m; uint32_t place; bookRead(m, place); *out = 0;
+    const auto* part = bookPartition();
+    if (!part || !m.id || size < 2) return 0;
+    // The chunk holding byte `at`: chunks are in order, so halve the window.
+    unsigned lo = m.lo, hi = m.hi, c = 0; BookChunk head{};
+    for (;;) {
+        if (lo >= hi) return 0;
+        c = (lo + hi) / 2;
+        if (!bookHead(part, m, c, head)) return 0;
+        if (at < head.first) hi = c; else if (at >= head.first + head.count) lo = c + 1; else break;
+    }
+    // Then on into the chunks after it while there is room.
+    size_t used = 0;
+    for (uint32_t from = at - head.first;;) {
+        const size_t take = std::min<size_t>(head.count - from, size - 1 - used);
+        if (esp_partition_read(part, (c % m.slots) * kSector + sizeof(head) + from, out + used, take) != ESP_OK) break;
+        used += take;
+        if (used + 1 == size || ++c >= m.hi || !bookHead(part, m, c, head)) break;
+        from = 0;
+    }
+    // Whole characters only: a sequence cut at the end goes.
+    size_t lead = used;
+    while (lead && (static_cast<unsigned char>(out[lead - 1]) & 0xc0) == 0x80) --lead;
+    if (lead) { const auto b = static_cast<unsigned char>(out[lead - 1]); const size_t need = b < 0x80 ? 1 : b >= 0xf0 ? 4 : b >= 0xe0 ? 3 : 2; if (used - (lead - 1) < need) used = lead - 1; }
+    out[used] = 0; return used;
+}
+bool BookStore::open(uint32_t id, const char* title, uint32_t size, uint16_t chunks, uint16_t at, uint32_t place) {
+    if (!id || !size || !chunks || at >= chunks || place >= size || !slots()) return false;
+    BookMeta m; m.id = id; m.size = size; m.chunks = chunks; m.lo = m.hi = at; m.slots = slots();
+    size_t length = std::min(strlen(title), sizeof(m.title) - 1);
+    while (length && (static_cast<unsigned char>(title[length]) & 0xc0) == 0x80) --length;
+    memcpy(m.title, title, length);
+    const bool saved = bookWrite(&m, &place); ++bookRevision; return saved;
+}
+bool BookStore::drop(uint16_t lo) {
+    BookMeta m; uint32_t place; bookRead(m, place);
+    if (!m.id || lo <= m.lo) return true;
+    m.lo = std::min(lo, m.hi); return bookWrite(&m, nullptr);
+}
+bool BookStore::write(uint16_t chunk, uint16_t at, const char* text, size_t size) {
+    BookMeta m; uint32_t place; bookRead(m, place); const auto* part = bookPartition();
+    // Only the next chunk, into the sector of one already dropped.
+    if (!part || !m.id || chunk != m.hi || chunk >= m.chunks || m.hi - m.lo >= m.slots || sizeof(BookChunk) + at + size > kSector) return false;
+    const size_t base = (chunk % m.slots) * kSector;
+    if (!at && esp_partition_erase_range(part, base, kSector) != ESP_OK) return false;
+    return !size || esp_partition_write(part, base + sizeof(BookChunk) + at, text, size) == ESP_OK;
+}
+bool BookStore::finish(uint16_t chunk, uint32_t first, uint16_t length) {
+    BookMeta m; uint32_t place; bookRead(m, place); const auto* part = bookPartition();
+    if (!part || !m.id || chunk != m.hi || chunk >= m.chunks || m.hi - m.lo >= m.slots || !length || length > kSector - sizeof(BookChunk) || first + length > m.size) return false;
+    const BookChunk head{BookChunk::kMagic, m.id, chunk, length, first};
+    if (esp_partition_write(part, (chunk % m.slots) * kSector, &head, sizeof(head)) != ESP_OK) return false;
+    ++m.hi; const bool saved = bookWrite(&m, nullptr); ++bookRevision; return saved;
 }
 } // namespace passport

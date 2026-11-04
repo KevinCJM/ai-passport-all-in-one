@@ -87,7 +87,7 @@ class ServiceTests(TestCase):
 
     def test_gemini_usage_keeps_the_most_used_gemini_and_third_party_model(self):
         envelope='go-keyring-base64:'+base64.b64encode(json.dumps({'token':{'access_token':'ya29.test'}}).encode()).decode()
-        models={'gemini-2.5-pro':{'quotaInfo':{'remainingFraction':0.75,'resetTime':'2026-11-03T13:21:07Z'}},
+        models={'gemini-4-argon-high':{'quotaInfo':{'remainingFraction':0.75,'resetTime':'2026-11-03T13:21:07Z'}},
                 'gemini-3-flash':{'quotaInfo':{'remainingFraction':0.9,'resetTime':'2026-11-03T13:21:07Z'}},
                 'gemini-3.1-flash-image':{'quotaInfo':{'remainingFraction':0.1,'resetTime':'2026-11-03T13:21:07Z'}},
                 'claude-opus-5-5-high':{'quotaInfo':{'remainingFraction':0.4,'resetTime':'2026-11-03T14:00:00Z'}},
@@ -99,11 +99,25 @@ class ServiceTests(TestCase):
              patch('passport_services.urllib.request.urlopen',return_value=response) as opened:
             data=gemini_usage()
         self.assertEqual(keychain.call_args.args[0][:5],['security','find-generic-password','-s','gemini','-a'])
-        self.assertEqual(data['windows'][0]['usedPercent'],25.0)  # Gemini 4 / Pro: 25% used
+        self.assertEqual(data['windows'][0]['usedPercent'],25.0)  # Pro: 25% used
         self.assertEqual(data['windows'][1]['usedPercent'],10.0)  # Flash: 10% used
         self.assertEqual(data['windows'][2]['usedPercent'],60.0)  # Third-party: Claude Opus at 40% left -> 60% used
         self.assertEqual(data['windows'][2]['resetsAt'],1793714400)
         self.assertEqual(opened.call_args.args[0].get_header('Authorization'),'Bearer ya29.test')
+
+    def test_gemini_usage_reports_zero_remaining_for_pro_when_unallocated(self):
+        envelope='go-keyring-base64:'+base64.b64encode(json.dumps({'token':{'access_token':'ya29.test'}}).encode()).decode()
+        # Free-tier response has gemini-2.5-pro sharing the flash bucket, with no gemini-4/argon
+        models={'gemini-2.5-flash':{'quotaInfo':{'remainingFraction':0.92,'resetTime':'2026-11-03T13:21:07Z'}},
+                'gemini-2.5-pro':{'quotaInfo':{'remainingFraction':0.92,'resetTime':'2026-11-03T13:21:07Z'}}}
+        response=MagicMock();response.read.return_value=json.dumps({'models':models}).encode()
+        response.__enter__.return_value=response
+        with patch('passport_services.subprocess.run',return_value=NS(stdout=envelope+'\n')),\
+             patch('passport_services.urllib.request.urlopen',return_value=response):
+            data=gemini_usage()
+        self.assertEqual(data['windows'][0]['usedPercent'],100.0)  # Pro exhausted / 0% remaining
+        self.assertEqual(data['windows'][0]['resetsAt'],0)
+        self.assertEqual(data['windows'][1]['usedPercent'],8.0)    # Flash retains 92% remaining
 
     def test_gemini_usage_renews_an_expired_token_through_agy(self):
         wrap=lambda token,expiry:NS(stdout='go-keyring-base64:'+base64.b64encode(json.dumps({'token':{'access_token':token,'expiry':expiry}}).encode()).decode())

@@ -24,6 +24,7 @@ from passport_dictation import BluetoothDictation,paste
 from passport_ai_sessions import AISessions,TOOLS as AI_TOOLS
 from passport_guard import Guard
 from passport_ledger import Ledger
+from passport_books import Books
 from passport_mac_open import MacOpener
 from passport_feishu import Feishu,BUNDLE as FEISHU_BUNDLE
 from passport_computer_link import LinkBusy
@@ -197,8 +198,8 @@ def opencode_usage():
 def gemini_usage():
     """Gemini's limits in Antigravity (the agy CLI's login, Mac keychain). The token lasts an hour and only agy refreshes
     it, so an expired one is renewed by running `agy models`, which writes the new token back. Three
-    rows: Gemini 4 / Pro, Flash, then third-party (Claude/GPT), each at its most used model. Antigravity gives a reset time per model
-    but no window length, so the rows carry the 5-hour cadence it reports."""
+    rows: Pro (Gemini 4 Argon), Flash, then third-party (Claude/GPT). If Pro has no allocation in the active tier
+    or is exhausted, it reports 100% used (0% remaining)."""
     import base64
     if sys.platform=='win32':raise FileNotFoundError('Gemini usage is read on the Mac only')
     def read():
@@ -214,20 +215,28 @@ def gemini_usage():
     request=urllib.request.Request('https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',data=b'{}',headers={
         'Authorization':'Bearer '+token,'Content-Type':'application/json','User-Agent':'antigravity/1.4.10'})
     with urllib.request.urlopen(request,timeout=8) as response:models=json.loads(response.read(2_000_000))['models']
-    families={'gemini_4':[],'flash':[],'third_party':[]}
+    families={'pro':[],'flash':[],'third_party':[]}
     for name,model in models.items():
         info=model.get('quotaInfo') or {}; fraction=info.get('remainingFraction')
         if 'image' in name or not isinstance(fraction,(int,float)):continue
-        if '4' in name or 'argon' in name or ('pro' in name and name.startswith('gemini-')):
-            families['gemini_4'].append((fraction,iso_epoch(info.get('resetTime'))))
-        elif name.startswith('gemini-') and 'flash' in name:
+        if '4' in name or 'argon' in name:
+            families['pro'].append((fraction,iso_epoch(info.get('resetTime'))))
+        elif name.startswith('gemini-'):
             families['flash'].append((fraction,iso_epoch(info.get('resetTime'))))
         elif name.startswith(('claude-','gpt-')):
             families['third_party'].append((fraction,iso_epoch(info.get('resetTime'))))
     windows=[]
-    for family in ('gemini_4','flash','third_party'):
-        if not families[family]:continue
-        fraction,resets=min(families[family])
+    # Row 0: Pro; if the user's tier has no active pro pool, reports 100% used (0% remaining).
+    if families['pro']:
+        fraction,resets=min(families['pro'])
+        windows.append({'usedPercent':round((1-fraction)*100,1),'windowDurationMins':300,'resetsAt':resets})
+    else:
+        windows.append({'usedPercent':100.0,'windowDurationMins':300,'resetsAt':0})
+    if families['flash']:
+        fraction,resets=min(families['flash'])
+        windows.append({'usedPercent':round((1-fraction)*100,1),'windowDurationMins':300,'resetsAt':resets})
+    if families['third_party']:
+        fraction,resets=min(families['third_party'])
         windows.append({'usedPercent':round((1-fraction)*100,1),'windowDurationMins':300,'resetsAt':resets})
     return {'windows':windows,'source':'Antigravity Gemini quota read-only'}
 
@@ -241,6 +250,7 @@ class Services:
         self.dictation_ble=BluetoothDictation(self)
         self.guard=None;self.guard_context=None
         self.ledger=Ledger(user_data()/'记账.csv')
+        self.books=Books(user_data()/'电子书')
         self.mac=MacOpener(lambda:self.settings.get('mac_app_aliases',{}))
         if getattr(simulator,'physical_device',False):
             self.audio.endpoint=simulator.audio_endpoint;self.audio.token=simulator.token;self.audio.force_reconnect=True;self.audio.playback=False
@@ -695,6 +705,7 @@ class Services:
         details=dict(self.details,audio=dict(self.audio.stats),media=dict(self.media.details))
         details['bluetooth_dictation']=dict(self.dictation_ble.stats)
         details['ledger']=dict(self.ledger.stats,rows=len(self.ledger.rows),path=str(self.ledger.path))
+        details['books']=dict(self.books.stats,badge=self.books.badge)
         if self.cloud: details['chat']=dict(self.cloud.stats,ready=self.hello_ready(),listening=self.cloud.listening)
         return {'active':self.active,'details':details,'metrics':self.metrics,'source_sha256':self.sources}
 

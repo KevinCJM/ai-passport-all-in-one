@@ -429,6 +429,7 @@ bool LiveServices::tick(uint64_t now) {
         request(audioReady ? "enter" : "audio_unavailable"); renderLocal(now);
     }
     if(runtime_.ledgerSynced()&&active==App::Ledger)dirty=true;
+    if(runtime_.bookSynced())dirty=true;
 #ifdef PASSPORT_DEVICE
     native_->poll();
     // 语音笔记: the text the cloud heard, saved once; the device's task waits until it is.

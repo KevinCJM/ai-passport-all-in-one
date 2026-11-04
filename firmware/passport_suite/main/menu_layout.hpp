@@ -76,9 +76,15 @@ inline MenuLayout defaultMenuLayout(){
     MenuLayout layout;std::memset(layout.order,255,sizeof(layout.order));
     for(unsigned i=0;i<MenuLayout::kPages;++i)layout.pages[i]=i;
     // Short names fit the custom-page eight-character limit (the original category titles can be longer).
+    // A category of more than nine fills a second page (its name with "续"), as on the category screens.
     const char* names[]{"小智语音","电脑时间","天气财经资讯","学习影音","工具设置"};
-    for(unsigned i=0;i<5;++i)std::strcpy(layout.names[i],names[i]);
-    for(unsigned i=0;i<kFunctions.size();++i){const auto app=kFunctions[i];for(auto& list:layout.order)list[i]=static_cast<uint8_t>(app);layout.assignment[static_cast<unsigned>(app)]=menuPageOf(i);}
+    unsigned page=0;
+    for(unsigned c=0;c<5;++c,++page)for(unsigned i=kMenuStarts[c];i<kMenuStarts[c+1];++i){
+        if(i>kMenuStarts[c]&&(i-kMenuStarts[c])%9==0)++page;
+        if(i==kMenuStarts[c]||(i-kMenuStarts[c])%9==0){std::strcpy(layout.names[page],names[c]);if(i>kMenuStarts[c])std::strcat(layout.names[page],"续");}
+        const auto app=kFunctions[i];for(auto& list:layout.order)list[i]=static_cast<uint8_t>(app);layout.assignment[static_cast<unsigned>(app)]=page;
+    }
+    layout.pageCount=page;
     return layout;
 }
 struct MenuView {
@@ -96,6 +102,12 @@ struct MenuView {
                 const int index=menuCatalogIndex(app);if(index>=0)items[count++]=static_cast<uint8_t>(index);
             }
             if(count!=begin){starts[pages]=begin;this->groups[pages++]=group;}
+        }
+        // A category of more than nine goes on over another screen (custom pages hold nine at most).
+        if(layout.mode==MenuLayout::Categories){
+            uint8_t s[MenuLayout::kPages]{},g[MenuLayout::kPages]{};unsigned n=0;
+            for(unsigned p=0;p<pages;++p){const unsigned end=p+1<pages?starts[p+1]:count;for(unsigned at=starts[p];at<end&&n<MenuLayout::kPages;at+=9){s[n]=at;g[n++]=this->groups[p];}}
+            memcpy(starts,s,n);memcpy(this->groups,g,n);pages=n;
         }
         // Nine a screen: at most 64 apps, so at most kPages screens.
         if(layout.mode==MenuLayout::Continuous){pages=(count+8)/9;for(unsigned p=0;p<pages;++p){starts[p]=p*9;this->groups[p]=0;}}

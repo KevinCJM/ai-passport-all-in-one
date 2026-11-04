@@ -115,7 +115,7 @@ void domainTests(Runtime& runtime) {
     puts("CASE_PASS foreground_only_timer_pause_notifications");
 }
 void settingsTests(Runtime& runtime){
-    CHECK(kFunctions.size()==45&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
+    CHECK(kFunctions.size()==46&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
     // Physical long-confirm emits Back: each step must follow the hierarchy.
     for(auto app:kFunctions){
         CHECK(runtime.switchTo(app)==Result::Ok);runtime.model.settingsPage=SettingsPage::List;
@@ -722,11 +722,11 @@ void toolPagesTests(Runtime& runtime){
     CHECK(!strcmp(items[n-1].name,"纪念日")&&items[n-1].days<0);
     // QR: stored entries first, then WiFi built from the settings.
     QrEntry entry{};for(unsigned i=0;i<QrEntry::kCount;++i)CHECK(SettingsStore::saveQr(i,entry));
-    CHECK(runtime.switchTo(App::Qr)==Result::Ok&&runtime.qrCount()==1&&!strncmp(m.qrText,"WIFI:T:WPA;S:",13));
+    CHECK(runtime.switchTo(App::Qr)==Result::Ok&&runtime.qrCount()==1&&!strncmp(m.page.qr.text,"WIFI:T:WPA;S:",13));
     strcpy(entry.title,"我的博客");strcpy(entry.text,"https://example.com/passport");CHECK(SettingsStore::saveQr(1,entry));
-    runtime.reloadQr();CHECK(runtime.qrCount()==2&&!strcmp(m.qrText,"https://example.com/passport"));
+    runtime.reloadQr();CHECK(runtime.qrCount()==2&&!strcmp(m.page.qr.text,"https://example.com/passport"));
     uiRender(runtime);uiCapture("qr_custom");
-    runtime.key(Key::Down,500);CHECK(m.qrIndex==1&&!strncmp(m.qrText,"WIFI:",5));
+    runtime.key(Key::Down,500);CHECK(m.qrIndex==1&&!strncmp(m.page.qr.text,"WIFI:",5));
     runtime.key(Key::Confirm,501);CHECK(m.qrBright);
     entry={};CHECK(SettingsStore::saveQr(1,entry));
     // Torch: 20% steps, three colours, never sleeps.
@@ -770,12 +770,48 @@ void toolPagesTests(Runtime& runtime){
     runtime.podcastEpisodes(507);runtime.key(Key::Back,507);CHECK(!m.podcastEpisodes&&m.podcastPlayer);
     runtime.key(Key::Back,507);CHECK(runtime.active()==App::Podcast&&!m.podcastPlayer);
     runtime.key(Key::Back,507);CHECK(runtime.active()==App::Menu);
-    // Menu: long Up/Down turn a page and land on its first entry.
+    // 电子书: a book of three chunks cut as the computer cuts them (whole paragraphs, at most 4080 bytes), two synced so
+    // far. The badge lays the pages out: Down goes on where the page ended, Up a page's lines back; past the window a gap
+    // screen, from which the other key goes back; long Up/Down change the size, the page starting where it did.
+    {std::string book;char line[200];
+     for(unsigned i=0;i<48;++i){snprintf(line,sizeof(line),"%s　　第%u段：他走进房间，看见桌上放着一封信。“你来了？”她问。窗外的雨一直在下，街灯把湿漉漉的石板路照得发亮。He said: hello world.",i?"\n":"",i);book+=line;}
+     size_t cuts[4]{};for(unsigned c=1;c<3;++c)cuts[c]=book.rfind('\n',cuts[c-1]+4079)+1;cuts[3]=book.size();CHECK(cuts[3]-cuts[2]<=4080&&cuts[2]>cuts[1]);
+     const auto put=[&](unsigned c){return BookStore::write(c,0,book.data()+cuts[c],1000)&&BookStore::write(c,1000,book.data()+cuts[c]+1000,cuts[c+1]-cuts[c]-1000)&&BookStore::finish(c,cuts[c],cuts[c+1]-cuts[c]);};
+     auto& b=m.page.book;
+     CHECK(BookStore::slots()>=16&&BookStore::open(7,"测试书",book.size(),3,0,0)&&runtime.switchTo(App::Book)==Result::Ok&&b.size==book.size()&&b.gap==1&&!strcmp(b.title,"测试书"));
+     CHECK(!BookStore::write(1,0,"x",1)&&put(0)&&put(1)&&runtime.bookSynced()&&b.gap==0&&b.at==0);
+     while(b.font)runtime.longKey(false,507);
+     CHECK(runtime.bookSynced()==false&&!strncmp(b.text,"　　第0段",strlen("　　第0段"))&&bookLines(0)==11);uiRender(runtime);uiCapture("book_page");
+     const auto same=[&]{return b.next>b.at&&strlen(b.text)==b.next-b.at&&!memcmp(b.text,book.data()+b.at,b.next-b.at);};
+     unsigned pages=0;uint32_t end=0;
+     for(;;){CHECK(same());end=b.next;runtime.key(Key::Down,507);if(b.gap)break;CHECK(b.at==end);++pages;}
+     CHECK(pages>=10&&end==cuts[2]);uiRender(runtime);uiCapture("book_gap");
+     {uint32_t place=0;BookMeta meta;BookStore::load(meta,place);CHECK(place==b.at&&meta.lo==0&&meta.hi==2);}
+     runtime.key(Key::Up,507);CHECK(b.gap==0&&b.next==cuts[2]);
+     for(unsigned i=0;i<100&&b.at;++i){const auto at=b.at;runtime.key(Key::Up,507);CHECK(same()&&b.at<at&&b.next>=at&&b.next-at<b.next-b.at);}
+     CHECK(b.at==0);runtime.key(Key::Up,507);CHECK(b.at==0&&!b.gap);
+     // The last chunk: on to the end, where Down stays.
+     CHECK(put(2)&&runtime.bookSynced());
+     for(unsigned i=0;i<100&&b.next<book.size();++i)runtime.key(Key::Down,507);
+     CHECK(b.next==book.size());{const auto at=b.at;runtime.key(Key::Down,507);CHECK(b.at==at&&!b.gap);}
+     for(unsigned i=0;i<5;++i)runtime.key(Key::Up,507);
+     // Sizes: larger holds less, from the same place; the largest stays the largest.
+     {const auto at=b.at;unsigned held=b.next-b.at;
+      for(unsigned size=1;size<kBookSizes;++size){CHECK(runtime.longKey(true,507)&&b.font==size&&b.at==at&&same()&&b.next-b.at<held);held=b.next-b.at;}
+      uiRender(runtime);uiCapture("book_page_large");
+      CHECK(runtime.longKey(true,507)&&b.font==kBookSizes-1&&SettingsStore::loadByte("book_font")==kBookSizes-1);
+      runtime.key(Key::Down,507);CHECK(b.at==at+held&&same());}
+     // The read part dropped: Up stops at the window's start with a gap screen; Down goes back.
+     while(b.font)runtime.longKey(false,507);
+     CHECK(BookStore::drop(1)&&BookStore::start()==cuts[1]);
+     for(unsigned i=0;i<100&&!b.gap;++i)runtime.key(Key::Up,507);
+     CHECK(b.gap==-1&&b.at>=cuts[1]);{const auto at=b.at;runtime.key(Key::Down,507);CHECK(!b.gap&&b.at==at);}}
     CHECK(runtime.switchTo(App::Menu)==Result::Ok);
-    {const unsigned pages=std::size(kMenuPages),page=menuPageOf(runtime.selection());
-     CHECK(runtime.longKey(false,507)&&runtime.selection()==kMenuStarts[(page+1)%pages]);
-     CHECK(runtime.longKey(true,507)&&runtime.selection()==kMenuStarts[page]);}
-    for(unsigned p=0;p<std::size(kMenuPages);++p)CHECK(kMenuStarts[p+1]-kMenuStarts[p]<=9&&menuPageOf(kMenuStarts[p])==p);
+    // Menu: long Up/Down turn a page and land on its first entry; 学习 · 影音 has ten, so two screens.
+    {MenuView v;v.build(runtime.menuLayout());const unsigned pages=v.pages,page=v.page(v.position(runtime.selection()));CHECK(pages==6);
+     CHECK(runtime.longKey(false,507)&&runtime.selection()==v.items[v.starts[(page+1)%pages]]);
+     CHECK(runtime.longKey(true,507)&&runtime.selection()==v.items[v.starts[page]]);}
+    for(unsigned p=0;p<std::size(kMenuPages);++p)CHECK(kMenuStarts[p+1]-kMenuStarts[p]<=18&&menuPageOf(kMenuStarts[p])==p);
     // 秒表: Confirm runs and pauses, Up records a lap while running, Down resets once paused; it holds off deep sleep.
     CHECK(runtime.switchTo(App::Stopwatch)==Result::Ok);m.swRunning=false;m.swBase=0;m.swLapCount=0;
     runtime.key(Key::Confirm,507);CHECK(m.swRunning);vTaskDelay(pdMS_TO_TICKS(60));
@@ -1268,25 +1304,25 @@ static MenuLayout sampleCustomMenu(){
 }
 static void menuLayoutTests(Runtime& runtime){
     auto layout=defaultMenuLayout();CHECK(layout.valid());CHECK(runtime.configureMenu(layout));
-    CHECK(runtime.menuView().count==45&&runtime.menuView().pages==5);
+    CHECK(runtime.menuView().count==46&&runtime.menuView().pages==6);
     for(auto app:kFunctions)if(menuCategory(app)==0)layout.show(app,false);
-    CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==4&&runtime.menuView().count==36);
+    CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==5&&runtime.menuView().count==37);
     runtime.switchTo(App::Menu);runtime.key(Key::Confirm,0);CHECK(runtime.active()!=App::Chat);
     // Unpaged grid: nine a screen in the user's order, no page names; long Down jumps to the next screen.
     layout=defaultMenuLayout();layout.mode=MenuLayout::Continuous;std::reverse(layout.order[1],layout.order[1]+layout.catalogCount);
-    CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==5);runtime.switchTo(App::Settings);runtime.switchTo(App::Menu);
+    CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==6);runtime.switchTo(App::Settings);runtime.switchTo(App::Menu);
     CHECK(runtime.menuPosition()==0&&runtime.menuWindowStart()==0);uiRender(runtime);uiCapture("menu_continuous_top");
     for(unsigned i=0;i<10;++i)runtime.key(Key::Down,0);
     CHECK(runtime.menuPosition()==10&&runtime.menuWindowStart()==9);uiRender(runtime);uiCapture("menu_continuous_scroll");
-    for(unsigned i=0;i<44;++i){const auto before=runtime.menuPosition();runtime.key(Key::Down,0);CHECK(runtime.menuPosition()==(before+1)%45);CHECK(runtime.menuWindowStart()==runtime.menuPosition()/9*9);}
-    CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==18);CHECK(runtime.longKey(true,0)&&runtime.longKey(true,0)&&runtime.longKey(true,0));CHECK(runtime.menuPosition()==36);
+    for(unsigned i=0;i<45;++i){const auto before=runtime.menuPosition();runtime.key(Key::Down,0);CHECK(runtime.menuPosition()==(before+1)%46);CHECK(runtime.menuWindowStart()==runtime.menuPosition()/9*9);}
+    CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==18);CHECK(runtime.longKey(true,0)&&runtime.longKey(true,0)&&runtime.longKey(true,0));CHECK(runtime.menuPosition()==45);
     // Compact list: the same order as the grid, seven rows that scroll with the selection.
-    layout.mode=MenuLayout::List;CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==1&&runtime.menuView().count==45);
+    layout.mode=MenuLayout::List;CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==1&&runtime.menuView().count==46);
     runtime.switchTo(App::Settings);runtime.switchTo(App::Menu);CHECK(runtime.menuPosition()==0&&runtime.menuWindowStart()==0);uiRender(runtime);uiCapture("menu_list_top");
     for(unsigned i=0;i<10;++i)runtime.key(Key::Down,0);
     CHECK(runtime.menuPosition()==10&&runtime.menuWindowStart()==4);uiRender(runtime);uiCapture("menu_list_scroll");
-    for(unsigned i=0;i<45;++i){runtime.key(Key::Up,0);CHECK(runtime.menuPosition()>=runtime.menuWindowStart()&&runtime.menuPosition()<runtime.menuWindowStart()+MenuLayout::kListRows&&runtime.menuWindowStart()<=38);}
-    const auto before=runtime.menuPosition();CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==(before+7)%45);
+    for(unsigned i=0;i<45;++i){runtime.key(Key::Up,0);CHECK(runtime.menuPosition()>=runtime.menuWindowStart()&&runtime.menuPosition()<runtime.menuWindowStart()+MenuLayout::kListRows&&runtime.menuWindowStart()<=39);}
+    const auto before=runtime.menuPosition();CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==(before+7)%46);
     layout.mode=MenuLayout::Continuous;CHECK(runtime.configureMenu(layout));uiRender(runtime);uiCapture("menu_continuous_after_list");
     layout.show(App::Macro,false);CHECK(runtime.configureMenu(layout));const auto selection=runtime.selection();
     CHECK(runtime.switchTo(App::Macro)==Result::Ok);runtime.key(Key::Back,0);CHECK(runtime.active()==App::Menu&&runtime.selection()==selection);
@@ -1444,7 +1480,8 @@ extern "C" void app_main() {
     runtime.key(Key::Down, 0); CHECK(runtime.selection() == 0);
     runtime.key(Key::Up, 0); CHECK(runtime.selection() == kFunctions.size()-1);
     uiRender(runtime); uiCapture("menu_2");
-    // The middle pages under their themes, then 系统设置 at the end of the last.
+    // The middle pages under their themes (学习 · 影音 over two screens), then 系统设置 at the end of the last.
+    CHECK(runtime.longKey(true,0)&&runtime.selection()==36);uiRender(runtime);uiCapture("menu_page4b");
     CHECK(runtime.longKey(true,0)&&runtime.selection()==27);uiRender(runtime);uiCapture("menu_page4");
     CHECK(runtime.longKey(true,0)&&runtime.selection()==18);uiRender(runtime);uiCapture("menu_page3");
     CHECK(runtime.longKey(true,0)&&runtime.selection()==9);uiRender(runtime);uiCapture("menu_page2");
@@ -1486,7 +1523,7 @@ extern "C" void app_main() {
     {const auto at=[](int seconds){return static_cast<uint32_t>(time(nullptr)+seconds);};auto& q=runtime.model.quotas;
     q[0]={true,24,300,at(2*3600+10*60)};q[1]={true,11,10080,at(6*86400+3*3600)};q[2]={};    // Codex
     q[3]={true,0,300,at(3600+30*60)};q[4]={true,74,10080,at(86400+15*3600)};q[5]={};        // Claude Code
-    q[6]={true,8,300,at(3*3600)};q[7]={true,2,300,at(3*3600)};q[8]={true,0,300,at(3*3600)}; // Gemini 4, Flash, 第三方
+    q[6]={true,8,300,at(3*3600)};q[7]={true,2,300,at(3*3600)};q[8]={true,0,300,at(3*3600)}; // Pro, Flash, 第三方
     q[9]={true,38,43200,at(20*86400)};q[10]={true,12,43200,at(20*86400)};q[11]={};          // Cursor
     q[12]={true,5,300,at(4*3600)};q[13]={};q[14]={};}                                         // OpenCode Go
     runtime.switchTo(App::Codex);runtime.model.quotaPage=0;uiRender(runtime);uiCapture("codex_quota");

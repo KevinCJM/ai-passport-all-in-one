@@ -29,7 +29,8 @@
   function defaults(catalog) {
     const ids=catalog.flatMap(g=>g.apps.map(a=>a.id));
     const d={mode:0,count:ids.length,pageCount:5,hidden:[],categories:[0,1,2,3,4],orders:[ids.slice(),ids.slice(),ids.slice()],assignment:Array(APPS).fill(0),pages:[0,1,2,3,4,5,6,7],names:Array(PAGES).fill('')};
-    catalog.forEach((g,p)=>{d.names[p]=g.name.replace(/\s*·\s*/g,'').slice(0,8);g.apps.forEach(a=>d.assignment[a.id]=p);});
+    // As defaultMenuLayout(): a category of more than nine goes on over another page, its name with 续.
+    let p=0;catalog.forEach(g=>{g.apps.forEach((a,i)=>{if(i&&i%9===0)p++;if(i%9===0)d.names[p]=g.name.replace(/\s*·\s*/g,'').slice(0,i?7:8)+(i?'续':'');d.assignment[a.id]=p;});p++;});d.pageCount=p;
     return d;
   }
   function mount(root, prefix='') {

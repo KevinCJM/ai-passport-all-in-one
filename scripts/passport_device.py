@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Physical AI Passport companion. Prefers USB and falls back to paired BLE."""
-import asyncio,collections,http.client,json,pathlib,queue,signal,struct,subprocess,sys,threading,time,urllib.request
+import asyncio,collections,http.client,json,pathlib,queue,signal,struct,subprocess,sys,threading,time,urllib.parse,urllib.request
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from passport_services import Services
 from passport_device_cloud import DeviceXiaoZhi
@@ -265,6 +265,11 @@ class Device:
     if self.services.ledger.due(self.state):
      try:self.services.ledger.sync(self.request);self.services.details.pop('ledger_error',None)
      except Exception as error:self.services.details['ledger_error']=type(error).__name__
+    # 电子书: one step a pass (one chunk at most), so the badge's events are never kept waiting long.
+    books=self.services.books
+    if books.due(self.state):
+     try:books.sync(self.request);books.stats['error']=''
+     except Exception as error:books.stats['error']=type(error).__name__
     event=self.request('/events')
     if event:self.submit_event(event)
    except Exception as error:
@@ -318,7 +323,7 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 <main>
 <header><h1>AI Passport 设置</h1><span id=conn class=pill>正在检查连接…</span></header>
 <p class=lead>胸牌的设置保存在胸牌里，胸牌通过 USB 或蓝牙连着这台电脑时才能读取和保存。</p>
-<nav><a href="#assistant" class=assistant hidden>电脑助手</a><a href="#menu">菜单</a><a href="#status">状态牌</a><a href="#countdown">倒数日</a><a href="#qr">二维码</a><a href="#mac">打开电脑程序</a><a href="#feishu">飞书提醒</a><a href="#ai">AI 控制器</a><a href="#remote">模拟遥控</a><a href="#diag">诊断</a></nav>
+<nav><a href="#assistant" class=assistant hidden>电脑助手</a><a href="#menu">菜单</a><a href="#status">状态牌</a><a href="#countdown">倒数日</a><a href="#qr">二维码</a><a href="#mac">打开电脑程序</a><a href="#feishu">飞书提醒</a><a href="#ai">AI 控制器</a><a href="#book">电子书</a><a href="#remote">模拟遥控</a><a href="#diag">诊断</a></nav>
 
 <section id=assistant class=assistant hidden><h2>电脑助手</h2>
 <div class=row><span id=aStatus class=pill>正在检查…</span></div><p id=aMessage class=hint></p><div id=aCode class=code hidden></div>
@@ -360,6 +365,10 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 <p class=hint>不用设置：在 App 里开的对话回到 App；在终端里开的，还在跑就切到它所在的终端（Ghostty、系统终端、iTerm、Warp 能切到对应的标签，Warp 的分屏也行），已经退出就在它上次所在的终端新开一个标签接着聊。</p>
 <span id=aiResult class=out></span>
 <h3>最近的对话</h3><div id=aiList class=rows></div></section>
+<section id=book><h2>电子书</h2><p class=muted>上传 txt（UTF-8、GBK 都行），胸牌「电子书」页就能读：上下键翻页，长按翻 10 页。整本书留在电脑上，胸牌只放 1 MB（约 33 万字）。每次胸牌连上电脑（USB 或蓝牙），先删掉早已读过的部分（留下最近约 100 页可以往回翻），再补上后面没读的，一直保持 1 MB。胸牌上读到哪一页会记回电脑。</p>
+<div class=row><input type=file id=bkFile accept=".txt,text/plain"><button onclick="bkUpload()">上传并在胸牌上读</button><span id=bkResult class=out></span></div>
+<p id=bkState class=hint></p>
+<h3>书架</h3><div id=bkList class=rows></div></section>
 <section id=remote><h2>模拟遥控</h2><p class=muted>点一下等于按一下胸牌上对应的键，长按也一样。</p>
 <div class="row remote"><button onclick="act('up')">上</button><button onclick="act('down')">下</button><button onclick="act('ok')">确认</button><button onclick="act('ap_on')">长按上</button><button onclick="act('settings')">长按下</button><button onclick="act('back')">长按确认</button><span id=actResult class=out></span></div></section>
 <section id=diag><h2>诊断</h2><p class=muted>助手和胸牌之间的连接状态，每 2 秒刷新。遇到问题时复制下来发给开发者。</p>
@@ -427,6 +436,16 @@ async function aiLoad(){try{const r=await (await fetch('/api/ai')).json();
  $('#aiList').replaceChildren(...r.sessions.map(x=>{const d=document.createElement('div');d.className='row';const s=document.createElement('span');s.textContent=aiNames[x.tool]+' · '+x.title+' · '+x.folder+(aiStates[x.state]?' · '+aiStates[x.state]:'')+' → '+x.place;
   const b=document.createElement('button');b.textContent='在电脑打开';b.onclick=async()=>{try{say($('#aiResult'),(await post('/api/ai-go',{tool:x.tool,id:x.id})).note,'ok');aiLoad()}catch(e){say($('#aiResult'),'失败：'+e.message,'err')}};d.append(s,b);return d}))}catch(e){say($('#aiResult'),'读取失败：'+e.message,'err')}}
 aiLoad();
+async function bkLoad(){try{const r=await (await fetch('/api/books')).json();const now=r.books.find(x=>x.id==r.current);
+ $('#bkState').textContent=!now?'还没选书':r.cached?('胸牌上已有第 '+r.cached[0]+'–'+r.cached[1]+' 页，读到第 '+(now.page+1)+' 页'+(r.error?' · 同步出错：'+r.error:'')):'等胸牌连上电脑后开始同步「'+now.title+'」'+(r.error?' · 同步出错：'+r.error:'');
+ $('#bkList').replaceChildren(...r.books.map(x=>{const d=document.createElement('div');d.className='row';const s=document.createElement('span');s.textContent=(x.id==r.current?'▶ ':'')+x.title+' · 共 '+x.pages+' 页 · 读到第 '+(x.page+1)+' 页';
+  const read=document.createElement('button');read.textContent='在胸牌上读';read.disabled=x.id==r.current;read.onclick=()=>bkAct('read',x.id);
+  const del=document.createElement('button');del.textContent='删除';del.onclick=()=>{if(confirm('删除「'+x.title+'」？'))bkAct('delete',x.id)};d.append(s,read,del);return d}))}catch(e){say($('#bkResult'),'读取失败：'+e.message,'err')}}
+async function bkAct(action,id){try{await post('/api/books',{action,id});bkLoad()}catch(e){say($('#bkResult'),'失败：'+e.message,'err')}}
+async function bkUpload(){const f=$('#bkFile').files[0];if(!f)return say($('#bkResult'),'先选一个 txt 文件','err');say($('#bkResult'),'正在排版…');
+ try{const r=await fetch('/api/books/upload?name='+encodeURIComponent(f.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:f});const j=await r.json();if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
+  say($('#bkResult'),'✓ 已加入，胸牌连上电脑后开始同步','ok');bkLoad()}catch(e){say($('#bkResult'),'上传失败：'+e.message,'err')}}
+bkLoad();setInterval(()=>{if(location.hash=='#book')bkLoad()},3000);
 
 async function act(command){const out=$('#actResult');try{await post('/api/action',{command});say(out,'')}catch(e){say(out,'胸牌没有响应','err')}}
 async function copyDiag(){try{await navigator.clipboard.writeText($('#state').textContent);say($('#diagResult'),'已复制')}catch(e){say($('#diagResult'),'复制失败，请手动选中复制','err')}}
@@ -480,6 +499,7 @@ class Handler(BaseHTTPRequestHandler):
    if self.path=='/api/mac-apps':return self.send(200,DEVICE.services.mac_config())
    if self.path=='/api/feishu':return self.send(200,DEVICE.services.feishu.state())
    if self.path=='/api/ai':return self.send(200,DEVICE.services.ai.web())
+   if self.path=='/api/books':return self.send(200,DEVICE.services.books.state())
    # What the badge has saved now (0.5.28+), so the page edits that instead of a stale browser copy.
    if self.path=='/api/status-labels':return self.send(200,DEVICE.request('/content/status'))
    if self.path=='/api/countdowns':return self.send(200,DEVICE.request('/content/countdowns'))
@@ -491,6 +511,14 @@ class Handler(BaseHTTPRequestHandler):
    if self.headers.get('Host')!='127.0.0.1:%d'%UI_PORT:return self.send(403,{'error':'host'})
    origin=self.headers.get('Origin');allowed='http://127.0.0.1:%d'%UI_PORT
    if origin and origin!=allowed: return self.send(403,{'error':'origin'})
+   # 电子书: the txt itself, up to 32 MB (a whole novel); the name rides in the query.
+   if self.path.startswith('/api/books/upload?'):
+    size=int(self.headers.get('Content-Length','0'))
+    if DEVICE is None:return self.send(503,{'error':'胸牌未连接'})
+    if self.headers.get('Content-Type','').split(';')[0]!='application/octet-stream' or not 0<size<=32<<20:return self.send(400,{'error':'文件太大或为空'})
+    name=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('name',['未命名.txt'])[0]
+    try:return self.send(200,DEVICE.services.books.add(name,self.rfile.read(size)))
+    except ValueError as error:return self.send(400,{'error':str(error)})
    if self.headers.get('Content-Type','').split(';')[0]!='application/json':return self.send(415,{'error':'content type'})
    size=int(self.headers.get('Content-Length','0'))
    if size<=0 or size>16384:raise ValueError('invalid size')
@@ -507,6 +535,7 @@ class Handler(BaseHTTPRequestHandler):
    elif self.path=='/api/qr-codes':result=DEVICE.qr_codes(data['codes'])
    elif self.path=='/api/mac-apps':result=DEVICE.services.set_mac_aliases(data['aliases'])
    elif self.path=='/api/feishu':result=DEVICE.services.feishu.configure(int(data['mode']),data['vip'],data['mute'])
+   elif self.path=='/api/books':result=(DEVICE.services.books.choose if data['action']=='read' else DEVICE.services.books.remove)(int(data['id']))
    elif self.path=='/api/ai-go':result={'note':DEVICE.services.ai.open(str(data['tool']),str(data['id']))}
    elif self.path=='/api/feishu-test':result=DEVICE.services.feishu_test()
    elif self.path=='/api/mac-open':result={'note':DEVICE.services.mac.open_path(data['path'])}

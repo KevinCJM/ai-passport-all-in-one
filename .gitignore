@@ -12,3 +12,5 @@ __pycache__/
 /experiments/passport-assistant-build/
 /experiments/passport-connectivity-tools/
 /releases/
+.venv/
+.codegraph/

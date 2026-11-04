@@ -36,6 +36,12 @@ constexpr size_t kReserve = 48 * 1024;
 struct Event { App app; uint32_t generation; uint32_t value; };
 
 // All records are bounded. No account secrets or live credentials in fixtures.
+// 电子书's font sizes (16, 20, 24 and 32 px). ui.cpp measures with LVGL's own line breaking, so the label shows exactly
+// what these count: a page's lines, the bytes of `text`'s first line, and of as many lines as a page holds.
+inline constexpr uint8_t kBookSizes = 4, kBookMaxLines = 11;
+unsigned bookLines(uint8_t size);
+unsigned bookLine(const char* text, unsigned length, uint8_t size);
+unsigned bookFit(const char* text, unsigned length, uint8_t size);
 struct Model {
     std::array<std::array<char, 160>, 8> notices{};
     uint8_t noticeCount{}, noticeHead{}, focusPhase{}, volume{55};
@@ -112,8 +118,8 @@ struct Model {
     StatusLabel statusLabel(unsigned index) const;
     // Torch: brightness in 20% steps (1-5) and colour; the mode shows for two seconds after a key.
     uint8_t torchLevel{5},torchColor{};uint64_t torchChanged{};
-    // QR page: stored entries present (a bit per slot), then the WiFi entry; the shown one is loaded into qrTitle/qrText.
-    uint8_t qrIndex{},qrMask{};bool qrBright{};char qrTitle[48]{},qrText[301]{};
+    // QR page: stored entries present (a bit per slot), then the WiFi entry; the shown one is loaded into page.qr.
+    uint8_t qrIndex{},qrMask{};bool qrBright{};
     // 万年历: the selected day (its month is on show); calendarView 0 shows the month, 1 that day's 黄历, 2 its 月相 and 节气.
     int calendarYear{2026},calendarMonth{1},calendarDay{1};uint8_t calendarView{};
     // 倒数日: built-in festivals plus the computer's (or spoken) events, nearest first; past one-off events last.
@@ -155,6 +161,12 @@ struct Model {
         struct{char question[256],answers[4][72],category[40],level[8];} quiz;
         struct{std::array<WifiAp,16> aps;std::array<PingRow,3> pings;std::array<LanDevice,32> lan;} wifi;
         std::array<PodcastRow,12> podcasts;
+        // 二维码: the entry on show (Runtime::reloadQr).
+        struct{char title[48],text[301];} qr;
+        // 电子书: the book's title and the page on show, bytes at..next-1 of size (0: no book yet), in font size `font`
+        // (kBookSizes); gap -1/1 shows that the text before/after it is not on the badge (dropped, or not synced yet)
+        // instead; revision is the store's when read.
+        struct{char title[64];char text[BookStore::kText];uint32_t at,next,size;uint8_t font;int8_t gap;unsigned revision;} book;
         WeatherForecast forecast;
         // chart: 0-999 between chartLow and chartHigh; minute prices, or four (open, close, high, low) per day.
         struct{std::array<StockRow,12> rows;std::array<int16_t,200> chart;} stocks;
@@ -409,6 +421,11 @@ public:
     // 语音计算器: works out what the cloud heard, going on from the picked result (false: lastNotice says why).
     bool addCalc(const char* heard);
     bool ledgerSynced();
+    // 电子书: shows the page at the place read (step 0), the next (1) or the one before (-1); false when it is not on the
+    // badge (page.book.gap says which way). bookSynced re-reads it after the computer changed the book (true: redraw).
+    bool showBook(int step);
+    bool bookSynced();
+    uint32_t bookBack(uint32_t at);  // where the page before byte `at` starts (UINT32_MAX: not on the badge)
     // 随机转盘: Confirm spins the mode on show; what the cloud heard becomes a mode ("吃饭，烧烤，汉堡") or options
     // added to the mode on show (one or two items). false: nothing changed, lastNotice says why.
     void spinWheel();

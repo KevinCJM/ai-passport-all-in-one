@@ -179,9 +179,9 @@ int main(){
     assert(strstr(keyHint(App::Macro,SettingsPage::List,false,false,false,false),"换页"));
     assert(strstr(keyHint(App::Macro,SettingsPage::List,false,false,false,false,true),"12/60"));
     for(unsigned tab=0;tab<5;++tab)assert(!strstr(keyHint(App::Macro,SettingsPage::List,false,false,false,false,false,tab),"删除"));
-    for(unsigned i=0;i<kFunctions.size();++i){assert(kMenuStarts[menuPageOf(i)+1]-kMenuStarts[menuPageOf(i)]<=9);for(unsigned j=0;j<i;++j)assert(kFunctions[i]!=kFunctions[j]);}
+    for(unsigned i=0;i<kFunctions.size();++i){for(unsigned j=0;j<i;++j)assert(kFunctions[i]!=kFunctions[j]);}
     static_assert(unsigned(App::Walkie)==46&&unsigned(App::Macro)==47); // Keep the published main branch app IDs.
-    static_assert(kFunctions.size()==45);
+    static_assert(kFunctions.size()==46);
 }
 '''
         compiler = shutil.which("clang++") or shutil.which("g++")
