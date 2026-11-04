@@ -357,7 +357,7 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 <div class=actions><button class=primary onclick="fsSave()">保存</button><button onclick="fsTest()">发一条测试提醒</button><span id=fsResult class=out></span></div></section>
 
 <section id=ai><h2>AI 控制器</h2><p class=muted>胸牌「AI 控制器」页列出 24 小时内 Codex、Claude Code、Gemini Agy、Cursor、OpenCode 的对话，AI 回复完的那一行带提示。在胸牌上选中对话按确认，电脑就打开它，光标停在输入框，胸牌转到语音输入：确认说话，下键发送，上键删除。</p>
-<p class=hint>不用设置：在 App 里开的对话回到 App；在终端里开的，还在跑就切到它所在的终端（Ghostty、系统终端、iTerm 能切到标签，Warp 只能切到窗口），已经退出就在它上次所在的终端新开一个标签接着聊。</p>
+<p class=hint>不用设置：在 App 里开的对话回到 App；在终端里开的，还在跑就切到它所在的终端（Ghostty、系统终端、iTerm、Warp 能切到对应的标签，Warp 的分屏也行），已经退出就在它上次所在的终端新开一个标签接着聊。</p>
 <span id=aiResult class=out></span>
 <h3>最近的对话</h3><div id=aiList class=rows></div></section>
 <section id=remote><h2>模拟遥控</h2><p class=muted>点一下等于按一下胸牌上对应的键，长按也一样。</p>

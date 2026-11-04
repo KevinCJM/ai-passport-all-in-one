@@ -16,8 +16,8 @@ from passport_signing import identity,sign,requirement
 ROOT=Path(__file__).resolve().parents[1]
 WORK=ROOT/'experiments/passport-assistant-build'
 SOURCES=WORK/'sources'
-VERSION='0.1.18'
-BUILD_NUMBER='19'
+VERSION='0.1.19'
+BUILD_NUMBER='20'
 DIST=ROOT/f'releases/ai-passport-assistant-{VERSION}-preview'
 TOOLS=ROOT/'experiments/passport-connectivity-tools/bin'
 OPUS=Path('/opt/homebrew/opt/opus/lib/libopus.0.dylib').resolve()  # 语音输入's encoder, loaded with ctypes

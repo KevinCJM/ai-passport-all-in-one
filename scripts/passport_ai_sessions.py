@@ -448,14 +448,58 @@ end tell''')
   end repeat
   activate
 end tell''')
+        elif app=='Warp' and tty and self.warp(tty,title):pass
         else:
-            # Warp, editors and the rest: only windows can be raised, by the title of their selected tab.
+            # Editors and the rest: only windows can be raised, by the title of their selected tab.
             subprocess.run(['open','-a',app],timeout=8)
             if title:applescript(f'''tell application "System Events" to repeat with p in (processes whose bundle identifier is (id of application {quoted(app)}))
   repeat with w in windows of p
     if name of w contains {quoted(title)} then perform action "AXRaise" of w
   end repeat
 end repeat''')
+
+    def warp(self,tty,title):
+        """Warp has no way to pick a tab from outside, and shows only the focused pane's title as its window's. So the
+        conversation's terminal gets a unique title (an escape sequence, nothing printed), and Warp's own keys go
+        through its panes (⌘]) and tabs (⇧⌘]) until the window shows it; then its title is put back."""
+        marker='⌁'+tty
+        try:
+            with open('/dev/'+tty,'w') as f:f.write(f'\033]0;{marker}\007')
+        except OSError:return False
+        time.sleep(.3)
+        # ponytail: a pane or tab cycle ends when the title repeats, so two panes titled alike can hide the next ones
+        found=applescript(f'''tell application "System Events" to tell (first process whose bundle identifier is "dev.warp.Warp-Stable")
+  set frontmost to true
+  repeat with w in windows
+    if name of w contains "{marker}" then
+      perform action "AXRaise" of w
+      return "yes"
+    end if
+  end repeat
+  repeat with w in windows
+    perform action "AXRaise" of w
+    delay 0.15
+    set tabStart to name of window 1
+    repeat 15 times
+      set paneStart to name of window 1
+      repeat 6 times
+        if name of window 1 contains "{marker}" then return "yes"
+        keystroke "]" using command down
+        delay 0.12
+        if name of window 1 is paneStart then exit repeat
+      end repeat
+      if name of window 1 contains "{marker}" then return "yes"
+      keystroke "]" using {{command down, shift down}}
+      delay 0.15
+      if name of window 1 is tabStart then exit repeat
+    end repeat
+  end repeat
+  return "no"
+end tell''')=='yes'
+        try:
+            with open('/dev/'+tty,'w') as f:f.write(f'\033]0;{title}\007')   # the CLI sets its own again when it next does
+        except OSError:pass
+        return found
 
     def resume(self,s,terminal):
         """No CLI runs the conversation: a new tab in that terminal resumes it."""

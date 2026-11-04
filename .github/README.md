@@ -17,7 +17,7 @@ AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个�
 
 ## 源码里的新功能（0.5.33，尚未发布固件）
 
-- **AI 控制器**（原「AI 额度」，0.5.32–0.5.33，需要电脑助手 0.1.18）：Codex、Claude Code、Gemini Agy、Cursor、OpenCode 每一行，AI 回复完显示「新回复 N」，还在跑显示「运行中」。在一行上按确认，列出这个工具 24 小时内最近 5 个对话；选中一个再按确认，电脑就打开这个对话，光标停在输入框，胸牌转到语音输入，说完下键发送、上键删除。不用设置打开方式：在 App 里开的回到 App，在终端里开的切到它所在的终端，已经退出的在它上次所在的终端新开一个标签接着聊（仅 Mac）。
+- **AI 控制器**（原「AI 额度」，0.5.32–0.5.33，需要电脑助手 0.1.19）：Codex、Claude Code、Gemini Agy、Cursor、OpenCode 每一行，AI 回复完显示「新回复 N」，还在跑显示「运行中」。在一行上按确认，列出这个工具 24 小时内最近 5 个对话；选中一个再按确认，电脑就打开这个对话，光标停在输入框，胸牌转到语音输入，说完下键发送、上键删除。不用设置打开方式：在 App 里开的回到 App，在终端里开的切到它所在的终端，已经退出的在它上次所在的终端新开一个标签接着聊（仅 Mac）。
 - **飞书提醒**：Mac 上的飞书来消息时，胸牌在任何页面底部弹出提醒；页面里看最近 6 条，确认看详情，再按确认朗读。可设特别关注和免打扰，不用申请飞书开发者权限（见下方「飞书提醒」）。
 - **AI 额度五项列表**（0.5.31）：上下键选择展开 OpenAI Codex、Claude Code、Gemini Agy（Gemini / 第三方）、Cursor & GrokBot（本期套餐和 API 额度）、OpenCode Go，收起行显示剩余更少的那档。
 - **记分牌**（0.5.30）：乒乓球、羽毛球、排球自动判局，放在系统设置前面。
@@ -193,7 +193,7 @@ python -m esptool --chip esp32c3 -p PORT -b 921600 write-flash \
 
 ## 电脑助手（Mac / Windows）
 
-电脑助手是运行在电脑上的配套程序（源码 `scripts/passport_assistant.py`，当前版本 `0.1.18-preview`）。语音输入、AI 控制器、电脑监控、离座锁屏、飞书提醒、打开电脑程序和 USB 借网等功能，需要电脑上开着助手。胸牌和电脑之间优先走 USB 线，拔线后自动改走蓝牙。
+电脑助手是运行在电脑上的配套程序（源码 `scripts/passport_assistant.py`，当前版本 `0.1.19-preview`）。语音输入、AI 控制器、电脑监控、离座锁屏、飞书提醒、打开电脑程序和 USB 借网等功能，需要电脑上开着助手。胸牌和电脑之间优先走 USB 线，拔线后自动改走蓝牙。
 
 | | Mac | Windows（预览） |
 | --- | --- | --- |
@@ -206,7 +206,7 @@ python -m esptool --chip esp32c3 -p PORT -b 921600 write-flash \
 
 ### 1. 安装
 
-安装包在 [Releases › 电脑助手 0.1.18 预览版](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/assistant-v0.1.18-preview)：Mac 下载 `…-macos-arm64.pkg`，Windows 下载 `…-windows-x64.zip`，可用同页的 `SHA256SUMS` 校验。
+安装包在 [Releases › 电脑助手 0.1.19 预览版](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/assistant-v0.1.19-preview)：Mac 下载 `…-macos-arm64.pkg`，Windows 下载 `…-windows-x64.zip`，可用同页的 `SHA256SUMS` 校验。
 
 **Mac**：双击 `.pkg` 安装，助手会装进「应用程序」。安装包没有签名和 Apple 公证，双击安装包或第一次打开时如果提示无法验证，到「系统设置 › 隐私与安全性」点「仍要打开」。
 
@@ -259,7 +259,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 | 功能 | 怎么用 |
 | --- | --- |
 | **语音输入** | 先在电脑上把光标放到要输入的地方，例如聊天框、文档、终端。在胸牌按**确认**开始说话，再按**确认**结束，识别出的文字会粘贴到光标处；长按确认放弃这次录音。说完之后，按**下**发送回车，按**上**删除光标所在的整行。不需要安装输入法，用的是小智的语音识别（需要先在胸牌上绑定「识别小智」）。粘贴大约 1 秒后，助手会把剪贴板恢复成原来的文字。 |
-| **AI 控制器 · 对话**（仅 Mac） | 列表里每个 AI 工具都能按确认看对话：Codex、Claude Code、Gemini Agy（`agy` 命令行）、Cursor（命令行和编辑器）、OpenCode。AI 回复完、你还没打开的对话，那一行显示「新回复」。选中对话按确认，电脑打开它：Codex App 里的对话直接打开到那个对话；正在终端里跑的切到它所在的终端（Ghostty、系统终端、iTerm 能切到标签，Warp 和编辑器只能切到窗口）；已经退出的在它上次所在的终端新开一个标签，用 `claude --resume`、`codex resume`、`agy --conversation`、`cursor-agent --resume`、`opencode -s` 接着聊；Cursor 编辑器、OpenCode App 只能打开 App，不能直接跳到那个对话。打开后胸牌转到语音输入，文字输入到这个对话，下键发送，上键删除，长按确认回到对话列表。设置网页「AI 控制器」一节列出最近的对话和各自会在哪里打开。读的都是各工具自己存在电脑上的记录，格式没有公开，工具升级后可能失效。 |
+| **AI 控制器 · 对话**（仅 Mac） | 列表里每个 AI 工具都能按确认看对话：Codex、Claude Code、Gemini Agy（`agy` 命令行）、Cursor（命令行和编辑器）、OpenCode。AI 回复完、你还没打开的对话，那一行显示「新回复」。选中对话按确认，电脑打开它：Codex App 里的对话直接打开到那个对话；正在终端里跑的切到它所在的终端（Ghostty、系统终端、iTerm、Warp 能切到对应的标签和分屏，编辑器只能切到窗口）；已经退出的在它上次所在的终端新开一个标签，用 `claude --resume`、`codex resume`、`agy --conversation`、`cursor-agent --resume`、`opencode -s` 接着聊；Cursor 编辑器、OpenCode App 只能打开 App，不能直接跳到那个对话。打开后胸牌转到语音输入，文字输入到这个对话，下键发送，上键删除，长按确认回到对话列表。设置网页「AI 控制器」一节列出最近的对话和各自会在哪里打开。读的都是各工具自己存在电脑上的记录，格式没有公开，工具升级后可能失效。 |
 | **AI 控制器 · 额度** | 五项列表，上下键选择展开：OpenAI Codex、Claude Code 的 5 小时和 7 天额度；Gemini Agy（仅 Mac）的 Gemini 与第三方（Claude / GPT）模型额度；Cursor & GrokBot 本期（当前计费周期）套餐和 API 模型额度；OpenCode Go 的 5 小时额度和每周/每月中用得更多的那档。未展开的行显示该工具剩余更少的那档。这些工具需要你自己在电脑上安装并登录（Gemini Agy 读 Mac 钥匙串里的 `agy` 登录，过期自动调 `agy models` 刷新；Cursor 读编辑器自己的登录；OpenCode 读 `~/.local/share/opencode/auth.json` 里的 `opencode-go` 密钥；Claude Code 运行时若接口限流，也可由状态栏脚本写入 `~/.claude/passport-rate-limits.json`）；非官方接口可能随时失效，失效时显示「暂不可用」。Windows 上 Codex 要能在命令行直接运行 `codex`；Claude Code 读 `%USERPROFILE%\.claude\.credentials.json`。 |
 | **电脑监控** | 显示 CPU、内存、磁盘、网速和电池，打开页面就能看。 |
 | **离座锁屏** | 胸牌挂在身上，用蓝牙信号判断你是否在座位上，你走开就锁定电脑。上下键选择设置项，确认键修改。可设置：离开距离（近 / 中 / 远）、离开确认（5、10、20、30 秒）、防锁屏（关 / 保持亮屏 / 保持在线，「保持在线」会定时轻移鼠标，避免聊天软件显示离开）、回来亮屏。长按**上**：以当前信号作为「在座」的基准，第一次用时坐在电脑前做一次；长按**下**：立即锁屏。插着 USB 线时不测信号，只有防锁屏和立即锁屏。**Windows 读不到蓝牙信号强度，所以只能防锁屏和立即锁屏，不会自动锁屏。** 解锁电脑仍需要你自己输入密码或使用指纹。 |
