@@ -2612,7 +2612,7 @@ void quotaMove(lv_obj_t* row,int32_t y,int32_t h){
     lv_obj_set_y(row,y);lv_obj_set_height(row,h);
 }
 void renderQuotas(const Model& model){
-    static const char* const tools[Model::kQuotaTools]={"Codex","Claude Code","Gemini","Cursor","OpenCode Go"};
+    static const char* const tools[Model::kQuotaTools]={"OpenAI Codex","Claude Code","Gemini Agy","Cursor & GrokBot","OpenCode Go"};
     const unsigned page=model.quotaPage%Model::kQuotaTools;
     char text[64],name[64],reset[64];
     setLabel(dashboardTitle,"AI 额度");
