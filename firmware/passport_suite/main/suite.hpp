@@ -79,7 +79,7 @@ struct Model {
     // Settings > WiFi: the saved networks' names (last joined first). wifiRow 0 is 添加 WiFi, n the network n-1;
     // wifiArmed: a long Down asked to forget it.
     char wifiSaved[WifiList::kMax][33]{};uint8_t wifiSavedCount{},wifiRow{};bool wifiArmed{};
-    // AI 额度: two windows a tool, in this order: Codex (short/long), Claude Code (5 hours/7 days), Gemini (Gemini/第三方),
+    // AI 控制器's quotas: two windows a tool, in this order: Codex (short/long), Claude Code (5 hours/7 days), Gemini (Gemini/第三方),
     // Cursor (plan/API), OpenCode Go (5 hours/week or month); resets an epoch. quotaPage is the selected row.
     static constexpr uint8_t kQuotaTools{5};
     struct Quota { bool known{};uint8_t used{};uint16_t minutes{};uint32_t resets{}; } quotas[2*kQuotaTools];uint8_t quotaPage{};
@@ -136,6 +136,10 @@ struct Model {
     // fresh: since the page was last opened) and its alert mode (0 all, 1 特别关注 only, 2 off).
     struct FeishuItem{char from[37];char text[150];bool vip,fresh;uint32_t at;};  // 12 and 48 characters
     struct FeishuView{std::array<FeishuItem,6> items;uint8_t count,mode;uint16_t today;char error[48],note[48];};
+    // AI 控制器: a tool's latest conversations from the computer; state 0 idle, 1 running, 2 replied, 3 replied and not
+    // opened yet; minutes since its last turn; the reply's head (40 characters).
+    struct AiItem{char id[9],title[37],folder[19],reply[121];uint8_t state;uint16_t minutes;};
+    struct AiView{std::array<AiItem,5> items;uint8_t count;bool loaded;};  // loaded: the computer has answered
     union PageData{
         // 财经新闻: the six headlines, and item textFor's text in full (255: none yet).
         struct{std::array<NewsItem,6> items;char text[720];uint8_t textFor;} news;
@@ -157,6 +161,7 @@ struct Model {
         struct{std::array<MemoRow,kMemoRows> rows;MemoNote note;} memo;
         WheelBoard wheel;
         FeishuView feishu;
+        AiView ai;
         ScoreBoard score;  // 记分牌, loaded on entry and saved on every point
         TodoList todo;
         LedgerBook ledger;
@@ -240,6 +245,11 @@ struct Model {
     // asked (liveState tells how it goes). A new message's alert takes macNote's place in the footer (from "飞书·"),
     // red and longer for feishuVip.
     uint8_t feishuIndex{};bool feishuDetail{},feishuSaying{},feishuVip{};
+    // AI 控制器 (App::Codex): the first kAiTools rows (Codex, Claude Code) have conversations: aiRows their [replied and
+    // unread, running] counts. aiLevel 1: the conversations of row quotaPage (page.ai), aiIndex the picked one.
+    // aiDictation: 语音输入 was opened on one of them; it types there, and its Back comes back here.
+    static constexpr uint8_t kAiTools{2};
+    uint8_t aiRows[kAiTools][2]{},aiLevel{},aiIndex{};bool aiDictation{};
     // 记分牌: page.score; scoreArmed: a long Down asked to start over.
     bool scoreArmed{};
     // 待办提醒: page.todo while the page is open. todoNextAt/todoNext: the next reminder (epoch, 0 = none) and its text,

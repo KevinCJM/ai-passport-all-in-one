@@ -249,7 +249,7 @@ inline constexpr AppWord kAppWords[]{
     {App::Menu,"功能列表"},{App::Menu,"功能"},{App::Menu,"菜单"},
     {App::Chat,"小智语音"},{App::Chat,"小智"},{App::Chat,"聊天"},{App::Chat,"对话"},
     {App::Memo,"语音笔记"},{App::Memo,"笔记"},{App::Memo,"记笔记"},{App::Dictation,"语音输入"},{App::Dictation,"听写"},
-    {App::Codex,"ai额度"},{App::Codex,"额度"},{App::Monitor,"电脑状态"},
+    {App::Codex,"ai控制器"},{App::Codex,"控制器"},{App::Codex,"ai额度"},{App::Codex,"额度"},{App::Monitor,"电脑状态"},
     {App::Slides,"ppt翻页"},{App::Slides,"ppt"},{App::Slides,"翻页笔"},{App::Slides,"幻灯片"},
     {App::Focus,"番茄钟"},{App::Focus,"番茄"},{App::Focus,"专注"},{App::Stopwatch,"秒表"},{App::Stopwatch,"计时"},
     {App::Alarm,"闹钟"},{App::Alarm,"闹铃"},{App::Calendar,"万年历"},{App::Calendar,"日历"},{App::Calendar,"黄历"},

@@ -20,6 +20,7 @@ class LiveServices {
     uint32_t requestId_{}, pending_{}, pendingGeneration_{}, accepted_{}, received_{}, stale_{};
     uint32_t macRequest_{};  // 打开 Mac 程序: the request the computer has yet to answer
     void openOnMac(const char* name,uint64_t now);
+    void openConversation(uint64_t now);
     uint64_t voiceAt_{};  // 语音指令: the last time it was busy; home 10 s later
     App command(const char* heard,uint64_t now);
     uint32_t observedGeneration_{};

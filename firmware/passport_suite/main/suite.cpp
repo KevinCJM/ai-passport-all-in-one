@@ -20,7 +20,7 @@ constexpr Profile kProfiles[] = {
     {"home", "时钟与天气", 0, false, false},
     {"chat", "小智语音", 88 * 1024, true, false},
     {"dictation", "语音输入", 32 * 1024, true, false},
-    {"codex", "AI 额度", 4 * 1024, false, false},
+    {"codex", "AI 控制器", 4 * 1024, false, false},
     {"focus", "番茄钟", 2 * 1024, false, false},
     {"monitor", "电脑状态", 8 * 1024, false, false},
     {"reserved", "", 0, false, false}, // Protocol ID 6 is retired; never routable.
@@ -884,7 +884,11 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
     if (target == App::History) model.eventCount = model.eventIndex = 0;
     if (target == App::Daily) { model.page.daily.en[0] = model.page.daily.cn[0] = 0; model.dailyBack = model.dailyWant = 0; }
     if (target == App::Quake) model.quakeIndex = 0;
-    if (target == App::Codex) model.quotaPage = 0;  // AI 额度 opens on the first row
+    // AI 控制器 opens on the first row, or comes back to the conversations 语音输入 was opened from.
+    if (target == App::Codex && !model.aiDictation) {  // aiDictation: only ever set on 语音输入
+    model.quotaPage = 0; model.aiLevel = 0; }
+    if (target == App::Codex) { model.page.ai.count = 0; model.page.ai.loaded = false; }
+    if (target != App::Dictation) model.aiDictation = false;
     if (target == App::Hacker) model.storyIndex = 0;
     if (target == App::Typhoon) { model.typhoonIndex = 0; model.page.typhoon.count = 0; model.page.typhoon.shown = 255; }
     if (target == App::Memo) {
@@ -920,6 +924,8 @@ void Runtime::key(Key key, uint64_t now) {
         if (active_ == App::Macro && model.macroDetail) { model.macroDetail = false; return; }
         if (active_ == App::Hot && model.hotDetail) { model.hotDetail = false; return; }
         if (active_ == App::Feishu && model.feishuDetail) { model.feishuDetail = model.feishuSaying = false; return; }
+        if (active_ == App::Codex && model.aiLevel) { model.aiLevel = 0; return; }
+        if (active_ == App::Dictation && model.aiDictation) { switchTo(App::Codex); return; }
         if (active_ == App::Memo && model.memoDetail && !model.voiceBusy()) { model.memoDetail = model.memoArmed = false; return; }
         if (active_ == App::Alarm && model.alarmRinging) { model.alarmRinging = false; return; }
         if (active_ == App::Alarm && model.alarmEdit && !model.voiceBusy()) { model.alarmEdit = false; return; }
@@ -1197,8 +1203,12 @@ void Runtime::key(Key key, uint64_t now) {
         auto& t = model.page.typhoon;
         if (t.count && (key == Key::Up || key == Key::Down)) model.typhoonIndex = (model.typhoonIndex + (key == Key::Up ? t.count - 1 : 1)) % t.count;
     } else if (active_ == App::Codex) {
-        // AI 额度: Up/Down select the previous or next tool's row; Confirm refreshes (LiveServices).
-        if (key == Key::Up || key == Key::Down) model.quotaPage = (model.quotaPage + (key == Key::Up ? Model::kQuotaTools - 1 : 1)) % Model::kQuotaTools;
+        // AI 控制器: Up/Down select a tool's row. Confirm on Codex or Claude Code lists its conversations, elsewhere it
+        // refreshes. In the list Up/Down pick one; Confirm opens it on the computer and 语音输入 (LiveServices).
+        auto& m = model; const unsigned count = m.page.ai.count;
+        if (m.aiLevel) { if (count && (key == Key::Up || key == Key::Down)) m.aiIndex = (m.aiIndex + (key == Key::Up ? count - 1 : 1)) % count; }
+        else if (key == Key::Up || key == Key::Down) m.quotaPage = (m.quotaPage + (key == Key::Up ? Model::kQuotaTools - 1 : 1)) % Model::kQuotaTools;
+        else if (key == Key::Confirm && m.quotaPage < Model::kAiTools) { m.aiLevel = 1; m.aiIndex = 0; m.page.ai.count = 0; m.page.ai.loaded = false; m.confirmTaken = true; }
     } else if (active_ == App::Feishu) {
         // Up/Down pick a message, in the list or the open one; Confirm opens it, and in the open one reads it aloud
         // (LiveServices; confirmTaken keeps the opening Confirm from reading too). Back closes it.

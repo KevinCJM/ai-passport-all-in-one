@@ -193,6 +193,7 @@ lv_obj_t *rows[kRows], *rowLabels[kRows], *rowBadges[kRows], *rowIcons[kRows], *
 lv_obj_t *headingMark,*hero,*heroBadge,*heroIcon,*heroTrack,*heroFill,*detail;
 lv_obj_t *pomoRoot,*pomoArc,*pomoTime,*pomoState,*pomoPhase,*pomoRounds,*pomoAction,*pomoActionIcon,*pomoActionText,*pomoDots[4];
 lv_obj_t *pomoTabs[3],*pomoTabText[3];
+lv_obj_t *aiView;  // AI 控制器's conversations (aiLevel 1), drawn over the quota rows
 lv_obj_t *dashboard,*dashboardTitle,*cards[2],*cardTitles[2],*cardValues[2],*cardDetails[2],*cardBars[2],*cardTrends[2],*dashboardFoot;
 lv_obj_t *quotaNames[2],*quotaResets[2],*quotaValues[2],*quotaFills[2],*quotaRows[5],*quotaRowNames[5],*quotaRowValues[5],*quotaDetail;int quotaShown{-1};App dashboardApp{};
 lv_point_precise_t trendPoints[24];
@@ -214,6 +215,7 @@ lv_obj_t *calendarRoot,*calendarTitle,*calendarYearName,*calendarGrid;
 lv_obj_t *countRoot,*countName,*countDays,*countUnit,*countDate,*countInfo,*countList,*countVoice;
 lv_obj_t *newsRoot,*newsQuotes,*newsMeta,*newsTitle,*newsDigest,*newsLines;
 const char* lineEnd(const char* s,int room,const lv_font_t* font=LV_FONT_DEFAULT);
+void drawAi(lv_event_t* e);
 lv_obj_t *sonarRoot,*sonarView,*sonarMode,*sonarInfo,*sonarDetail;
 lv_obj_t *swRoot,*swTime,*swState,*swLaps;
 lv_obj_t *histRoot,*histMeta,*histYear,*histKind,*histTitle,*histNext[3];
@@ -260,7 +262,7 @@ void initChrome(lv_obj_t* screen){
 void renderChrome(const Runtime& runtime){
     statusBarRender(runtime);const auto& m=runtime.model;
     const auto app=runtime.active();
-    const bool alt=app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Stock?m.stockDetail:app==App::Macro?m.macroDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Walkie?m.walkieAuto:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
+    const bool alt=app==App::Codex?m.aiLevel>0:app==App::Dictation?m.aiDictation:app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Stock?m.stockDetail:app==App::Macro?m.macroDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Walkie?m.walkieAuto:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
     const auto* hint=keyHint(app,m.settingsPage,m.focusRunning,*m.pairingCode,m.live&&m.livePhase==LivePhase::Loading,m.live&&m.livePhase==LivePhase::Error,alt,app==App::Wifi?m.wifiTab:app==App::Settings?(m.settingsPage==SettingsPage::City?dictationTab(m):m.settingsPage==SettingsPage::Idle?m.idleRow:m.wifiSetup?0u:m.wifiArmed?3u:m.wifiRow?2u:1u):
         app==App::Rate?voiceTab(m,m.rateArmed):app==App::Stock?voiceTab(m,m.stockArmed):app==App::Macro?0u:app==App::Countdown?voiceTab(m,m.countdownArmed):
         app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:m.page.score.fresh()?0u:1u):app==App::Feishu?(m.feishuDetail?1u:m.page.feishu.count?0u:2u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:m.soundView);
@@ -334,6 +336,7 @@ void initDashboard(lv_obj_t* screen,App app) {
             quotaRowNames[i]=label(quotaRows[i],12,2,130,LV_FONT_DEFAULT,kText);lv_obj_set_height(quotaRowNames[i],20);
             quotaRowValues[i]=label(quotaRows[i],140,2,64,LV_FONT_DEFAULT,kAccent);setTextAlign(quotaRowValues[i],LV_TEXT_ALIGN_RIGHT,0);
         }
+        aiView=lv_obj_create(dashboard);box(aiView,8,30,224,226,kBg);lv_obj_add_event_cb(aiView,drawAi,LV_EVENT_DRAW_MAIN,nullptr);
         quotaDetail=lv_obj_create(quotaRows[0]);box(quotaDetail,0,24,216,64,kPanel);lv_obj_set_style_bg_opa(quotaDetail,LV_OPA_TRANSP,0);
         for(unsigned i=0;i<2;++i){
             quotaNames[i]=label(quotaDetail,12,i*32,72,LV_FONT_DEFAULT,kMuted);lv_obj_set_height(quotaNames[i],20);
@@ -1966,18 +1969,19 @@ lv_obj_t *dictationRoot,*dictationView;
 constexpr uint32_t kDictation=0xb59cff;
 void drawDictation(lv_event_t* e){
     const auto& m=*drawModel;auto p=painter(e);const uint64_t now=esp_timer_get_time()/1000000;
-    if(m.voiceBusy()){drawListening(p,m,now,"最长 60 秒 · 到时自动结束","文字将输入到电脑光标处");return;}
+    // Opened on an AI 控制器 conversation: the text goes there (liveLines[3] names it), Down sends it.
+    if(m.voiceBusy()){drawListening(p,m,now,"最长 60 秒 · 到时自动结束",m.aiDictation?"文字将输入到 AI 对话":"文字将输入到电脑光标处");return;}
     const bool done=!strcmp(m.liveValue,"done"),failed=!strcmp(m.liveValue,"empty")||!strcmp(m.liveValue,"fail");
     // Status: the last outcome (a success fades after 4 s, a failure stays), then the link on the right.
     if(failed||!m.bridgeAlive)p.text(failed?m.liveState:"未连接电脑助手",0,0,223,kMemoRed);
     else if(!strcmp(m.liveValue,"key")&&now-m.dictationAt<4)p.text(m.liveState,0,0,150,kAccent);
-    else p.text(done&&now-m.dictationAt<4?"已输入到电脑":"输入到电脑光标处",0,0,150,done&&now-m.dictationAt<4?kAccent:kMuted);
+    else p.text(done&&now-m.dictationAt<4?"已输入到电脑":m.aiDictation?(*m.liveLines[3]?m.liveLines[3]:"输入到 AI 对话"):"输入到电脑光标处",0,0,165,done&&now-m.dictationAt<4?kAccent:kMuted);
     if(!failed&&m.bridgeAlive&&*m.liveLines[2]){p.rect(170,6,177,13,kAccent,4);p.text(m.liveLines[2],182,0,223,kAccent);}
     p.rect(112-46,76-46,112+46,76+46,0x2a2440,46);
     p.rect(112-38,76-38,112+38,76+38,kDictation,38);
     p.text(ICON_MIC,62,64,162,kBg,LV_TEXT_ALIGN_CENTER,&passport_icon_font_24);
     p.text("按确认开始说话",0,132,223,kText,LV_TEXT_ALIGN_CENTER);
-    p.text("下键：回车    上键：删除整行",0,154,223,0x5f7f94,LV_TEXT_ALIGN_CENTER);
+    p.text(m.aiDictation?"下键：发送    上键：删除":"下键：回车    上键：删除整行",0,154,223,0x5f7f94,LV_TEXT_ALIGN_CENTER);
     // The last input: its start (two lines, "…" when cut short), length and time.
     p.rect(0,182,223,254,kPanel,8);
     if(!*m.liveLines[0]){p.text("还没有输入",0,206,223,kMuted,LV_TEXT_ALIGN_CENTER);return;}
@@ -2611,11 +2615,41 @@ void quotaMove(lv_obj_t* row,int32_t y,int32_t h){
 #endif
     lv_obj_set_y(row,y);lv_obj_set_height(row,h);
 }
+static const char* const kAiNames[Model::kQuotaTools]={"OpenAI Codex","Claude Code","Gemini Agy","Cursor & GrokBot","OpenCode Go"};
+// AI 控制器's conversations of one tool: the picked one shows the head of its reply, the others their folder and age.
+// Replied and not opened yet: a dot and 新回复; running: 运行中.
+void aiAge(char* out,size_t size,unsigned minutes){
+    if(minutes<1)snprintf(out,size,"刚刚");else if(minutes<60)snprintf(out,size,"%u分钟",minutes);
+    else if(minutes<1440)snprintf(out,size,"%u小时",minutes/60);else snprintf(out,size,"%u天",minutes/1440);
+}
+void drawAi(lv_event_t* e){
+    const auto& m=*drawModel;auto p=painter(e);const auto& v=m.page.ai;char text[96],age[16];
+    if(!v.count){p.text(v.loaded?"24 小时内没有对话":"正在读取对话…",0,80,223,kMuted,LV_TEXT_ALIGN_CENTER);return;}
+    int y=0;
+    for(unsigned i=0;i<v.count;++i){
+        const auto& r=v.items[i];const bool picked=i==m.aiIndex%v.count;const int h=picked&&*r.reply?62:38;
+        p.rect(0,y,223,y+h,picked?kBorder:kPanel,8);
+        if(r.state==3)p.rect(3,y+8,8,y+13,kAccent,3);
+        aiAge(age,sizeof(age),r.minutes);
+        const char* state=r.state==3?"新回复":r.state==1?"运行中":age;
+        p.text(state,150,y+1,217,r.state==3?kAccent:r.state==1?0xffe08a:kMuted,LV_TEXT_ALIGN_RIGHT);
+        const char* end=lineEnd(r.title,136);fitText(text,sizeof(text),r.title,end-r.title);p.text(text,12,y+1,148,kText);
+        if(picked&&*r.reply)paragraph(p,r.reply,y+20,2,kMuted,12,217);
+        else{snprintf(text,sizeof(text),"%s · %s",r.folder,age);p.text(text,12,y+18,217,0x5f7f94);}
+        y+=h+2;
+    }
+}
 void renderQuotas(const Model& model){
-    static const char* const tools[Model::kQuotaTools]={"OpenAI Codex","Claude Code","Gemini Agy","Cursor & GrokBot","OpenCode Go"};
     const unsigned page=model.quotaPage%Model::kQuotaTools;
+    const auto& tools=kAiNames;
     char text[64],name[64],reset[64];
-    setLabel(dashboardTitle,"AI 额度");
+    drawModel=&model;
+    visible(aiView,model.aiLevel);for(auto* row:quotaRows)visible(row,!model.aiLevel);
+    if(model.aiLevel){
+        snprintf(text,sizeof(text),"%s · 对话",tools[page]);setLabel(dashboardTitle,text);
+        lv_obj_invalidate(aiView);setLabel(dashboardFoot,"");return;  // the list reaches the footer, which says the keys
+    }
+    setLabel(dashboardTitle,"AI 控制器");
     const auto shade=[](bool known,int left){return !known?kMuted:left<=10?kWarn:left<=30?0xffe08a:kAccent;};
     for(unsigned i=0;i<Model::kQuotaTools;++i){
         // Collapsed rows show the tighter of the two windows.
@@ -2623,7 +2657,11 @@ void renderQuotas(const Model& model){
         const bool known=left<=100,selected=i==page;
         setLabel(quotaRowNames[i],tools[i]);setTextColor(quotaRowNames[i],lv_color_hex(selected?kText:kMuted),0);
         if(known)snprintf(text,sizeof(text),"%d%%",left);else strcpy(text,"--");
-        setLabel(quotaRowValues[i],selected?"":text);setTextColor(quotaRowValues[i],lv_color_hex(shade(known,left)),0);
+        // Codex and Claude Code: 新回复 N (an AI finished and that is not opened yet) or 运行中 instead of the share.
+        const auto* ai=i<Model::kAiTools?model.aiRows[i]:nullptr;
+        if(ai&&ai[0]){snprintf(text,sizeof(text),"新回复 %u",unsigned(ai[0]));setLabel(quotaRowValues[i],text);setTextColor(quotaRowValues[i],lv_color_hex(kAccent),0);}
+        else if(ai&&ai[1]){setLabel(quotaRowValues[i],"运行中");setTextColor(quotaRowValues[i],lv_color_hex(0xffe08a),0);}
+        else{setLabel(quotaRowValues[i],selected?"":text);setTextColor(quotaRowValues[i],lv_color_hex(shade(known,left)),0);}
         lv_obj_set_style_border_width(quotaRows[i],selected?1:0,0);
         if(static_cast<int>(page)!=quotaShown)quotaMove(quotaRows[i],32+i*26+(i>page?64:0),selected?88:24);
     }
@@ -2641,7 +2679,7 @@ void renderQuotas(const Model& model){
         setTextColor(quotaValues[n],lv_color_hex(color),0);setBgColor(quotaFills[n],lv_color_hex(color),0);
         setWidth(quotaFills[n],std::max(1,left*192/100));
     }
-    setLabel(dashboardFoot,"百分比为剩余额度 · 上下选择");
+    setLabel(dashboardFoot,page<Model::kAiTools?"确认：看对话 · 上下选择":"百分比为剩余额度 · 上下选择");
 }
 void renderDashboard(App app,const Model& model) {
     if(app==App::Codex){renderQuotas(model);return;}

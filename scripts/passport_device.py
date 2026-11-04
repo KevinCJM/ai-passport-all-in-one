@@ -237,7 +237,7 @@ class Device:
   else:raise ValueError('unsupported USB report action')
   return {'ok':True,'result':result}
  def submit_event(self,event):
-  if event['operation'].startswith('open:'):return self.services.submit(event)  # 打开 Mac 程序 outlives its page
+  if event['operation'].startswith(('open:','aigo:')):return self.services.submit(event)  # 打开 Mac 程序 and AI 控制器's opening outlive their page
   with self.lock:state=dict(self.state)
   if (state.get('app'),state.get('generation'))!=(event['app'],event['generation']):
    state=self.request('/status')
@@ -318,7 +318,7 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 <main>
 <header><h1>AI Passport 设置</h1><span id=conn class=pill>正在检查连接…</span></header>
 <p class=lead>胸牌的设置保存在胸牌里，胸牌通过 USB 或蓝牙连着这台电脑时才能读取和保存。</p>
-<nav><a href="#assistant" class=assistant hidden>电脑助手</a><a href="#menu">菜单</a><a href="#status">状态牌</a><a href="#countdown">倒数日</a><a href="#qr">二维码</a><a href="#mac">打开电脑程序</a><a href="#feishu">飞书提醒</a><a href="#remote">模拟遥控</a><a href="#diag">诊断</a></nav>
+<nav><a href="#assistant" class=assistant hidden>电脑助手</a><a href="#menu">菜单</a><a href="#status">状态牌</a><a href="#countdown">倒数日</a><a href="#qr">二维码</a><a href="#mac">打开电脑程序</a><a href="#feishu">飞书提醒</a><a href="#ai">AI 控制器</a><a href="#remote">模拟遥控</a><a href="#diag">诊断</a></nav>
 
 <section id=assistant class=assistant hidden><h2>电脑助手</h2>
 <div class=row><span id=aStatus class=pill>正在检查…</span></div><p id=aMessage class=hint></p><div id=aCode class=code hidden></div>
@@ -356,6 +356,13 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 <label class=rows>不提醒（名字或群名，用逗号分开；胸牌页面里仍然列出）<textarea id=fsMute rows=2 style="width:100%" placeholder="例如：闲聊群"></textarea></label>
 <div class=actions><button class=primary onclick="fsSave()">保存</button><button onclick="fsTest()">发一条测试提醒</button><span id=fsResult class=out></span></div></section>
 
+<section id=ai><h2>AI 控制器</h2><p class=muted>胸牌「AI 控制器」页列出 24 小时内的 Codex 和 Claude Code 对话，AI 回复完的那一行带提示。在胸牌上选中对话按确认，电脑就打开它，光标停在输入框，胸牌转到语音输入：确认说话，下键发送，上键删除。</p>
+<p class=hint>对话还开着时，助手会切到它所在的终端。Ghostty、系统终端、iTerm 能切到对应的标签；Warp 只能切到窗口。对话没在运行时，在下面选的终端里新开一个标签接着聊。</p>
+<label class=row>Codex 用 <select id=aiCodex><option value=app>Codex App</option><option value=terminal>终端（codex resume）</option></select></label>
+<label class=row>Claude Code 用 <select id=aiClaude><option value=terminal>终端（claude --resume）</option></select></label>
+<label class=row>新开对话用的终端 <select id=aiTerm></select></label>
+<div class=actions><button class=primary onclick="aiSave()">保存</button><span id=aiResult class=out></span></div>
+<h3>最近的对话</h3><div id=aiList class=rows></div></section>
 <section id=remote><h2>模拟遥控</h2><p class=muted>点一下等于按一下胸牌上对应的键，长按也一样。</p>
 <div class="row remote"><button onclick="act('up')">上</button><button onclick="act('down')">下</button><button onclick="act('ok')">确认</button><button onclick="act('ap_on')">长按上</button><button onclick="act('settings')">长按下</button><button onclick="act('back')">长按确认</button><span id=actResult class=out></span></div></section>
 <section id=diag><h2>诊断</h2><p class=muted>助手和胸牌之间的连接状态，每 2 秒刷新。遇到问题时复制下来发给开发者。</p>
@@ -417,6 +424,13 @@ async function fsLoad(){try{const r=await (await fetch('/api/feishu')).json(),st
 async function fsSave(){try{await post('/api/feishu',{mode:+$('#fsMode').value,vip:$('#fsVip').value,mute:$('#fsMute').value});say($('#fsResult'),'✓ 已保存，马上生效','ok');fsLoad()}catch(e){say($('#fsResult'),'保存失败：'+e.message,'err')}}
 async function fsTest(){try{await post('/api/feishu-test',{});say($('#fsResult'),'已发送，看胸牌底部','ok')}catch(e){say($('#fsResult'),'胸牌没有响应：请确认已连接','err')}}
 fsLoad();
+const aiStates=['','运行中','已回复','新回复'];
+async function aiLoad(){try{const r=await (await fetch('/api/ai')).json();$('#aiCodex').value=r.config.codex;$('#aiClaude').value=r.config.claude;
+ $('#aiTerm').replaceChildren(...r.terminals.map(t=>{const o=document.createElement('option');o.value=t.name;o.textContent=t.name+(t.installed?'':'（未安装）');return o}));$('#aiTerm').value=r.config.terminal;
+ $('#aiList').replaceChildren(...r.sessions.map(x=>{const d=document.createElement('div');d.className='row';const s=document.createElement('span');s.textContent=(x.tool=='codex'?'Codex':'Claude')+' · '+x.title+' · '+x.folder+(aiStates[x.state]?' · '+aiStates[x.state]:'');
+  const b=document.createElement('button');b.textContent='在电脑打开';b.onclick=async()=>{try{say($('#aiResult'),(await post('/api/ai-go',{tool:x.tool,id:x.id})).note,'ok');aiLoad()}catch(e){say($('#aiResult'),'失败：'+e.message,'err')}};d.append(s,b);return d}))}catch(e){say($('#aiResult'),'读取失败：'+e.message,'err')}}
+async function aiSave(){try{await post('/api/ai',{codex:$('#aiCodex').value,claude:$('#aiClaude').value,terminal:$('#aiTerm').value});say($('#aiResult'),'✓ 已保存，马上生效','ok')}catch(e){say($('#aiResult'),'保存失败：'+e.message,'err')}}
+aiLoad();
 
 async function act(command){const out=$('#actResult');try{await post('/api/action',{command});say(out,'')}catch(e){say(out,'胸牌没有响应','err')}}
 async function copyDiag(){try{await navigator.clipboard.writeText($('#state').textContent);say($('#diagResult'),'已复制')}catch(e){say($('#diagResult'),'复制失败，请手动选中复制','err')}}
@@ -469,6 +483,7 @@ class Handler(BaseHTTPRequestHandler):
    if self.path=='/api/device-info':return self.send(200,DEVICE.request('/wifi/status'))
    if self.path=='/api/mac-apps':return self.send(200,DEVICE.services.mac_config())
    if self.path=='/api/feishu':return self.send(200,DEVICE.services.feishu.state())
+   if self.path=='/api/ai':return self.send(200,DEVICE.services.ai.web())
    # What the badge has saved now (0.5.28+), so the page edits that instead of a stale browser copy.
    if self.path=='/api/status-labels':return self.send(200,DEVICE.request('/content/status'))
    if self.path=='/api/countdowns':return self.send(200,DEVICE.request('/content/countdowns'))
@@ -496,6 +511,8 @@ class Handler(BaseHTTPRequestHandler):
    elif self.path=='/api/qr-codes':result=DEVICE.qr_codes(data['codes'])
    elif self.path=='/api/mac-apps':result=DEVICE.services.set_mac_aliases(data['aliases'])
    elif self.path=='/api/feishu':result=DEVICE.services.feishu.configure(int(data['mode']),data['vip'],data['mute'])
+   elif self.path=='/api/ai':result=DEVICE.services.ai.configure(data)
+   elif self.path=='/api/ai-go':result={'note':DEVICE.services.ai.open(str(data['tool']),str(data['id']))}
    elif self.path=='/api/feishu-test':result=DEVICE.services.feishu_test()
    elif self.path=='/api/mac-open':result={'note':DEVICE.services.mac.open_path(data['path'])}
    else:return self.send(404,{'error':'not found'})

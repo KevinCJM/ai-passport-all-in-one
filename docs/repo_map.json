@@ -652,6 +652,7 @@
         "scripts/passport_dictation.py",
         "scripts/passport_guard.py",
         "scripts/passport_mac_open.py",
+        "scripts/passport_ai_sessions.py",
         "scripts/passport_services.py",
         "scripts/passport_ppp_gateway.cpp",
         "scripts/build_passport_assistant.py",
@@ -673,6 +674,7 @@
         "tests/test_passport_menu.py",
         "tests/test_passport_guard.py",
         "tests/test_passport_mac_open.py",
+        "tests/test_passport_ai_sessions.py",
         "tests/test_passport_bluetooth_dictation.py",
         "scripts/smoke_windows_assistant.py"
       ],

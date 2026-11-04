@@ -208,6 +208,10 @@ void LiveServices::request(const char* operation) {
     if(runtime_.active()==App::Guard){const auto& g=runtime_.model.guard;const char* verb=!strcmp(operation,"cal")||!strcmp(operation,"lock")?operation:"cfg";
         const char digits[]{char('0'+g.distance%10),char('0'+g.delay%10),char('0'+g.keep%10),char('0'+g.wake%10),0};
         snprintf(stock,sizeof(stock),"%.4s:%s",verb,digits);operation=stock;}
+    // AI 控制器 in a tool's conversations asks for them ("list:<row>"), without the quotas.
+    if(runtime_.active()==App::Codex&&runtime_.model.aiLevel&&(!strcmp(operation,"refresh")||!strcmp(operation,"enter"))){snprintf(stock,sizeof(stock),"list:%u",runtime_.model.quotaPage);operation=stock;}
+    // 语音输入 opened on one of them types into it.
+    if(runtime_.active()==App::Dictation&&runtime_.model.aiDictation&&!strcmp(operation,"enter"))operation="enter:ai";
     // 台风 too: its list with the picked typhoon's track.
     if(runtime_.active()==App::Typhoon&&(!strcmp(operation,"refresh")||!strcmp(operation,"enter"))){typhoonAsked_=runtime_.model.typhoonIndex;snprintf(stock,sizeof(stock),"show:%u",runtime_.model.typhoonIndex);operation=stock;}
     // 语音笔记's task (and 状态牌's) reads every Confirm itself, in order; a deferred one would start or stop listening late.
@@ -245,6 +249,19 @@ void LiveServices::openOnMac(const char* name,uint64_t now){
     board::event(operation,macRequest_,static_cast<unsigned>(App::Home),runtime_.generation());
 #endif
     printf("MAC_OPEN {\"request\":%lu,\"operation\":\"%s\"}\n",static_cast<unsigned long>(macRequest_),operation);
+}
+// AI 控制器: the computer brings the picked conversation up, its input focused (the answer shows in the footer), and
+// 语音输入 opens to speak into it.
+void LiveServices::openConversation(uint64_t now){
+    auto& m=runtime_.model;auto& item=m.page.ai.items[m.aiIndex%m.page.ai.count];
+    macRequest_=++requestId_;char operation[48];snprintf(operation,sizeof(operation),"aigo:%u:%s",m.quotaPage,item.id);
+    copy(m.macNote,"Mac 正在打开对话…");m.macAt=now;
+    if(item.state==3){item.state=2;auto& unread=m.aiRows[m.quotaPage%Model::kAiTools][0];if(unread)--unread;}
+#ifdef PASSPORT_DEVICE
+    board::event(operation,macRequest_,static_cast<unsigned>(App::Home),runtime_.generation());
+#endif
+    printf("MAC_OPEN {\"request\":%lu,\"operation\":\"%s\"}\n",static_cast<unsigned long>(macRequest_),operation);
+    m.aiDictation=true;runtime_.switchTo(App::Dictation);
 }
 void LiveServices::persistFocus() {
     const auto& model=runtime_.model;
@@ -322,6 +339,7 @@ void LiveServices::action(Key key) {
         loadingAt_=requestedAt_=esp_timer_get_time()/1000000;
         request(m.cityRow?"locate":"speak");return;
     }
+    if(key==Key::Confirm&&active==App::Codex&&runtime_.model.aiLevel&&!runtime_.model.confirmTaken&&runtime_.model.page.ai.count){openConversation(esp_timer_get_time()/1000000);return;}
     if(key==Key::Confirm&&runtime_.model.livePhase==LivePhase::Error&&active!=App::Macro) { request("enter");runtime_.model.livePhase=LivePhase::Loading;loadingAt_=requestedAt_=esp_timer_get_time()/1000000;return; }
     if(key==Key::Confirm&&active==App::Daily) { request("say"); return; }
     // Confirm on the list opens the player (tick asks for the program); in the player it plays or pauses.
@@ -693,7 +711,22 @@ bool LiveServices::tick(uint64_t now) {
                 }
             }
             if(active==App::Quiz&&model.livePhase!=LivePhase::Loading){quizAsked_=false;if(model.livePhase==LivePhase::Error)model.quizWant=false;}
-            if(active==App::Codex) for(unsigned i=0;i<std::size(model.quotas);++i){const auto* window=cJSON_GetArrayItem(field(json,"windows"),i);auto& quota=model.quotas[i];
+            if(active==App::Codex&&cJSON_IsObject(field(json,"ai"))){
+                // AI 控制器: [unread, running] a tool; a tool's conversations as [id8, title, folder, state, minutes, reply].
+                const auto* o=field(json,"ai");const auto value=[](const cJSON* f,double most){return std::clamp(cJSON_IsNumber(f)?f->valuedouble:0.0,0.0,most);};
+                for(unsigned t=0;t<Model::kAiTools;++t)for(unsigned k=0;k<2;++k)model.aiRows[t][k]=value(cJSON_GetArrayItem(cJSON_GetArrayItem(field(o,"rows"),t),k),99);
+                if(cJSON_IsArray(field(o,"list"))){
+                    auto& v=model.page.ai;v.count=0;v.loaded=true;const cJSON* item;
+                    cJSON_ArrayForEach(item,field(o,"list")){
+                        if(v.count==v.items.size())break;
+                        const auto text=[&](int i){const auto* f=cJSON_GetArrayItem(item,i);return cJSON_IsString(f)?f->valuestring:"";};
+                        auto& r=v.items[v.count++];copy(r.id,text(0));copy(r.title,text(1));copy(r.folder,text(2));copy(r.reply,text(5));
+                        r.state=value(cJSON_GetArrayItem(item,3),3);r.minutes=value(cJSON_GetArrayItem(item,4),9999);
+                    }
+                    if(model.aiIndex>=v.count)model.aiIndex=0;
+                }
+            }
+            if(active==App::Codex&&cJSON_IsArray(field(json,"windows"))) for(unsigned i=0;i<std::size(model.quotas);++i){const auto* window=cJSON_GetArrayItem(field(json,"windows"),i);auto& quota=model.quotas[i];
                 const double used=number(window,"used",-1),minutes=number(window,"minutes",0);
                 quota.known=used>=0&&used<=100&&minutes>0&&minutes<=65535;quota.used=quota.known?used:0;quota.minutes=quota.known?minutes:0;quota.resets=std::clamp(number(window,"resets",0),0.0,double(UINT32_MAX));
             }
@@ -726,7 +759,7 @@ bool LiveServices::tick(uint64_t now) {
     const bool hostMissing=!hostContact_.load()||now>hostContact_.load()+5;
     model.bridgeAlive=!hostMissing;
     if(needsHost){
-        const char* stage=active==App::Chat?"云端连接中":active==App::Dictation?(usb_?"USB 连接中":"蓝牙连接中"):active==App::Codex?"读取额度中":active==App::Monitor?"读取电脑状态":active==App::Guard?"正在连接电脑":"天气更新中";
+        const char* stage=active==App::Chat?"云端连接中":active==App::Dictation?(usb_?"USB 连接中":"蓝牙连接中"):active==App::Codex?"读取 AI 状态中":active==App::Monitor?"读取电脑状态":active==App::Guard?"正在连接电脑":"天气更新中";
         const bool computerLinked=usb_||model.bleConnected||bleReady_;
         const char* hint=computerConnectionHint(usb_,model.bleConnected||bleReady_,!hostMissing);
         if(hint)stage=hint;

@@ -142,7 +142,7 @@ TERMINALS={'com.apple.Terminal','com.googlecode.iterm2','dev.warp.Warp-Stable','
 class BluetoothDictation:
     def __init__(self,services):
         self.services=services; self.stop=threading.Event(); self.thread=None; self.context=None
-        self.session=None; self.expected=None; self.recognizer=None; self.delivery=None; self.keyboard=None
+        self.session=None; self.expected=None; self.recognizer=None; self.delivery=None; self.keyboard=None; self.target=None
         self.last=None   # the last text typed and when (epoch seconds)
         self.pressing=threading.Lock()
         self.stats={'state':'未连接','transport':'BLE','pcm_bytes':0,'sequence_errors':0,'sessions':0,'completed':0,'physical_adapter':False}
@@ -152,8 +152,9 @@ class BluetoothDictation:
         if not reply.get('ok'): raise RuntimeError(reply.get('error','BLE operation failed'))
         return reply['result']
 
-    def open(self,context):
-        self.close(); self.context=context; self.stop=threading.Event()
+    def open(self,context,target=None):
+        """target: AI 控制器's conversation (entered from there): the text and keys go to it, focused again first."""
+        self.close(); self.context=context; self.stop=threading.Event(); self.target=target
         self.stats.pop('error',None)
         self.services.require_dictation_permissions()
         wired=getattr(self.services.sim,'transport',None)=='usb'
@@ -173,7 +174,8 @@ class BluetoothDictation:
         text,at=self.last or ('',0)
         size='%d 字 · %s'%(len(text),time.strftime('%H:%M',time.localtime(at))) if text else ''
         state=state or self.stats['state'];self.stats['state']=state
-        return {'state':state,'value':value,'lines':[text.encode()[:HEAD].decode('utf-8','ignore'),size,'USB' if self.stats['transport']=='USB' else '蓝牙','']}
+        return {'state':state,'value':value,'lines':[text.encode()[:HEAD].decode('utf-8','ignore'),size,'USB' if self.stats['transport']=='USB' else '蓝牙',
+                                                  '→ '+self.target.target['title'][:24] if self.target and self.target.target else '']}
 
     def publish(self,value,state=None):
         self.services.push(self.status(value,state),self.context)
@@ -214,6 +216,7 @@ class BluetoothDictation:
         with self.pressing:
             if self.delivery:self.delivery.join(30)
             try:
+                if self.target:self.target.refocus()
                 if which==1:self.key('enter');label='已回车'
                 else:self.key('delete_line');label='已删除整行'
             except PermissionError:return self.publish('fail','需要辅助功能授权')
@@ -236,7 +239,9 @@ class BluetoothDictation:
             return self.publish('fail','识别失败，请重试')
         text=recognizer.text.strip()
         if not text:return self.publish('empty','没有听清，请再说一次')
-        try:restore=paste(text,self.key)
+        try:
+            if self.target:self.target.refocus()
+            restore=paste(text,self.key)
         except PermissionError:return self.publish('fail','需要辅助功能授权')
         except Exception as error:
             self.stats['error']=type(error).__name__;return self.publish('fail','输入失败，请重试')

@@ -20,7 +20,8 @@ from urllib.parse import urlencode
 import psutil
 from passport_audio import AudioBridge,MediaPlayer
 from passport_xiaozhi import XiaoZhi
-from passport_dictation import BluetoothDictation
+from passport_dictation import BluetoothDictation,paste
+from passport_ai_sessions import AISessions,TOOLS as AI_TOOLS
 from passport_guard import Guard
 from passport_ledger import Ledger
 from passport_mac_open import MacOpener
@@ -246,6 +247,7 @@ class Services:
         self.settings={'ip_location_allowed':False}
         if (DATA/'settings.json').exists(): self.settings.update(json.loads((DATA/'settings.json').read_text()))
         self.feishu=Feishu(self.settings,self.save_settings)
+        self.ai=AISessions(self.settings,self.save_settings,DATA/'ai-read.json',self.type_line)
         threading.Thread(target=self.run,daemon=True).start()
         if sys.platform=='darwin':threading.Thread(target=self.feishu_loop,daemon=True).start()
         threading.Thread(target=self.heartbeat,daemon=True).start()
@@ -256,7 +258,7 @@ class Services:
             except Exception:pass
 
     def submit(self,item):
-        if item['operation'].startswith('open:'):
+        if item['operation'].startswith(('open:','aigo:')):
             threading.Thread(target=self.open_on_mac,args=(item,),daemon=True).start();return
         context=(item['app'],item['generation'])
         if context!=self.requested_context:
@@ -286,7 +288,13 @@ class Services:
 
     def open_on_mac(self,item):
         """打开 Mac 程序: whatever page the badge shows by now, it gets the note for its request."""
-        try:note=self.mac.open(item['operation'][5:])
+        verb,_,rest=item['operation'].partition(':')
+        try:
+            if verb=='aigo':
+                # AI 控制器: "aigo:<row>:<id8>" brings that conversation up, its input focused.
+                row,_,prefix=rest.partition(':')
+                note=self.ai.open(AI_TOOLS[int(row)],prefix) if row.isdigit() and int(row)<len(AI_TOOLS) else '对话不存在'
+            else:note=self.mac.open(rest)
         except Exception as error:note='Mac 打开失败';self.details['mac_open_error']=type(error).__name__
         self.details['mac_open']=self.mac.history
         try:self.post({'mac':note,'request':item['request']})
@@ -421,6 +429,23 @@ class Services:
             self.usage_cache[name]=(time.monotonic(),data);self.details[name]=data
         return data['windows']
 
+    def type_line(self,text,enter):
+        """Types a line at the cursor (a Warp tab resuming a conversation), Return after it when asked."""
+        restore=paste(text,self.dictation_ble.key)
+        if enter:time.sleep(.2);self.dictation_ble.key('enter')
+        restore()
+
+    def ai_page(self,op):
+        """AI 控制器: the rows (quotas and conversation hints); "list:<row>" that tool's conversations, without the
+        quotas (an "aigo:" event opens one: open_on_mac)."""
+        verb,_,row=op.partition(':')
+        if verb=='list' and row.isdigit() and int(row)<len(AI_TOOLS):
+            return {'state':'对话已更新','value':'','lines':[],'ai':self.ai.badge(AI_TOOLS[int(row)])}
+        result=self.codex_snapshot()
+        try:result['ai']=self.ai.badge()
+        except Exception as error:self.details['ai_error']=type(error).__name__
+        return result
+
     def codex_snapshot(self):
         # Codex and Claude Code fail independently; the page errors only when neither can be read.
         try: data=self.codex.snapshot(); failure=None
@@ -498,7 +523,7 @@ class Services:
         if op=='audio_unavailable': return {'state':'音频不可用','value':'--','lines':['C3 音频初始化或内存准入失败']}
         if app==0: return self.weather()
         if app==5: return self.monitor()
-        if app==3: return self.codex_snapshot()
+        if app==3: return self.ai_page(op)
         if app==4: return {'state':'本地计时','value':'','lines':[]}
         if app==49: return self.feishu_page(op)
         if app==41:
@@ -509,7 +534,7 @@ class Services:
                 self.guard_context=context;threading.Thread(target=self.guard_loop,args=(context,),daemon=True).start()
             return self.guard.state()
         if app==2:
-            if op=='enter': self.dictation_ble.open((app,request['generation']))
+            if op in ('enter','enter:ai'): self.dictation_ble.open((app,request['generation']),self.ai if op=='enter:ai' else None)
             return self.dictation_ble.status()
         if app==1:
             if self.cloud is not None and not self.hello_ready():

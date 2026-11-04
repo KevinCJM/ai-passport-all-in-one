@@ -1484,6 +1484,28 @@ extern "C" void app_main() {
     runtime.key(Key::Down,0);CHECK(runtime.model.quotaPage==0);
     runtime.model.quotaPage=2;uiRender(runtime);uiCapture("codex_quota_gemini");
     runtime.switchTo(App::Home);runtime.switchTo(App::Codex);CHECK(runtime.model.quotaPage==0);  // entering selects the first row
+    {   // AI 控制器: row hints, a tool's conversations, 语音输入 opened on one and Back to them.
+        auto& m=runtime.model;m.aiRows[0][1]=1;m.aiRows[1][0]=2;  // Codex running; Claude Code: 2 new replies
+        uiRender(runtime);uiCapture("ai_rows");
+        runtime.key(Key::Down,0);runtime.key(Key::Confirm,0);CHECK(m.aiLevel==1&&m.confirmTaken&&m.page.ai.count==0&&!m.page.ai.loaded);
+        uiRender(runtime);uiCapture("ai_list_loading");
+        auto& v=m.page.ai;v.loaded=true;v.count=3;
+        v.items[0]={"fbe92ef9","AI 控制器","AI-Passport","下面是「AI 控制器」的分析和设计。先查了各家 AI 的会话文件和完成信号",3,2};
+        v.items[1]={"716fef56","Gemini 不可用问题","ai-passport","",1,0};
+        v.items[2]={"c89cd35d","远端main分支最新代码标题","ai-passport","都推送好了",2,1064};
+        uiRender(runtime);uiCapture("ai_list");
+        runtime.key(Key::Down,0);CHECK(m.aiIndex==1);uiRender(runtime);uiCapture("ai_list_running");
+        runtime.key(Key::Up,0);runtime.key(Key::Up,0);CHECK(m.aiIndex==2);
+        runtime.key(Key::Back,0);CHECK(m.aiLevel==0&&runtime.active()==App::Codex&&m.quotaPage==1);
+        runtime.key(Key::Confirm,0);CHECK(m.aiLevel==1);
+        // LiveServices opens one: 语音输入 types into it, and its Back comes back to the list.
+        m.aiDictation=true;CHECK(runtime.switchTo(App::Dictation)==Result::Ok&&m.aiDictation);uiRender(runtime);uiCapture("ai_dictation");
+        runtime.key(Key::Back,0);CHECK(runtime.active()==App::Codex&&m.aiLevel==1&&m.quotaPage==1&&!m.aiDictation);
+        runtime.switchTo(App::Home);runtime.switchTo(App::Codex);CHECK(m.aiLevel==0&&m.quotaPage==0);
+        m.aiDictation=true;runtime.switchTo(App::Dictation);runtime.switchTo(App::Home);CHECK(!m.aiDictation);  // left another way
+        runtime.switchTo(App::Codex);runtime.model.quotaPage=2;runtime.key(Key::Confirm,0);CHECK(m.aiLevel==0);  // quota-only rows
+        m.aiRows[0][1]=m.aiRows[1][0]=0;
+    }
     {   // Pomodoro fixture: third focus round, 18:23 left; then the same round paused.
         runtime.switchTo(App::Focus);auto& p=runtime.model;const auto saved=std::make_tuple(p.focusRunning,p.focusRemaining,p.focusRounds,p.focusDeadline);
         p.focusRounds=2;p.focusRemaining=1103;p.focusRunning=true;p.focusDeadline=~0ULL;
