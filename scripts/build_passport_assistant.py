@@ -16,7 +16,7 @@ from passport_signing import identity,sign,requirement
 ROOT=Path(__file__).resolve().parents[1]
 WORK=ROOT/'experiments/passport-assistant-build'
 SOURCES=WORK/'sources'
-VERSION='0.1.12'
+VERSION='0.1.13'
 BUILD_NUMBER='15'
 DIST=ROOT/f'releases/ai-passport-assistant-{VERSION}-preview'
 TOOLS=ROOT/'experiments/passport-connectivity-tools/bin'

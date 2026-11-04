@@ -103,6 +103,15 @@ class ServiceTests(TestCase):
         self.assertEqual(data['windows'][1]['resetsAt'],1793714400)
         self.assertEqual(opened.call_args.args[0].get_header('Authorization'),'Bearer ya29.test')
 
+    def test_gemini_usage_renews_an_expired_token_through_agy(self):
+        wrap=lambda token,expiry:NS(stdout='go-keyring-base64:'+base64.b64encode(json.dumps({'token':{'access_token':token,'expiry':expiry}}).encode()).decode())
+        response=MagicMock();response.read.return_value=b'{"models":{}}';response.__enter__.return_value=response
+        with patch('passport_services.subprocess.run',side_effect=[wrap('old','2020-01-01T00:00:00+08:00'),NS(stdout=''),wrap('new','2099-01-01T00:00:00+08:00')]) as run,\
+             patch('passport_services.urllib.request.urlopen',return_value=response) as opened:
+            gemini_usage()
+        self.assertEqual(run.call_args_list[1].args[0][1:],['models'])
+        self.assertEqual(opened.call_args.args[0].get_header('Authorization'),'Bearer new')
+
     def test_codex_cache_avoids_restarting_or_refetching_on_reentry(self):
         reader=CodexReader();reader.start=Mock();reader.rpc=Mock(side_effect=[{'rateLimits':{'primary':{'usedPercent':12,'windowDurationMins':300}}},{'data':[]}])
         first=reader.snapshot();self.assertEqual(reader.snapshot(),first);reader.start.assert_called_once();self.assertEqual(reader.rpc.call_count,2)

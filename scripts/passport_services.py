@@ -9,6 +9,7 @@ import hashlib
 import os
 from pathlib import Path
 import queue
+import shutil
 import subprocess
 import sys
 import threading
@@ -193,13 +194,21 @@ def opencode_usage():
 
 
 def gemini_usage():
-    """Gemini's limits in Antigravity (the agy CLI's login, Mac keychain), with the token never refreshed or kept. Two
+    """Gemini's limits in Antigravity (the agy CLI's login, Mac keychain). The token lasts an hour and only agy refreshes
+    it, so an expired one is renewed by running `agy models`, which writes the new token back. Two
     rows: Pro, then Flash, each at its most used model. Antigravity gives a reset time per model but no window length,
     so the rows carry the 5-hour cadence it reports."""
     import base64
     if sys.platform=='win32':raise FileNotFoundError('Gemini usage is read on the Mac only')
-    raw=subprocess.run(['security','find-generic-password','-s','gemini','-a','antigravity','-w'],capture_output=True,text=True,timeout=10,check=True).stdout.strip()
-    token=json.loads(base64.b64decode(raw.split(':',1)[1]))['token']['access_token']
+    def read():
+        raw=subprocess.run(['security','find-generic-password','-s','gemini','-a','antigravity','-w'],capture_output=True,text=True,timeout=10,check=True).stdout.strip()
+        return json.loads(base64.b64decode(raw.split(':',1)[1]))['token']
+    token=read()
+    expiry=token.get('expiry')
+    if expiry and datetime.fromisoformat(expiry).timestamp()<time.time()+60:
+        agy=shutil.which('agy') or str(Path.home()/'.local/bin/agy')  # launchd's PATH lacks ~/.local/bin
+        subprocess.run([agy,'models'],stdin=subprocess.DEVNULL,capture_output=True,timeout=30,check=True);token=read()
+    token=token['access_token']
     # The API answers only the Antigravity client: a plain Python request is refused with 403.
     request=urllib.request.Request('https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',data=b'{}',headers={
         'Authorization':'Bearer '+token,'Content-Type':'application/json','User-Agent':'antigravity/1.4.10'})
