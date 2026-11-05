@@ -864,6 +864,13 @@ bool LiveServices::nativeBusy()const{
     return false;
 #endif
 }
+bool LiveServices::nativeOnline()const{
+#ifdef PASSPORT_DEVICE
+    return native_&&native_->online();
+#else
+    return false;
+#endif
+}
 bool LiveServices::stopAudio(){
 #ifdef PASSPORT_DEVICE
     if(native_&&!native_->idle()){native_->cancel(runtime_.generation()+1);return true;}

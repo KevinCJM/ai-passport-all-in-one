@@ -1,34 +1,34 @@
 /* Shared, offline menu editor: served by the badge and by the Mac assistant. */
 (function (scope) {
   'use strict';
-  const APPS = 64, PAGES = 8, NAME = 25, BYTES = 481;
+  const APPS = 64, PAGES = 8, NAME = 25, BYTES = 482, CATEGORIES = 6;
   const clone = value => JSON.parse(JSON.stringify(value));
   function decode(encoded) {
     const b = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
     if (b.length !== BYTES || b[0] !== 1) throw Error('配置版本不兼容，请更新固件和小助手');
-    const d = {mode:b[1], count:b[2], pageCount:b[3], hidden:[], categories:[...b.slice(12,17)], orders:[], assignment:[...b.slice(209,273)], pages:[...b.slice(273,281)], names:[]};
+    const d = {mode:b[1], count:b[2], pageCount:b[3], hidden:[], categories:[...b.slice(12,12+CATEGORIES)], orders:[], assignment:[...b.slice(12+CATEGORIES+3*APPS,12+CATEGORIES+4*APPS)], pages:[...b.slice(12+CATEGORIES+4*APPS,12+CATEGORIES+4*APPS+PAGES)], names:[]};
     for (let id=0; id<APPS; id++) if (b[4+(id>>3)] & (1<<(id%8))) d.hidden.push(id);
-    for (let m=0; m<3; m++) d.orders.push([...b.slice(17+m*APPS,17+m*APPS+d.count)]);
+    for (let m=0; m<3; m++) d.orders.push([...b.slice(12+CATEGORIES+m*APPS,12+CATEGORIES+m*APPS+d.count)]);
     const utf8 = new TextDecoder('utf-8', {fatal:true});
-    for (let p=0; p<PAGES; p++) {const name=b.slice(281+p*NAME,281+(p+1)*NAME);const end=name.indexOf(0);d.names.push(utf8.decode(name.slice(0,end<0?NAME:end)));}
+    for (let p=0; p<PAGES; p++) {const name=b.slice(12+CATEGORIES+4*APPS+PAGES+p*NAME,12+CATEGORIES+4*APPS+PAGES+(p+1)*NAME);const end=name.indexOf(0);d.names.push(utf8.decode(name.slice(0,end<0?NAME:end)));}
     return d;
   }
   function encode(d) {
     const b = new Uint8Array(BYTES);b[0]=1;b[1]=d.mode;b[2]=d.count;b[3]=d.pageCount;
     for (const id of d.hidden) b[4+(id>>3)] |= 1<<(id%8);
     b.set(d.categories,12);
-    for (let m=0;m<3;m++){b.fill(255,17+m*APPS,17+(m+1)*APPS);b.set(d.orders[m],17+m*APPS);}
-    b.set(d.assignment,209);b.set(d.pages,273);
+    for (let m=0;m<3;m++){b.fill(255,12+CATEGORIES+m*APPS,12+CATEGORIES+(m+1)*APPS);b.set(d.orders[m],12+CATEGORIES+m*APPS);}
+    b.set(d.assignment,12+CATEGORIES+3*APPS);b.set(d.pages,12+CATEGORIES+4*APPS);
     for(let p=0;p<d.pageCount;p++){
       const text=d.names[p], raw=new TextEncoder().encode(text);
       if(!text.trim()||[...text].length>8||raw.length>=NAME||/[\x00-\x1f\x7f]/.test(text))throw Error('页面名称请用1～8个字');
-      b.set(raw,281+p*NAME);
+      b.set(raw,12+CATEGORIES+4*APPS+PAGES+p*NAME);
     }
     return btoa(String.fromCharCode(...b));
   }
   function defaults(catalog) {
     const ids=catalog.flatMap(g=>g.apps.map(a=>a.id));
-    const d={mode:0,count:ids.length,pageCount:5,hidden:[],categories:[0,1,2,3,4],orders:[ids.slice(),ids.slice(),ids.slice()],assignment:Array(APPS).fill(0),pages:[0,1,2,3,4,5,6,7],names:Array(PAGES).fill('')};
+    const d={mode:0,count:ids.length,pageCount:CATEGORIES,hidden:[],categories:[0,1,2,3,4,5],orders:[ids.slice(),ids.slice(),ids.slice()],assignment:Array(APPS).fill(0),pages:[0,1,2,3,4,5,6,7],names:Array(PAGES).fill('')};
     // As defaultMenuLayout(): a category of more than nine goes on over another page, its name with 续.
     let p=0;catalog.forEach(g=>{g.apps.forEach((a,i)=>{if(i&&i%9===0)p++;if(i%9===0)d.names[p]=g.name.replace(/\s*·\s*/g,'').slice(0,i?7:8)+(i?'续':'');d.assignment[a.id]=p;});p++;});d.pageCount=p;
     return d;
@@ -77,7 +77,7 @@
       const ids=order();ids.splice(ids.indexOf(id),1);
       const at=before===undefined?-1:ids.indexOf(before);ids.splice(at<0?ids.length:at,0,id);
     }
-    function shiftPage(group,delta){const order=draft.mode===0?draft.categories:draft.pages;const i=order.indexOf(group),j=i+delta,limit=draft.mode===0?5:draft.pageCount;if(j<0||j>=limit)return;[order[i],order[j]]=[order[j],order[i]];}
+    function shiftPage(group,delta){const order=draft.mode===0?draft.categories:draft.pages;const i=order.indexOf(group),j=i+delta,limit=draft.mode===0?CATEGORIES:draft.pageCount;if(j<0||j>=limit)return;[order[i],order[j]]=[order[j],order[i]];}
     function drop(event,group,before){event.preventDefault();try{const payload=JSON.parse(event.dataTransfer.getData('text/plain'));change(()=>{if(payload.kind==='app')move(payload.id,group,before);else if(payload.kind==='page'&&!flat()){const order=draft.mode===0?draft.categories:draft.pages;const i=order.indexOf(payload.id),j=order.indexOf(group);order.splice(i,1);order.splice(j,0,payload.id);}});}catch(_){status.textContent='无法移动，请使用上移／下移按钮';}}
     function button(text,fn,parent,disabled=false){const b=el('button',text);b.type='button';b.disabled=disabled;b.onclick=fn;parent.append(b);return b;}
     function renderPreview(){
@@ -120,7 +120,7 @@
       renderPreview();actions.replaceChildren();button('恢复默认',()=>change(()=>{draft=defaults(catalog);previewPage=0;}),actions);
       const save=button('保存到胸牌',saveDraft,actions);save.className='pm-save';
     }
-    async function read(){if(busy)return;busy=true;reload.disabled=true;form.disabled=true;status.textContent='正在读取胸牌…';try{const state=await api('/menu');const groups=[];for(let g=0;g<5;g++)groups.push(await api('/menu/catalog?group='+g));catalog=groups;apps=catalog.flatMap((g,group)=>g.apps.map(a=>({...a,group})));byId=new Map(apps.map(a=>[a.id,a]));const next=decode(state.layout);if(next.count!==apps.length)throw Error('功能目录与配置不一致，请重新读取');draft=next;revision=state.revision;dirty=false;previewPage=0;render();form.disabled=false;status.textContent='已读取胸牌当前配置';}catch(e){status.textContent='读取失败：'+e.message;}finally{busy=false;reload.disabled=false;}}
+    async function read(){if(busy)return;busy=true;reload.disabled=true;form.disabled=true;status.textContent='正在读取胸牌…';try{const state=await api('/menu');const groups=[];for(let g=0;g<CATEGORIES;g++)groups.push(await api('/menu/catalog?group='+g));catalog=groups;apps=catalog.flatMap((g,group)=>g.apps.map(a=>({...a,group})));byId=new Map(apps.map(a=>[a.id,a]));const next=decode(state.layout);if(next.count!==apps.length)throw Error('功能目录与配置不一致，请重新读取');draft=next;revision=state.revision;dirty=false;previewPage=0;render();form.disabled=false;status.textContent='已读取胸牌当前配置';}catch(e){status.textContent='读取失败：'+e.message;}finally{busy=false;reload.disabled=false;}}
     async function saveDraft(){if(busy||!draft)return;busy=true;form.disabled=true;reload.disabled=true;status.textContent='正在保存到胸牌…';try{const layout=encode(draft),result=await api('/menu',{layout,revision});const until=Date.now()+20000;let saved=false;while(Date.now()<until){await new Promise(resolve=>setTimeout(resolve,300));const state=await api('/menu');if(state.done===result.ticket){if(state.result)throw Error('胸牌写入失败，原配置仍然保留');if(state.layout!==layout)throw Error('配置已被其他页面修改，请重新读取');revision=state.revision;saved=true;break;}if(!state.pending&&state.revision!==revision)throw Error('配置已变化，请重新读取');}if(!saved)throw Error('保存确认超时，请重新读取胸牌核对');dirty=false;status.textContent='已保存到胸牌，菜单已更新';}catch(e){status.textContent='保存失败：'+e.message;}finally{busy=false;form.disabled=false;reload.disabled=false;}}
     reload.onclick=read;scope.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});read();
   }

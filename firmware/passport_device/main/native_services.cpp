@@ -199,7 +199,7 @@ void NativeServices::poll(){
         }else{pendingReady_=false;busy_=true;memoryWaiting_=false;error_=0;}
     }
 }
-void NativeServices::run(void* context){auto& self=*static_cast<NativeServices*>(context);self.work();self.closeSocket();if((self.current_.app==App::Chat&&strcmp(self.current_.operation,"probe"))||self.transcribing()||self.current_.app==App::Radio||self.current_.app==App::Podcast||self.current_.app==App::Words||self.current_.app==App::Daily||self.current_.app==App::Feishu)self.audio_.stop();self.ready_=self.listening_=self.speaking_=self.playing_=false;self.finished_=true;vTaskSuspend(nullptr);}
+void NativeServices::run(void* context){auto& self=*static_cast<NativeServices*>(context);self.work();self.closeSocket();if((self.current_.app==App::Chat&&strcmp(self.current_.operation,"probe"))||self.transcribing()||self.current_.app==App::Radio||self.current_.app==App::Podcast||self.current_.app==App::Words||self.current_.app==App::Daily||self.current_.app==App::Feishu)self.audio_.stop();self.ready_=self.listening_=self.speaking_=self.playing_=self.online_=false;self.finished_=true;vTaskSuspend(nullptr);}
 void NativeServices::work(){if(cancelled())return;if(!strcmp(current_.operation,"speak"))memo();else if(!strcmp(current_.operation,"locate"))locate();else if(current_.app==App::Home)home();else if(current_.app==App::Chat)chat();else if(current_.app==App::Radio)media();else if(current_.app==App::Podcast)podcast();else if(current_.app==App::Words)words();else if(current_.app==App::News)news();else if(current_.app==App::Rate)rates();else if(current_.app==App::History)history();else if(current_.app==App::Daily)daily();else if(current_.app==App::Quake)quake();else if(current_.app==App::Quiz)quiz();else if(current_.app==App::Hacker)hacker();else if(current_.app==App::Forecast)forecast();else if(current_.app==App::Stock)stock();else if(current_.app==App::Macro)macro();else if(current_.app==App::Typhoon)typhoon();else if(current_.app==App::Hot)hot();else if(current_.app==App::Feishu)sayText();else if(transcribing())memo();stackFree_=uxTaskGetStackHighWaterMark(nullptr);}
 bool NativeServices::syncClock(){
     // Once per boot even when the clock is set: it drifts in deep sleep (internal RC oscillator), and the alarm
@@ -219,6 +219,8 @@ bool NativeServices::retryPause(unsigned attempt){
     return !cancelled();
 }
 bool NativeServices::fetch(const char* url,char* output,size_t capacity,Sink sink,void* context,const char* post,const char* userAgent,const char* const* headers){
+    // On the home page main stops Bluetooth now (LiveServices::nativeOnline); give it a second to hand back the memory.
+    if(current_.app==App::Home&&!online_.exchange(true))for(unsigned i=0;i<50&&!cancelled();++i)vTaskDelay(pdMS_TO_TICKS(20));
     for(unsigned attempt=1;attempt<=networkAttempts&&!cancelled();++attempt){
     struct Body{NativeServices* self;char* bytes;size_t used,capacity;bool invalid,done;Sink sink;void* context;} body{this,output,0,capacity,false,false,sink,context};
     if(output){output[0]=0;}

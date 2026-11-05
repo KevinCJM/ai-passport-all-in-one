@@ -14,12 +14,12 @@ inline unsigned menuCategory(App app) {
 }
 // All fields are bytes: a stable, endian-independent NVS/wire record. App IDs, never menu positions.
 struct MenuLayout {
-    static constexpr unsigned kVersion=1,kApps=64,kPages=8,kName=25,kBytes=481,kListRows=7;
+    static constexpr unsigned kVersion=1,kApps=64,kCategories=6,kPages=8,kName=25,kBytes=482,kListRows=7;
     // Continuous: no named pages, nine icons a screen. List: no pages, kListRows compact rows; it shares Continuous's order.
     enum Mode : uint8_t { Categories, Continuous, Custom, List };
     static unsigned orderOf(unsigned mode){return mode==List?Continuous:mode;}
-    uint8_t version{kVersion},mode{},catalogCount{static_cast<uint8_t>(kFunctions.size())},pageCount{5};
-    uint8_t hidden[8]{},categories[5]{0,1,2,3,4},order[3][kApps]{},assignment[kApps]{},pages[kPages]{};
+    uint8_t version{kVersion},mode{},catalogCount{static_cast<uint8_t>(kFunctions.size())},pageCount{kCategories};
+    uint8_t hidden[8]{},categories[kCategories]{0,1,2,3,4,5},order[3][kApps]{},assignment[kApps]{},pages[kPages]{};
     char names[kPages][kName]{};
     bool shown(App app)const {const auto id=static_cast<unsigned>(app);return id<kApps&&!(hidden[id/8]&(1u<<(id%8)));}
     void show(App app,bool yes){const auto id=static_cast<unsigned>(app);if(id<kApps){if(yes)hidden[id/8]&=~(1u<<(id%8));else hidden[id/8]|=1u<<(id%8);}}
@@ -41,7 +41,7 @@ struct MenuLayout {
         uint64_t known=0;for(auto app:kFunctions)known|=uint64_t{1}<<static_cast<unsigned>(app);
         for(unsigned i=0;i<kApps;++i)if((hidden[i/8]&(1u<<(i%8)))&&(!(known&(uint64_t{1}<<i))||i==static_cast<unsigned>(App::Settings)))return false;
         unsigned groupBits=0,pageBits=0;
-        for(auto group:categories){if(group>=5||(groupBits&(1u<<group)))return false;groupBits|=1u<<group;}
+        for(auto group:categories){if(group>=kCategories||(groupBits&(1u<<group)))return false;groupBits|=1u<<group;}
         for(unsigned i=0;i<pageCount;++i){if(pages[i]>=pageCount||(pageBits&(1u<<pages[i]))||!textValid(names[i]))return false;pageBits|=1u<<pages[i];}
         uint64_t first=0;
         for(unsigned modeIndex=0;modeIndex<3;++modeIndex){
@@ -77,9 +77,9 @@ inline MenuLayout defaultMenuLayout(){
     for(unsigned i=0;i<MenuLayout::kPages;++i)layout.pages[i]=i;
     // Short names fit the custom-page eight-character limit (the original category titles can be longer).
     // A category of more than nine fills a second page (its name with "续"), as on the category screens.
-    const char* names[]{"小智语音","电脑时间","天气财经资讯","学习影音","工具设置"};
+    const char* names[]{"小智语音","电脑办公","时间气象","财经资讯","学习影音","工具设置"};
     unsigned page=0;
-    for(unsigned c=0;c<5;++c,++page)for(unsigned i=kMenuStarts[c];i<kMenuStarts[c+1];++i){
+    for(unsigned c=0;c<MenuLayout::kCategories;++c,++page)for(unsigned i=kMenuStarts[c];i<kMenuStarts[c+1];++i){
         if(i>kMenuStarts[c]&&(i-kMenuStarts[c])%9==0)++page;
         if(i==kMenuStarts[c]||(i-kMenuStarts[c])%9==0){std::strcpy(layout.names[page],names[c]);if(i>kMenuStarts[c])std::strcat(layout.names[page],"续");}
         const auto app=kFunctions[i];for(auto& list:layout.order)list[i]=static_cast<uint8_t>(app);layout.assignment[static_cast<unsigned>(app)]=page;
@@ -92,7 +92,7 @@ struct MenuView {
     void build(const MenuLayout& layout){
         count=pages=0;
         const bool flat=layout.mode==MenuLayout::Continuous||layout.mode==MenuLayout::List;
-        const unsigned groups=flat?1:layout.mode==MenuLayout::Categories?5:layout.pageCount;
+        const unsigned groups=flat?1:layout.mode==MenuLayout::Categories?MenuLayout::kCategories:layout.pageCount;
         for(unsigned p=0;p<groups;++p){
             const unsigned group=layout.mode==MenuLayout::Categories?layout.categories[p]:layout.mode==MenuLayout::Custom?layout.pages[p]:0;
             const auto begin=count;

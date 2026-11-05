@@ -42,7 +42,7 @@ def tidy(text, chars=None):
     if chars is None:
         from passport_book_font import CHARS
         chars = set(CHARS)
-    paragraphs = (''.join(c if c in chars else ' ' if c == '\t' else '□' for c in line.strip(' \t　﻿') if c >= ' ')
+    paragraphs = (''.join(c if c in chars else ' ' if c == '\t' else '□' for c in line.strip(' \t　﻿') if c >= ' ' or c == '\t')
                   for line in text.replace('\r\n', '\n').replace('\r', '\n').split('\n'))
     return '\n'.join(INDENT + p for p in paragraphs if p)
 
@@ -80,6 +80,9 @@ class Books:
         self.stats = {'chunks': 0, 'error': ''}
         try: self.index = json.loads((self.folder / 'books.json').read_text(encoding='utf-8'))
         except (OSError, ValueError): self.index = {'current': 0, 'books': {}}
+        # Entries from before the badge laid pages out itself (no byte size) are left out.
+        self.index['books'] = {k: v for k, v in self.index['books'].items() if 'size' in v}
+        if str(self.index['current']) not in self.index['books']: self.index['current'] = 0
 
     def save(self):
         self.folder.mkdir(parents=True, exist_ok=True); target = self.folder / 'books.json'

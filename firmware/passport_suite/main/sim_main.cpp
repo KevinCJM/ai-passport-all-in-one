@@ -388,7 +388,7 @@ void ledgerTests(Runtime& runtime){
     m.lastNotice[0]=0;strcpy(m.liveValue,"rec");m.listenAt=903;uiRender(runtime);uiCapture("ledger_listening");strcpy(m.liveValue,"--");
     runtime.key(Key::Back,904);CHECK(runtime.active()==App::Menu);
     for(unsigned i=0;i<kFunctions.size()&&runtime.selection()!=kFunctions.size()-1;++i)runtime.key(Key::Down,904);
-    CHECK(runtime.selection()==kFunctions.size()-1);uiRender(runtime);uiCapture("menu_page5");
+    CHECK(runtime.selection()==kFunctions.size()-1);uiRender(runtime);uiCapture("menu_page6");
     forget();settimeofday(&saved,nullptr);
     puts("CASE_PASS ledger");
 }
@@ -1480,11 +1480,11 @@ extern "C" void app_main() {
     runtime.key(Key::Down, 0); CHECK(runtime.selection() == 0);
     runtime.key(Key::Up, 0); CHECK(runtime.selection() == kFunctions.size()-1);
     uiRender(runtime); uiCapture("menu_2");
-    // The middle pages under their themes (学习 · 影音 over two screens), then 系统设置 at the end of the last.
-    CHECK(runtime.longKey(true,0)&&runtime.selection()==36);uiRender(runtime);uiCapture("menu_page4b");
-    CHECK(runtime.longKey(true,0)&&runtime.selection()==27);uiRender(runtime);uiCapture("menu_page4");
-    CHECK(runtime.longKey(true,0)&&runtime.selection()==18);uiRender(runtime);uiCapture("menu_page3");
-    CHECK(runtime.longKey(true,0)&&runtime.selection()==9);uiRender(runtime);uiCapture("menu_page2");
+    // The middle pages under their themes (6 pages of < 9 items each), then 系统设置 at the end of the last.
+    CHECK(runtime.longKey(true,0)&&runtime.selection()==31);uiRender(runtime);uiCapture("menu_page5");
+    CHECK(runtime.longKey(true,0)&&runtime.selection()==24);uiRender(runtime);uiCapture("menu_page4");
+    CHECK(runtime.longKey(true,0)&&runtime.selection()==16);uiRender(runtime);uiCapture("menu_page3");
+    CHECK(runtime.longKey(true,0)&&runtime.selection()==8);uiRender(runtime);uiCapture("menu_page2");
     while(runtime.selection()!=kFunctions.size()-1)runtime.key(Key::Down,0);
     runtime.key(Key::Confirm, 0); CHECK(runtime.active() == App::Settings);
     runtime.key(Key::Back, 0); CHECK(runtime.active() == App::Menu);

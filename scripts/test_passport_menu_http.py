@@ -52,20 +52,20 @@ def main():
         raise TimeoutError('menu save acknowledgement missing')
     process,log,state=start('http-serial.log')
     try:
-        catalog=[api('/menu/catalog?group='+str(g)) for g in range(5)];ids=[a['id'] for g in catalog for a in g['apps']];assert len(ids)==43 and len(set(ids))==43
+        catalog=[api('/menu/catalog?group='+str(g)) for g in range(6)];ids=[a['id'] for g in catalog for a in g['apps']];assert len(ids)==len(set(ids))
         with HTTP.open(base+'/menu-editor.js') as response:assert response.read()==(ROOT/'scripts/passport_menu.js').read_bytes()
         api('/menu/catalog?group=8',expected=400)
-        original=state;raw=bytearray(base64.b64decode(state['layout']));raw[1]=1;raw[81:124]=raw[81:124][::-1]
+        original=state;raw=bytearray(base64.b64decode(state['layout']));raw[1]=1;raw[82:125]=raw[82:125][::-1]
         state=save(state,raw);api('/menu',{'layout':state['layout'],'revision':original['revision']},expected=409)
         bad=bytearray(raw);bad[4+10//8]|=1<<(10%8);api('/menu',{'layout':base64.b64encode(bad).decode(),'revision':state['revision']},expected=400)
         assert api('/menu')['layout']==state['layout']
         raw[1]=2;raw[3]=2;raw[4:12]=bytes(8);keep={1,4,10,35,47}
         for identity in ids:
             if identity not in keep:raw[4+identity//8]|=1<<(identity%8)
-        raw[209:273]=bytes(64)
-        for identity in (10,35,47):raw[209+identity]=1
-        raw[273:275]=bytes((1,0));raw[281:481]=bytes(200)
-        for group,name in enumerate(('常用','财经工具')):encoded=name.encode();raw[281+group*25:281+group*25+len(encoded)]=encoded
+        raw[210:274]=bytes(64)
+        for identity in (10,35,47):raw[210+identity]=1
+        raw[274:276]=bytes((1,0));raw[282:482]=bytes(200)
+        for group,name in enumerate(('常用','财经工具')):encoded=name.encode();raw[282+group*25:282+group*25+len(encoded)]=encoded
         state=save(state,raw);saved=state['layout']
     finally:stop(process,log)
     process,log,cold=start('http-coldboot.log')

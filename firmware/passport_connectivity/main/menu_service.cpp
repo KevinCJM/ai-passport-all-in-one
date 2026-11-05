@@ -28,7 +28,7 @@ int MenuService::request(const cJSON* data,char* output,size_t size){
     xSemaphoreGive(mutex_);return rc||size<length+140?500:200;
 }
 int MenuService::catalog(unsigned group,char* output,size_t size){
-    if(group>=5)return 400;
+    if(group>=MenuLayout::kCategories)return 400;
     JsonOutput json(output,size);char number[32];snprintf(number,sizeof(number),"{\"group\":%u,\"name\":",group);json.append(number);json.string(kMenuPages[group]);json.append(",\"apps\":[");
     for(unsigned i=kMenuStarts[group];i<kMenuStarts[group+1];++i){if(i!=kMenuStarts[group])json.append(",");const auto app=kFunctions[i];snprintf(number,sizeof(number),"{\"id\":%u,\"name\":",static_cast<unsigned>(app));json.append(number);json.string(menuLabel(app));json.append("}");}
     json.append("]}");return json.valid()?200:500;

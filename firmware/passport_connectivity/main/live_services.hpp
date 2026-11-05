@@ -89,6 +89,7 @@ public:
     bool stopAudio();
     bool nativeIdle()const;
     bool nativeBusy()const;  // a native task running or queued
+    bool nativeOnline()const;  // the home page's task wants the HTTPS memory Bluetooth holds
     // 打开 Mac 程序 waits for the computer: Bluetooth is wanted (and the wake word set aside) until it answers.
     bool macWaiting()const{return macRequest_;}
     bool enqueueNative(const char*);

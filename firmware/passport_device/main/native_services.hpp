@@ -18,7 +18,7 @@ class NativeServices {
     QueueHandle_t actions_{};TaskHandle_t task_{};
     Job pending_{},current_{};bool pendingReady_{},network_{},memoryWaiting_{};int64_t pendingSince_{};
     std::atomic<uint32_t> desired_{},owner_{},macroRequest_{};
-    std::atomic<bool> finished_{},allowed_{},ready_{},busy_{};
+    std::atomic<bool> finished_{},allowed_{},ready_{},busy_{},online_{};
     std::atomic<unsigned> httpCount_{},httpStatus_{},weatherUpdates_{},chatTx_{},chatRx_{},mediaBytes_{},stackFree_{};
     std::atomic<unsigned> ttsStarts_{},ttsStops_{},listenStarts_{};
     std::atomic<unsigned> httpRetries_{},cloudChecks_{},connectAttempts_{},readFailHeap_{};
@@ -104,6 +104,8 @@ public:
     const TranslationText* translated()const{return translated_.load()?&page_.translation:nullptr;}
     void translationTaken(){translated_=false;}
     bool busy()const{return task_||pendingReady_;}
+    // The home page keeps Bluetooth up; its job asks for the memory only when it really goes online (HTTPS).
+    bool online()const{return online_;}
     bool allowLocation(bool);
     void cityName(char*,size_t)const;  // the city set, as Settings shows it ("" when none)
     void snapshot(char*,size_t)const;

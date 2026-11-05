@@ -28,7 +28,10 @@ if [ ! -f "$OUT/ffmpeg.exe" ]; then
   (cd "$WORK/lame-3.100" && ./configure --prefix="$PREFIX" --disable-shared --enable-static --disable-frontend && make -j4 && make install)
   cp "$WORK/lame-3.100/COPYING" "$OUT/licenses/lame-COPYING"
   archive="$WORK/ffmpeg-7.1.2.tar.xz"
-  [ -f "$archive" ] || curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "$archive" https://ffmpeg.org/releases/ffmpeg-7.1.2.tar.xz
+  if [ ! -f "$archive" ]; then
+    curl -fsSL --connect-timeout 15 --retry 5 --retry-all-errors --retry-delay 5 -o "$archive" https://ffmpeg.org/releases/ffmpeg-7.1.2.tar.xz || \
+    curl -fsSL --connect-timeout 15 --retry 5 --retry-all-errors --retry-delay 5 -o "$archive" https://www.ffmpeg.org/releases/ffmpeg-7.1.2.tar.xz
+  fi
   echo "089bc60fb59d6aecc5d994ff530fd0dcb3ee39aa55867849a2bbc4e555f9c304  $archive" | sha256sum -c -
   tar -xf "$archive" -C "$WORK"
   (cd "$WORK/ffmpeg-7.1.2" && ./configure --disable-autodetect --disable-doc --disable-debug --disable-shared --enable-static \

@@ -70,7 +70,9 @@ template<int kNum,int kDen=1> const void* scaledBitmap(lv_font_glyph_dsc_t* g,lv
         const int sx=(x*2+1)*128*kDen/kNum-128,sy=(y*2+1)*128*kDen/kNum-128;
         const int x0=sx>>8,y0=sy>>8,fx=sx&255,fy=sy&255;
         const int top=at(x0,y0)*(256-fx)+at(x0+1,y0)*fx,bottom=at(x0,y0+1)*(256-fx)+at(x0+1,y0+1)*fx;
-        out->data[y*out->header.stride+x]=(top*(256-fy)+bottom*fy)>>16;
+        // Twice the contrast, pivoting below mid grey: blurred edges go back toward ink or paper, and the 16 px font's
+        // half-tone strokes (a line falling between two pixels) come out solid rather than faint.
+        out->data[y*out->header.stride+x]=std::clamp(((top*(256-fy)+bottom*fy)>>15)-64,0,255);
     }
     return out;
 }
@@ -3088,7 +3090,7 @@ void uiRender(const Runtime& runtime) {
 #else
                 setLabel(lines[0],"AI-Passport-C3-Sim");
 #endif
-                setLabel(lines[1],runtime.connected()?"拔线后自动使用蓝牙":"电脑开启蓝牙及电脑助手");setLabel(lines[2],model.bleConnected&&!model.bleEncrypted?"一直不通：电脑移除后重连":"首次连接需同意电脑配对");setLabel(lines[3],"进入电脑功能后自动连接");
+                setLabel(lines[1],runtime.connected()?"拔线后自动使用蓝牙":"电脑开启蓝牙及电脑助手");setLabel(lines[2],model.bleConnected&&!model.bleEncrypted?"一直不通：电脑移除后重连":"首次连接需同意电脑配对");setLabel(lines[3],"主页和电脑功能自动连接");
             }else if(page==SettingsPage::City){
                 // Two ways to set it: say the city, or look it up by the internet connection's IP.
                 setLabel(heading,"所在城市");

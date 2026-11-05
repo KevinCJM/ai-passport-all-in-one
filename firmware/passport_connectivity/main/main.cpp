@@ -1194,11 +1194,12 @@ extern "C" void app_main() {
         }
 #else
         // 状态牌 and 随机转盘 are local, but while what is spoken goes to the cloud it needs the memory BLE holds.
-        if((needsInternet(runtime.active())||((speaksOnce(runtime.active())||speaksToo(runtime.active())||runtime.active()==App::Feishu)&&live.nativeBusy()))&&!live.macWaiting()&&bt&&!board::provisioning()&&bleCompanion.drained()){if(bleStop()==0)restoreBleAfterAudio=false;}
+        // The home page keeps the computer link too (users leave the badge there), pausing it only while it fetches.
+        if(((needsInternet(runtime.active())&&runtime.active()!=App::Home)||(runtime.active()==App::Home&&live.nativeOnline())||((speaksOnce(runtime.active())||speaksToo(runtime.active())||runtime.active()==App::Feishu)&&live.nativeBusy()))&&!live.macWaiting()&&bt&&!board::provisioning()&&bleCompanion.drained()){if(bleStop()==0)restoreBleAfterAudio=false;}
         if(bt&&!settings.bluetoothEnabled)bleStop();
         static int64_t nextBleStart=0;
         // 打开 Mac 程序 brings Bluetooth up on any page until the computer has answered.
-        const bool computerBle=(needsComputer(runtime.active())||(runtime.active()==App::Settings&&runtime.model.settingsPage==SettingsPage::Bluetooth)||live.macWaiting())&&!runtime.connected();
+        const bool computerBle=(needsComputer(runtime.active())||runtime.active()==App::Home||(runtime.active()==App::Settings&&runtime.model.settingsPage==SettingsPage::Bluetooth)||live.macWaiting())&&!runtime.connected();
         if((computerBle||runtime.active()==App::Slides||runtime.active()==App::Sonar)&&runtime.power(esp_timer_get_time()/1000000)==Power::Awake&&!bt&&live.nativeIdle()&&uiPreparedFor(runtime.active())&&settings.bluetoothEnabled&&esp_timer_get_time()>=nextBleStart){bleStart();nextBleStart=esp_timer_get_time()+5000000;restoreBleAfterAudio=false;}
         wifiPortal.tick(ap,wifiPending);
         if(wifiPending){

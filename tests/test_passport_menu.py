@@ -33,8 +33,8 @@ class MenuTests(unittest.TestCase):
                 try:
                     with urllib.request.urlopen(base+'/api/menu') as response:self.assertEqual(json.load(response),{'revision':123})
                     paired.request.assert_called_with('/menu')
-                    with urllib.request.urlopen(base+'/api/menu/catalog?group=4') as response:self.assertEqual(response.status,200)
-                    paired.request.assert_called_with('/menu/catalog?group=4')
+                    with urllib.request.urlopen(base+'/api/menu/catalog?group=5') as response:self.assertEqual(response.status,200)
+                    paired.request.assert_called_with('/menu/catalog?group=5')
                     data={'layout':'test','revision':123};request=urllib.request.Request(base+'/api/menu',data=json.dumps(data).encode(),headers={'Content-Type':'application/json'})
                     with urllib.request.urlopen(request) as response:self.assertEqual(json.load(response)['ticket'],7)
                     paired.menu.assert_called_once_with(data)
@@ -70,7 +70,7 @@ int main(int argc,char** argv){
     for(unsigned trial=0;trial<1000;++trial){
         d=defaultMenuLayout();d.mode=trial%4;
         for(auto& list:d.order)std::shuffle(list,list+d.catalogCount,random);
-        std::shuffle(d.categories,d.categories+5,random);std::shuffle(d.pages,d.pages+5,random);
+        std::shuffle(d.categories,d.categories+MenuLayout::kCategories,random);std::shuffle(d.pages,d.pages+5,random);
         unsigned expected=0;for(auto app:kFunctions){const bool show=app==App::Settings||random()%2;d.show(app,show);expected+=show;}
         assert(d.valid());view.build(d);assert(view.count==expected&&view.pages>=1&&view.pages<=8);
         uint64_t seen=0;for(unsigned i=0;i<view.count;++i){const auto app=kFunctions[view.items[i]];assert(d.shown(app));const auto bit=uint64_t{1}<<unsigned(app);assert(!(seen&bit));seen|=bit;assert(view.position(view.items[i])==i);assert(view.page(i)<view.pages);}
@@ -86,7 +86,7 @@ int main(int argc,char** argv){
                             str(folder/'test.cpp'), '-o', str(folder/'test')], check=True)
             subprocess.run([str(folder/'test'), str(folder/'default.bin')], check=True)
             raw = (folder/'default.bin').read_bytes()
-            self.assertEqual(len(raw),481)
+            self.assertEqual(len(raw),482)
             node = r'''
 const fs=require('fs'),vm=require('vm');vm.runInThisContext(fs.readFileSync(process.argv[1],'utf8'));
 const input=process.argv[2],decoded=PassportMenu.decode(input);
@@ -95,7 +95,7 @@ if(PassportMenu.encode(decoded)!==input)throw Error('wire roundtrip mismatch');
 decoded.mode=2;decoded.names[0]='我的常用';decoded.orders[2].reverse();
 if(PassportMenu.decode(PassportMenu.encode(decoded)).names[0]!=='我的常用')throw Error('UTF8 mismatch');
 decoded.names[0]='a'.repeat(9);let rejected=false;try{PassportMenu.encode(decoded)}catch(e){rejected=true}if(!rejected)throw Error('name bound');
-console.log(JSON.stringify({bytes:481,apps:46,random_layouts:1000,wire_roundtrip:true}));
+console.log(JSON.stringify({bytes:482,apps:46,random_layouts:1000,wire_roundtrip:true}));
 '''
             subprocess.run(['node','-e',node,str(ROOT/'scripts/passport_menu.js'),base64.b64encode(raw).decode()],check=True)
 

@@ -365,7 +365,7 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 <p class=hint>不用设置：在 App 里开的对话回到 App；在终端里开的，还在跑就切到它所在的终端（Ghostty、系统终端、iTerm、Warp 能切到对应的标签，Warp 的分屏也行），已经退出就在它上次所在的终端新开一个标签接着聊。</p>
 <span id=aiResult class=out></span>
 <h3>最近的对话</h3><div id=aiList class=rows></div></section>
-<section id=book><h2>电子书</h2><p class=muted>上传 txt（UTF-8、GBK 都行），胸牌「电子书」页就能读：上下键翻页，长按翻 10 页。整本书留在电脑上，胸牌只放 1 MB（约 33 万字）。每次胸牌连上电脑（USB 或蓝牙），先删掉早已读过的部分（留下最近约 100 页可以往回翻），再补上后面没读的，一直保持 1 MB。胸牌上读到哪一页会记回电脑。</p>
+<section id=book><h2>电子书</h2><p class=muted>上传 txt（UTF-8、GBK 都行），胸牌「电子书」页就能读：上下键翻页，长按上键字变大、长按下键字变小（4 档，换字号后从同一处接着排）。整本书留在电脑上，胸牌只放 1 MB（约 33 万字）。每次胸牌连上电脑（USB 或蓝牙），先删掉早已读过的部分（留下最近读过的 64 KB 可以往回翻），再补上后面没读的，一直保持 1 MB。胸牌上读到哪里会记回电脑。</p>
 <div class=row><input type=file id=bkFile accept=".txt,text/plain"><button onclick="bkUpload()">上传并在胸牌上读</button><span id=bkResult class=out></span></div>
 <p id=bkState class=hint></p>
 <h3>书架</h3><div id=bkList class=rows></div></section>
@@ -437,8 +437,9 @@ async function aiLoad(){try{const r=await (await fetch('/api/ai')).json();
   const b=document.createElement('button');b.textContent='在电脑打开';b.onclick=async()=>{try{say($('#aiResult'),(await post('/api/ai-go',{tool:x.tool,id:x.id})).note,'ok');aiLoad()}catch(e){say($('#aiResult'),'失败：'+e.message,'err')}};d.append(s,b);return d}))}catch(e){say($('#aiResult'),'读取失败：'+e.message,'err')}}
 aiLoad();
 async function bkLoad(){try{const r=await (await fetch('/api/books')).json();const now=r.books.find(x=>x.id==r.current);
- $('#bkState').textContent=!now?'还没选书':r.cached?('胸牌上已有第 '+r.cached[0]+'–'+r.cached[1]+' 页，读到第 '+(now.page+1)+' 页'+(r.error?' · 同步出错：'+r.error:'')):'等胸牌连上电脑后开始同步「'+now.title+'」'+(r.error?' · 同步出错：'+r.error:'');
- $('#bkList').replaceChildren(...r.books.map(x=>{const d=document.createElement('div');d.className='row';const s=document.createElement('span');s.textContent=(x.id==r.current?'▶ ':'')+x.title+' · 共 '+x.pages+' 页 · 读到第 '+(x.page+1)+' 页';
+ const pct=x=>(x.place*100/x.size).toFixed(1)+'%';
+ $('#bkState').textContent=!now?'还没选书':r.cached?('胸牌上存着全书的 '+r.cached[0]+'%–'+r.cached[1]+'%，读到 '+pct(now)+(r.error?' · 同步出错：'+r.error:'')):'等胸牌连上电脑后开始同步「'+now.title+'」'+(r.error?' · 同步出错：'+r.error:'');
+ $('#bkList').replaceChildren(...r.books.map(x=>{const d=document.createElement('div');d.className='row';const s=document.createElement('span');s.textContent=(x.id==r.current?'▶ ':'')+x.title+' · 约 '+Math.max(1,Math.round(x.size/30000))+' 万字 · 读到 '+pct(x);
   const read=document.createElement('button');read.textContent='在胸牌上读';read.disabled=x.id==r.current;read.onclick=()=>bkAct('read',x.id);
   const del=document.createElement('button');del.textContent='删除';del.onclick=()=>{if(confirm('删除「'+x.title+'」？'))bkAct('delete',x.id)};d.append(s,read,del);return d}))}catch(e){say($('#bkResult'),'读取失败：'+e.message,'err')}}
 async function bkAct(action,id){try{await post('/api/books',{action,id});bkLoad()}catch(e){say($('#bkResult'),'失败：'+e.message,'err')}}
@@ -484,7 +485,7 @@ class Handler(BaseHTTPRequestHandler):
    if self.path=='/menu-editor.js':return self.send(200,(pathlib.Path(__file__).parent/'passport_menu.js').read_text(encoding='utf-8'), 'application/javascript;charset=utf-8')
    if self.path=='/api/assistant':return self.send(200,ASSISTANT.web_state() if ASSISTANT else {})
    if DEVICE is None:return self.send(503,{'error':'胸牌未连接'})
-   if self.path=='/api/menu' or self.path in {f'/api/menu/catalog?group={i}' for i in range(5)}:return self.send(200,DEVICE.request(self.path[4:]))
+   if self.path=='/api/menu' or self.path in {f'/api/menu/catalog?group={i}' for i in range(6)}:return self.send(200,DEVICE.request(self.path[4:]))
    if self.path=='/api/state':return self.send(200,DEVICE.snapshot())
    if self.path=='/api/services':return self.send(200,DEVICE.services.snapshot())
    if self.path=='/api/assistant-permissions':
