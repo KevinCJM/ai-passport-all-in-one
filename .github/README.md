@@ -16,7 +16,7 @@ AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个�
 
 支持「你好小智」语音唤醒和语音控制：说功能名就能跳转，也能用语音记笔记、记账、计算、添加待办和闹钟，或让 Mac 打开程序。唤醒开关在「系统设置 › 唤醒与对讲」；小智语音服务需要联网并完成激活。
 
-## 源码里的新功能（0.5.37，尚未发布固件）
+## 0.5.37 更新（0.5.29–0.5.37）
 
 - **修复**（0.5.37）：0.5.35 起手机网页和小助手里的「菜单」读取失败（提示“设备未返回配置”），现在可以正常编辑。
 - **修复**（0.5.36）：插着 USB 或按着键时没真正睡下，黑屏再亮屏后 WiFi 不再一直断开。
@@ -28,6 +28,8 @@ AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个�
 - **AI 额度五项列表**（0.5.31–0.5.34）：上下键选择展开 OpenAI Codex、Claude Code、Gemini Agy（Pro / Flash / 第三方）、Cursor & GrokBot（本期套餐和 API 额度）、OpenCode Go，收起行显示剩余更少的那档。
 - **记分牌**（0.5.30）：乒乓球、羽毛球、排球自动判局，放在系统设置前面。
 - **菜单调整**（0.5.35）：加入电子书后共 46 项，默认分类由 5 页重新梳理为 6 页（小智语音、电脑办公、时间气象、财经资讯、学习影音、工具设置），每页严格控制在 7～8 个功能（少于 9 个），九宫格留有舒适呼吸位，彻底告别单图标溢出页；旧菜单升级时新功能插在系统设置前，系统设置始终最后。
+
+以上更新包含在 **0.5.37** 中，可在下方「下载固件」获取。
 
 ## 0.5.28 更新
 
@@ -127,9 +129,9 @@ tests/                          电脑助手与固件数据解析的宿主测试
 
 ## 下载固件
 
-- [0.5.28 完整固件包](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.28/ai-passport-0.5.28-esp32c3.zip)：应用、引导程序、分区表、唤醒词模型及刷机说明。
-- [仅应用 passport_device.bin](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.28/passport_device.bin)：已安装本项目固件时使用。
-- [SHA256SUMS](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.28/SHA256SUMS)：下载校验。
+- [0.5.37 完整固件包](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.37/ai-passport-0.5.37-esp32c3.zip)：应用、引导程序、分区表、唤醒词模型及刷机说明。
+- [仅应用 passport_device.bin](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.37/passport_device.bin)：已安装本项目固件时使用。
+- [SHA256SUMS](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.37/SHA256SUMS)：下载校验。
 
 适用于上述 ESP32-C3、8 MB Flash、无PSRAM的 AI Passport。升级保留原分区表和设置，只写应用；首次安装按下文「刷机」操作。下载包解压后的文件布局与编译产物一致。
 
@@ -191,7 +193,7 @@ python -m esptool --chip esp32c3 -p PORT -b 921600 write-flash \
   --flash-mode keep --flash-freq keep --flash-size keep 0x10000 passport_device.bin
 ```
 
-`0x670000 srmodels.bin` 只有唤醒词模型变了才需要写。0.5.28 沿用原模型。
+`0x670000 srmodels.bin` 只有唤醒词模型变了才需要写。0.5.37 沿用原模型。
 
 开机后：
 - 按屏幕提示用手机连上胸牌的配网热点，在网页里选择 WiFi；
