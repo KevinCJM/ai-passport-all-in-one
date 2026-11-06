@@ -642,7 +642,7 @@ int companionRequest(const char* raw,char* output,size_t size){
     constexpr char menuCatalogPrefix[]="/menu/catalog?group=";
     if(!strncmp(path->valuestring,menuCatalogPrefix,sizeof(menuCatalogPrefix)-1)){
         const char* group=path->valuestring+sizeof(menuCatalogPrefix)-1;
-        return group[0]>='0'&&group[0]<='4'&&!group[1]?MenuService::catalog(group[0]-'0',output,size):400;
+        return group[0]>='0'&&group[0]<='9'&&!group[1]?MenuService::catalog(group[0]-'0',output,size):400;
     }
     if(!strcmp(path->valuestring,"/status")){state(output,size);return 200;}
     if(!strncmp(path->valuestring,"/content/",9))return contentRequest(path->valuestring,output,size);
@@ -884,7 +884,7 @@ void initMenuHttp(httpd_handle_t server){
         auto& out=menuHttpBuffer;int status=404;
         if(!strcmp(request->uri,"/menu"))status=menuService.request(nullptr,out,sizeof(out));
         constexpr char prefix[]="/menu/catalog?group=";
-        if(!strncmp(request->uri,prefix,sizeof(prefix)-1)){const char* group=request->uri+sizeof(prefix)-1;status=group[0]>='0'&&group[0]<='4'&&!group[1]?MenuService::catalog(group[0]-'0',out,sizeof(out)):400;}
+        if(!strncmp(request->uri,prefix,sizeof(prefix)-1)){const char* group=request->uri+sizeof(prefix)-1;status=group[0]>='0'&&group[0]<='9'&&!group[1]?MenuService::catalog(group[0]-'0',out,sizeof(out)):400;}
         if(status!=200)return httpd_resp_send_err(request,status==404?HTTPD_404_NOT_FOUND:HTTPD_400_BAD_REQUEST,"menu");
         httpd_resp_set_type(request,"application/json");return httpd_resp_sendstr(request,out);
     };
