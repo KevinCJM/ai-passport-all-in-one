@@ -1302,7 +1302,8 @@ extern "C" void app_main() {
                 board::power(2);
             }
         }else{
-            if(sleepWifiStopped){sleepWifiStopped=false;if(*settings.wifiSsid)stationConnect(true);}
+            // Deep sleep did not happen (USB host present, or a key held): the driver was stopped, so start it before joining.
+            if(sleepWifiStopped){sleepWifiStopped=false;esp_wifi_start();if(*settings.wifiSsid)stationConnect(true);}
             board::power(static_cast<unsigned>(currentPower));
         }
 #endif
