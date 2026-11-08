@@ -64,6 +64,12 @@ class SerialTest(unittest.TestCase):
         finally:
             bridge.terminate(); os.close(master); os.close(slave)
 
+    def test_bonded_badge_by_address(self):
+        # A bonded badge stops advertising on Windows: reached by its Bluetooth address, MAC + 2 (carry included).
+        import passport_device
+        badge = passport_device.bonded_passport('AI-Passport-4C11AE31B9FF')
+        self.assertEqual((badge.address, badge.details.adv.bluetooth_address), ('4C:11:AE:31:BA:01', 0x4c11ae31ba01))
+
     def test_gateway_command(self):
         from passport_computer_link import start_gateway
         with patch('passport_computer_link.subprocess.Popen') as popen:

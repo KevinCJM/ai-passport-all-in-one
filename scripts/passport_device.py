@@ -17,8 +17,17 @@ UI_PORT=8768
 DEVICE=None     # the connected badge, set by the assistant (or __main__)
 ASSISTANT=None  # passport_assistant.Controller: the page's 电脑助手 section
 
+def bonded_passport(expected):
+ """Windows: once bonded, the system's keyboard driver (the badge is also a BLE HID keyboard) holds its only
+ connection, so it stops advertising and a scan never finds it again. Reach it by address instead, which shares that
+ link: the badge's public Bluetooth address is its MAC (the name's last 12 digits) + 2."""
+ from types import SimpleNamespace
+ from bleak.backends.device import BLEDevice
+ address=(int(expected[-12:],16)+2)&0xffffffffffff
+ return BLEDevice(':'.join('%02X'%(address>>shift&255) for shift in range(40,-8,-8)),expected,SimpleNamespace(adv=SimpleNamespace(bluetooth_address=address),scan=None),-127)
+
 def connected_passport(expected):
- if sys.platform!='darwin':return None  # Windows: a connected badge keeps advertising, the scan finds it
+ if sys.platform!='darwin':return None  # Windows: see bonded_passport
  from CoreBluetooth import CBUUID
  from bleak.backends.corebluetooth.CentralManagerDelegate import CentralManagerDelegate
  from bleak.backends.device import BLEDevice
@@ -73,6 +82,7 @@ class Radio:
       # A peripheral connected by macOS may have stopped advertising.
       self.device=connected_passport(self.expected)
       if self.device is None:self.device=await BleakScanner.find_device_by_filter(lambda device,adv:adv.local_name==self.expected and SERVICE in [s.lower() for s in (adv.service_uuids or [])],timeout=6,service_uuids=[SERVICE])
+      if self.device is None and sys.platform=='win32':self.device=bonded_passport(self.expected)
       if self.device is None:raise RuntimeError('paired Passport is not advertising')
      client=BleakClient(self.device,services=[SERVICE,RPC_SERVICE],disconnected_callback=lambda _:self.notify(0,b''),timeout=6)
      try:

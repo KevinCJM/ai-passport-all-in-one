@@ -252,7 +252,7 @@ class Controller:
             label='USB' if transport=='usb' else '蓝牙' if transport=='ble' else '等待连接'
             self.status=('胸牌已连接 · '+label if time.monotonic()-self.device.last_seen<15 else '等待胸牌连接 · '+label)
             if transport=='ble' and self.deps.get('bluetooth_denied'):self.status='需要蓝牙权限'
-            hint='Mac 弹出蓝牙配对请求时，请点「连接」或「配对」'
+            hint=('Windows 提示添加蓝牙设备时，请点「允许」或「配对」' if WINDOWS else 'Mac 弹出蓝牙配对请求时，请点「连接」或「配对」')
             if transport=='ble' and time.monotonic()-self.device.last_seen>=15:self.error=hint
             elif self.error==hint:self.error=''
             return
