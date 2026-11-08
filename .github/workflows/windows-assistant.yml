@@ -40,7 +40,7 @@ jobs:
           PYTHONUTF8: '1'
         working-directory: tests
         # Assistant tests only; the menu file's firmware C++ host test is checked on the Mac (MSVC headers reject strcpy).
-        run: python -m unittest -v test_passport_windows test_passport_guard test_passport_ledger test_passport_menu.MenuTests.test_assistant_menu_routes_share_device_transport_and_origin_guard
+        run: python -m unittest -v test_passport_windows test_passport_guard test_passport_ledger test_passport_health test_passport_menu.MenuTests.test_assistant_menu_routes_share_device_transport_and_origin_guard
 
       - name: Build and self-test
         env:

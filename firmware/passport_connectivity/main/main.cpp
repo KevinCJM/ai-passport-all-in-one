@@ -128,6 +128,7 @@ void state(char* data, size_t size) {
 #endif
     {const size_t tail=strlen(data);if(tail+80<size)snprintf(data+tail-1,size-tail+1,",\"wifi_saved\":%u,\"wifi_scans\":%u,\"wifi_joins\":%u,\"wifi_connecting\":%s}",runtime.model.wifiSavedCount,wifiScans.load(),wifiJoins.load(),wifiConnecting?"true":"false");}
     {const auto l=ledgerStatus();const size_t tail=strlen(data);if(tail+32<size)snprintf(data+tail-1,size-tail+1,",\"ledger\":[%u,%u]}",l.pending,unsigned(l.monthKnown));}
+    {const size_t tail=strlen(data);if(tail+24<size)snprintf(data+tail-1,size-tail+1,",\"health\":[%u]}",healthPending());}
     // 电子书: [book, place read (a byte), window lo, hi] for the assistant's sync.
     {BookMeta b;uint32_t place=0;BookStore::load(b,place);const size_t tail=strlen(data);if(tail+64<size)snprintf(data+tail-1,size-tail+1,",\"book\":[%lu,%lu,%u,%u]}",static_cast<unsigned long>(b.id),static_cast<unsigned long>(place),b.lo,b.hi);}
     {const uint64_t w=wordProgress.load();const size_t tail=strlen(data);if(tail+48<size)snprintf(data+tail-1,size-tail+1,",\"words\":[%u,%u,%u,%u]}",unsigned(w&255),unsigned(w>>8&255),unsigned(w>>16&65535),unsigned(w>>32&65535));}
@@ -135,7 +136,13 @@ void state(char* data, size_t size) {
     const size_t batteryAt=strlen(data);if(batteryAt+strlen(battery)+12<size)snprintf(data+batteryAt-1,size-batteryAt+1,",\"battery\":%s}",battery);
 #endif
 }
-void printState() { char data[2048]; state(data, sizeof(data)); printf("STATE %s\n", data); }
+// The simulator's tests read these lines. The device has no console (CONFIG_ESP_CONSOLE_NONE), so it skips the work:
+// state() reads the e-book place from flash, walks the heap and takes locks, and was run on every frame.
+void printState() {
+#ifndef PASSPORT_DEVICE
+    char data[2048]; state(data, sizeof(data)); printf("STATE %s\n", data);
+#endif
+}
 void wifiEvent(void*, esp_event_base_t base, int32_t id, void* data) {
     if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) { station = true; wifiConnecting = false; wifiReason = 0; wifiRetryBudget=0; wifiRetryAt=0; }
     if (base == WIFI_EVENT) {
@@ -478,6 +485,7 @@ int bleStop() {
 }
 #ifdef PASSPORT_DEVICE
 extern "C" int passport_memory_report(char*,size_t);
+extern "C" int passport_cpu_report(char*,size_t);
 #endif
 esp_err_t statusGet(httpd_req_t* request) {
     #ifdef PASSPORT_DEVICE
@@ -488,6 +496,7 @@ esp_err_t statusGet(httpd_req_t* request) {
 #ifdef PASSPORT_DEVICE
     // ponytail: temporary memory survey; remove with passport_memory_report.
     if(strstr(request->uri,"?mem"))passport_memory_report(data,sizeof(data));else
+    if(strstr(request->uri,"?cpu"))passport_cpu_report(data,sizeof(data));else
 #endif
     state(data,sizeof(data));
     httpd_resp_set_type(request,"application/json");
@@ -602,6 +611,19 @@ int ledgerRequest(const cJSON* data,char* output,size_t size){
     ledgerExchange(acks,count,out,in,month,output,size);
     return 200;
 }
+// 健康记录: the same hand-over ({"ack":[[id,rev],...]}).
+int healthRequest(const cJSON* data,char* output,size_t size){
+    LedgerAck acks[8];unsigned count=0;
+    const auto* list=cJSON_GetObjectItemCaseSensitive(data,"ack");const cJSON* item=nullptr;
+    cJSON_ArrayForEach(item,list){
+        if(count==std::size(acks)||cJSON_GetArraySize(item)!=2)return 400;
+        const auto* id=cJSON_GetArrayItem(item,0);const auto* rev=cJSON_GetArrayItem(item,1);
+        if(!cJSON_IsNumber(id)||!cJSON_IsNumber(rev)||id->valuedouble<0||id->valuedouble>4294967295.0||rev->valuedouble<0||rev->valuedouble>255)return 400;
+        acks[count++]={static_cast<uint32_t>(id->valuedouble),static_cast<uint8_t>(rev->valuedouble)};
+    }
+    healthExchange(acks,count,output,size);
+    return 200;
+}
 // 电子书: the computer's assistant fills the badge's window of the book (scripts/passport_books.py has the protocol);
 // every answer is the window as it now stands.
 int bookRequest(const cJSON* data,char* output,size_t size){
@@ -654,6 +676,7 @@ int companionRequest(const char* raw,char* output,size_t size){
     }
     auto* data=cJSON_GetObjectItemCaseSensitive(object,"data");if(!cJSON_IsObject(data))return 400;
     if(!strcmp(path->valuestring,"/ledger"))return ledgerRequest(data,output,size);
+    if(!strcmp(path->valuestring,"/health"))return healthRequest(data,output,size);
     if(!strcmp(path->valuestring,"/book"))return bookRequest(data,output,size);
     if(!strcmp(path->valuestring,"/service")){
         char* body=cJSON_PrintUnformatted(data);if(!body)return 500;
@@ -784,7 +807,7 @@ int execute(const char* name) {
     // Long presses: the menu turns a page, the calendar steps a month, the sonar switches its filter,
     // the WiFi toolbox and the sound page change tab, the motion monitor turns its alarm on or off.
     // 白噪音 sets the volume with them, 闹钟 the hour; 语音笔记 deletes the open note with a long Down; 状态牌 switches 常亮.
-    if ((previous==App::Menu||previous==App::Calendar||previous==App::Sonar||previous==App::Wifi||previous==App::Sound||previous==App::Motion||previous==App::Noise||previous==App::Alarm||previous==App::Memo||previous==App::Status||previous==App::Wheel||previous==App::Todo||previous==App::Ledger||previous==App::Calc||previous==App::Rate||previous==App::Countdown||previous==App::Walkie||previous==App::Score||previous==App::Book)&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {
+    if ((previous==App::Menu||previous==App::Calendar||previous==App::Sonar||previous==App::Wifi||previous==App::Sound||previous==App::Motion||previous==App::Noise||previous==App::Alarm||previous==App::Memo||previous==App::Status||previous==App::Wheel||previous==App::Todo||previous==App::Ledger||previous==App::Calc||previous==App::Rate||previous==App::Countdown||previous==App::Walkie||previous==App::Score||previous==App::Book||previous==App::Health)&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {
         runtime.longKey(!strcmp(name,"ap_on"),now);
 #ifdef PASSPORT_DEVICE
         if(previous==App::Noise&&!board::setVolume(runtime.model.volume)){runtime.model.volume=board::volume();return -10;}
@@ -951,7 +974,7 @@ extern "C" void app_main() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     // /app_state builds a bounded 2 KiB JSON snapshot; simulator and badge need the same stack budget.
     config.stack_size = 6144;
-    config.max_uri_handlers = 24;  // 22 + /content/* + /book
+    config.max_uri_handlers = 25;  // 22 + /content/* + /book + /health
     config.uri_match_fn=httpd_uri_match_wildcard;
 #ifdef PASSPORT_DEVICE
     config.lru_purge_enable=true;
@@ -967,20 +990,25 @@ extern "C" void app_main() {
     initMenuHttp(server);
 #ifdef PASSPORT_DEVICE
     httpd_uri_t pair{};pair.uri="/pair";pair.method=HTTP_POST;pair.handler=board::pair;ESP_ERROR_CHECK(httpd_register_uri_handler(server,&pair));pair.method=HTTP_GET;ESP_ERROR_CHECK(httpd_register_uri_handler(server,&pair));
-    httpd_uri_t ledger{};ledger.uri="/ledger";ledger.method=HTTP_POST;
-    ledger.handler=[](httpd_req_t* request)->esp_err_t{
+    // 语音记账 and 健康记录: the assistant's hand-over. Static buffers, shared, as /status: handlers run one at a time
+    // on the httpd task.
+    static const auto post=[](httpd_req_t* request,int(*answer)(const cJSON*,char*,size_t),const char* name)->esp_err_t{
         if(!board::authorized(request))return httpd_resp_send_err(request,HTTPD_401_UNAUTHORIZED,"unauthorized");
         if(request->content_len<=0||request->content_len>1024)return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"size");
-        // Static, as /status: handlers run one at a time on the httpd task.
         static char raw[1025],out[1600];memset(raw,0,sizeof(raw));
         for(int used=0;used<request->content_len;){const int n=httpd_req_recv(request,raw+used,request->content_len-used);if(n<=0)return ESP_FAIL;used+=n;}
         live.hostSeen();
         auto* data=cJSON_Parse(raw);
-        const int status=cJSON_IsObject(data)?ledgerRequest(data,out,sizeof(out)):400;cJSON_Delete(data);
-        if(status!=200)return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,"ledger");
+        const int status=cJSON_IsObject(data)?answer(data,out,sizeof(out)):400;cJSON_Delete(data);
+        if(status!=200)return httpd_resp_send_err(request,HTTPD_400_BAD_REQUEST,name);
         httpd_resp_set_type(request,"application/json");return httpd_resp_sendstr(request,out);
     };
+    httpd_uri_t ledger{};ledger.uri="/ledger";ledger.method=HTTP_POST;
+    ledger.handler=[](httpd_req_t* request)->esp_err_t{return post(request,ledgerRequest,"ledger");};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server,&ledger));
+    httpd_uri_t health=ledger;health.uri="/health";
+    health.handler=[](httpd_req_t* request)->esp_err_t{return post(request,healthRequest,"health");};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server,&health));
     httpd_uri_t book{};book.uri="/book";book.method=HTTP_POST;
     book.handler=[](httpd_req_t* request)->esp_err_t{
         if(!board::authorized(request))return httpd_resp_send_err(request,HTTPD_401_UNAUTHORIZED,"unauthorized");
@@ -1142,9 +1170,9 @@ extern "C" void app_main() {
         char pairCode[7]{};board::pairCode(pairCode);if(strcmp(pairCode,runtime.model.pairingCode)){strcpy(runtime.model.pairingCode,pairCode);dirty=true;}
         bleCompanion.poll(companionRequest);
 #endif
-        Command command{};
+        Command command{};[[maybe_unused]] bool keyed=false;
         if (xQueueReceive(commands, &command, pdMS_TO_TICKS(20)) == pdTRUE) {
-            int rc = 0;
+            int rc = 0;keyed=true;
 #ifdef PASSPORT_DEVICE
             char pendingPairCode[7]{};
             if(command.physical&&(command.inputGeneration!=runtime.generation()||command.inputContext!=board::keyContext()||board::pairCode(pendingPairCode)))continue;
@@ -1333,7 +1361,18 @@ extern "C" void app_main() {
         if(animate)lastEmotion=wallMicros;
         if (dirty||animate) {
             const auto started=esp_timer_get_time();const auto pixels=uiFlushPixels(),spi=uiFlushMicros();
+#ifdef PASSPORT_DEVICE
+            // 语音唤醒 (priority 2) takes about half the CPU while it hears sound on Home and Menu, so a key's frame waited
+            // behind it: a page switch drew in 550 ms, not 250. The frame after a key goes first; nobody says the wake word
+            // mid-press. Only then: the microphone's buffer holds 2-3 frames (board.cpp micBuffer), and a longer wait
+            // drops one (hardware mic_drops), which the footer frames must not cost.
+            const bool ahead=(keyed||freshPage)&&tools::wakeListening();
+            if(ahead)vTaskPrioritySet(nullptr,3);
+#endif
             if(dirty)uiRender(runtime);else uiAnimate(runtime);
+#ifdef PASSPORT_DEVICE
+            if(ahead)vTaskPrioritySet(nullptr,1);
+#endif
             renderPixelsLast=uiFlushPixels()-pixels;renderSpiUsLast=uiFlushMicros()-spi; uiCapture("live"); dirty=false; printState();
             const auto spent=static_cast<unsigned>(esp_timer_get_time()-started);
             #ifdef PASSPORT_DEVICE

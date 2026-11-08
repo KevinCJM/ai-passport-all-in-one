@@ -215,6 +215,28 @@ bool SettingsStore::saveLedger(const LedgerBook& book) {
     return book.valid() && nvs_open("suite_system", NVS_READWRITE, &handle.value) == ESP_OK
         && nvs_set_blob(handle.value, "ledger_v1", &book, sizeof(book)) == ESP_OK && nvs_commit(handle.value) == ESP_OK;
 }
+bool SettingsStore::loadHealth(HealthBook& book) {
+    Handle handle; size_t size = sizeof(book);
+    if (nvs_open("suite_system", NVS_READONLY, &handle.value) != ESP_OK || nvs_get_blob(handle.value, "health_v1", &book, &size) != ESP_OK
+        || size != sizeof(book) || !book.valid()) { book = {}; return false; }
+    return true;
+}
+bool SettingsStore::saveHealth(const HealthBook& book) {
+    Handle handle;
+    return book.valid() && nvs_open("suite_system", NVS_READWRITE, &handle.value) == ESP_OK
+        && nvs_set_blob(handle.value, "health_v1", &book, sizeof(book)) == ESP_OK && nvs_commit(handle.value) == ESP_OK;
+}
+bool SettingsStore::loadHealthPrefs(HealthPrefs& prefs) {
+    Handle handle; HealthPrefs candidate; size_t size = sizeof(candidate);
+    if (nvs_open("suite_system", NVS_READONLY, &handle.value) != ESP_OK || nvs_get_blob(handle.value, "health_cfg", &candidate, &size) != ESP_OK
+        || size != sizeof(candidate) || !candidate.valid()) { prefs = {}; return false; }
+    prefs = candidate; return true;
+}
+bool SettingsStore::saveHealthPrefs(const HealthPrefs& prefs) {
+    Handle handle;
+    return prefs.valid() && nvs_open("suite_system", NVS_READWRITE, &handle.value) == ESP_OK
+        && nvs_set_blob(handle.value, "health_cfg", &prefs, sizeof(prefs)) == ESP_OK && nvs_commit(handle.value) == ESP_OK;
+}
 bool SettingsStore::loadGuard(GuardPrefs& prefs) {
     Handle handle; GuardPrefs candidate; size_t size = sizeof(candidate);
     if (nvs_open("suite_system", NVS_READONLY, &handle.value) != ESP_OK || nvs_get_blob(handle.value, "guard_v1", &candidate, &size) != ESP_OK
@@ -261,14 +283,14 @@ WheelBoard defaultWheel() {
 }
 bool SettingsStore::loadScore(ScoreBoard& board) {
     Handle handle; size_t size = sizeof(board);
-    if (nvs_open("suite_system", NVS_READONLY, &handle.value) != ESP_OK || nvs_get_blob(handle.value, "score_v1", &board, &size) != ESP_OK
+    if (nvs_open("suite_system", NVS_READONLY, &handle.value) != ESP_OK || nvs_get_blob(handle.value, "score_v2", &board, &size) != ESP_OK
         || size != sizeof(board) || !board.valid()) { board = {}; return false; }
     return true;
 }
 bool SettingsStore::saveScore(const ScoreBoard& board) {
     Handle handle;
     return board.valid() && nvs_open("suite_system", NVS_READWRITE, &handle.value) == ESP_OK
-        && nvs_set_blob(handle.value, "score_v1", &board, sizeof(board)) == ESP_OK && nvs_commit(handle.value) == ESP_OK;
+        && nvs_set_blob(handle.value, "score_v2", &board, sizeof(board)) == ESP_OK && nvs_commit(handle.value) == ESP_OK;
 }
 bool SettingsStore::loadWheel(WheelBoard& board) {
     Handle handle; size_t size = sizeof(board);

@@ -286,14 +286,27 @@ void soundRun(void*) {
 }
 
 // ---- 白噪音 and the alarm's ring ----
-// kind: a NoiseGen sound, kRing for the alarm, kQuiet to fade out and end.
-constexpr uint8_t kRing = 100, kQuiet = 255;
-std::atomic<uint8_t> noiseKind{kQuiet}; std::atomic<bool> noiseRunning{};
+// kind: a NoiseGen sound, kRing for the alarm, kQuiet to fade out and end. chimeStart: the task plays 健康记录's
+// reminder chime once (1 kHz then 2 kHz, 0.6 s) and ends.
+constexpr uint8_t kRing = 100, kChime = 101, kQuiet = 255;
+std::atomic<uint8_t> noiseKind{kQuiet}; std::atomic<bool> noiseRunning{}, chimeStart{}, chiming{};
 void noiseRun(void*) {
-    NoiseGen noise; AlarmTone ring; int16_t block[160]; uint8_t playing = noiseKind; bool loud = false; unsigned failures = 0;
+    NoiseGen noise; AlarmTone ring; int16_t block[160]; uint8_t playing = chimeStart.exchange(false) ? kChime : noiseKind.load(); bool loud = false; unsigned failures = 0, chimed = 0;
+    chiming = playing == kChime;
     if (board::audioOpen(false)) {
-        noise.start();
-        while (true) {
+        if (playing == kChime) board::outputVolume(std::max(board::volume(), 60u));
+        else noise.start();
+        while (playing == kChime && chimed < 9600) {
+            static constexpr int16_t sine[16]{0, 12539, 23170, 30273, 32767, 30273, 23170, 12539, 0, -12539, -23170, -30273, -32767, -30273, -23170, -12539};
+            for (unsigned i = 0; i < 160; ++i, ++chimed) {
+                const bool first = chimed < 3200, second = chimed >= 4000;  // 200 ms, a 50 ms gap, 350 ms
+                const unsigned into = first ? chimed : chimed - 4000, length = first ? 3200 : 5600;
+                const int32_t level = (first || second) ? 11000 * int32_t(length - into) / int32_t(length) : 0;
+                block[i] = static_cast<int16_t>(sine[(first ? chimed : chimed * 2) % 16] * level >> 15);
+            }
+            if (!board::speaker(block, 160, NoiseGen::kRate, 1) && ++failures > 100) break;
+        }
+        while (playing != kChime) {
             const uint8_t want = noiseKind;
             // The ring stops at once; a sound fades out, still playing its kind meanwhile.
             if (want == kQuiet && playing == kRing) break;
@@ -311,7 +324,7 @@ void noiseRun(void*) {
         }
         board::silence(); board::audioClose();
     }
-    noiseRunning = false;
+    chiming = false; noiseRunning = false;
 }
 
 // ---- 语音唤醒 ----
@@ -320,7 +333,12 @@ void noiseRun(void*) {
 // shipped partition table stays as it is. Its working memory exists only while this task runs.
 constexpr uint32_t kModelAt = 0x670000, kModelBytes = 0x40000;
 std::atomic<bool> wakeStop{}, wakeRunning{}, wakeHeard{};
-std::atomic<unsigned> wakeState{}, wakeError{}, wakeHeap{}, wakeLargest{}, wakeChunk{}, wakeFrames{}, wakeDetects{}, wakeUs{}, wakeStack{}, wakeAfterHeap{}, wakeAfterLargest{};
+std::atomic<unsigned> wakeState{}, wakeError{}, wakeHeap{}, wakeLargest{}, wakeChunk{}, wakeFrames{}, wakeDetects{}, wakeUs{}, wakeStack{}, wakeAfterHeap{}, wakeAfterLargest{}, wakeSeen{}, wakeFloor{};
+// The model costs about 15 ms of CPU per 32 ms of sound, half the C3, so it only hears what follows a sound: each frame
+// waits kWakeDelay frames in a line, and goes on to the model only within kWakeDelay before and kWakeHold after a
+// frame louder than the room (its level kept in wakeFloor). The phrase is heard from 300 ms before it starts, 300 ms late.
+// Tune with kWakeRatio/kWakeMargin (mean absolute sample over the floor) if quiet calls go unheard.
+constexpr unsigned kWakeDelay = 5, kWakeHold = 16, kWakeRatio = 2, kWakeMargin = 30;
 srmodel_list_t* wakeModels() {
     static srmodel_list_t* models = [] () -> srmodel_list_t* {
         const esp_partition_t* part = nullptr;
@@ -340,22 +358,36 @@ void wakeRun(void*) {
     model_iface_data_t* data = wn ? wn->create(name, DET_MODE_90) : nullptr;
     wakeHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT); wakeLargest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
     const unsigned chunk = data ? wn->get_samp_chunksize(data) : 0; wakeChunk = chunk;
-    auto samples = std::unique_ptr<int16_t[]>(new (std::nothrow) int16_t[2 * kFrame + chunk]);  // frame, reference, chunk
+    // frame, reference, the delay line, chunk
+    auto samples = std::unique_ptr<int16_t[]>(new (std::nothrow) int16_t[(2 + kWakeDelay) * kFrame + chunk]);
     const bool ready = data && samples && chunk && chunk <= kFrame && board::audioOpen(true, 2, false);
     wakeError = !name ? 1 : !ready && (!data || !samples) ? 2 : !ready ? 3 : 0; wakeState = ready ? 1 : 2;
-    unsigned filled = 0, frames = 0; uint64_t busy = 0;
+    unsigned filled = 0, frames = 0, seen = 0, floor = 0, loudAt = 0; bool heard = false; uint64_t busy = 0;
     while (ready && !wakeStop && !wakeHeard) {
-        int16_t* frame = samples.get(); int16_t* pending = frame + 2 * kFrame;
+        int16_t* frame = samples.get(); int16_t* line = frame + 2 * kFrame; int16_t* pending = line + kWakeDelay * kFrame;
         if (!board::microphone(frame, frame + kFrame)) { vTaskDelay(pdMS_TO_TICKS(10)); continue; }
-        // The model eats chunks of its own size; carry the rest of each 60 ms frame over.
-        for (unsigned at = 0; at < kFrame && !wakeHeard;) {
-            const unsigned take = std::min(chunk - filled, kFrame - at);
-            memcpy(pending + filled, frame + at, take * sizeof(int16_t)); filled += take; at += take;
-            if (filled < chunk) continue;
-            filled = 0; const auto started = esp_timer_get_time();
-            if (wn->detect(data, pending) > 0) { wakeHeard = true; ++wakeDetects; }
-            busy += esp_timer_get_time() - started; ++frames;
+        uint32_t sum = 0; for (unsigned i = 0; i < kFrame; ++i) sum += unsigned(std::abs(int(frame[i])));
+        const unsigned level = sum / kFrame;
+        // The floor drops at once to a quieter room and climbs over about 8 s.
+        floor = !seen || level < floor ? level : floor + (level - floor + 127) / 128;
+        if (seen >= kWakeDelay && level > kWakeRatio * floor + kWakeMargin) { loudAt = seen; heard = true; }
+        // The frame leaving the line (kWakeDelay frames old) takes this one's place.
+        int16_t* slot = line + (seen % kWakeDelay) * kFrame;
+        // It is fed when it lies within kWakeDelay before (always, the line being that long) to kWakeHold after the last loud one.
+        const bool feed = heard && seen >= kWakeDelay && seen - kWakeDelay <= loudAt + kWakeHold;
+        ++seen; wakeSeen = seen; wakeFloor = floor;
+        if (feed) {
+            // The model eats chunks of its own size; carry the rest of each 60 ms frame over.
+            for (unsigned at = 0; at < kFrame && !wakeHeard;) {
+                const unsigned take = std::min(chunk - filled, kFrame - at);
+                memcpy(pending + filled, slot + at, take * sizeof(int16_t)); filled += take; at += take;
+                if (filled < chunk) continue;
+                filled = 0; const auto started = esp_timer_get_time();
+                if (wn->detect(data, pending) > 0) { wakeHeard = true; ++wakeDetects; }
+                busy += esp_timer_get_time() - started; ++frames;
+            }
         }
+        memcpy(slot, frame, kFrame * sizeof(int16_t));
         wakeFrames = frames; wakeUs = frames ? busy / frames : 0; wakeStack = uxTaskGetStackHighWaterMark(nullptr);
     }
     if (ready) board::audioClose();
@@ -734,9 +766,20 @@ bool noiseTick(Runtime& runtime, bool codecFree) {
     const auto& m = runtime.model; const auto active = runtime.active();
     const uint8_t want = (active == App::Alarm && m.alarmRinging) || (active == App::Todo && m.todoRinging) ? kRing : active == App::Noise && m.noisePlaying ? m.noiseKind : kQuiet;
     noiseKind = want;
+    // 喝水提醒's chime: only on a page that leaves the codec alone (not under 语音唤醒's listening), else just the footer.
+    static uint8_t chimes = m.healthChimes;
+    if (m.healthChimes != chimes) {
+        chimes = m.healthChimes;
+        const bool quiet = want == kQuiet && !noiseRunning && codecFree && !profile(active).audio && !(m.wakeWord && (active == App::Home || active == App::Menu));
+        if (quiet) {
+            chimeStart = noiseRunning = true;
+            if (xTaskCreate(taskMain<noiseRun>, "noise", 3072, nullptr, 2, nullptr) != pdPASS) chimeStart = noiseRunning = false;
+            return false;
+        }
+    }
     if (want == kQuiet) {
-        // Leaving the page: wait for the fade (0.5 s) so the next page finds the codec closed.
-        if (noiseRunning && active != App::Noise && active != App::Alarm && active != App::Todo) for (unsigned i = 0; i < 80 && noiseRunning; ++i) vTaskDelay(pdMS_TO_TICKS(10));
+        // Leaving the page: wait for the fade (0.5 s) so the next page finds the codec closed (a chime ends by itself).
+        if (noiseRunning && !chiming && active != App::Noise && active != App::Alarm && active != App::Todo) for (unsigned i = 0; i < 80 && noiseRunning; ++i) vTaskDelay(pdMS_TO_TICKS(10));
         return false;
     }
     if (noiseRunning || !codecFree) return false;
@@ -744,6 +787,7 @@ bool noiseTick(Runtime& runtime, bool codecFree) {
     if (xTaskCreate(taskMain<noiseRun>, "noise", 3072, nullptr, 2, nullptr) != pdPASS) noiseRunning = false;
     return false;
 }
+bool wakeListening() { return wakeRunning; }
 bool wakeTick(Runtime& runtime, bool listen) {
     if (!listen || wakeHeard) {
         // Stop before anyone else opens the codec: the task closes it on its way out.
@@ -816,7 +860,8 @@ void walkieStatus(char* output, size_t size) {
 }
 bool wakeHolding() { return wakeRunning; }
 void wakeStatus(char* output, size_t size) {
-    snprintf(output, size, "[%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u]", wakeState.load(), wakeError.load(), wakeHeap.load(), wakeLargest.load(),
-             wakeChunk.load(), wakeFrames.load(), wakeDetects.load(), wakeUs.load(), wakeStack.load(), wakeAfterHeap.load(), wakeAfterLargest.load());
+    // ..., then mic frames seen and the room level (frames fed to the model = chunks [5] * chunk [4] / 960).
+    snprintf(output, size, "[%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u]", wakeState.load(), wakeError.load(), wakeHeap.load(), wakeLargest.load(),
+             wakeChunk.load(), wakeFrames.load(), wakeDetects.load(), wakeUs.load(), wakeStack.load(), wakeAfterHeap.load(), wakeAfterLargest.load(), wakeSeen.load(), wakeFloor.load());
 }
 }

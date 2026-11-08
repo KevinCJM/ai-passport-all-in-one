@@ -115,7 +115,7 @@ void domainTests(Runtime& runtime) {
     puts("CASE_PASS foreground_only_timer_pause_notifications");
 }
 void settingsTests(Runtime& runtime){
-    CHECK(kFunctions.size()==46&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
+    CHECK(kFunctions.size()==47&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
     // Physical long-confirm emits Back: each step must follow the hierarchy.
     for(auto app:kFunctions){
         CHECK(runtime.switchTo(app)==Result::Ok);runtime.model.settingsPage=SettingsPage::List;
@@ -356,6 +356,72 @@ void todoTests(Runtime& runtime){
     forget();runtime.reloadTodo();settimeofday(&saved,nullptr);
     puts("CASE_PASS todo");
 }
+// 健康记录: a cup by key, spoken records of each kind, 经期 by voice and keys, the records, deleting, the settings, the
+// computer taking them, and the 喝水提醒.
+void healthTests(Runtime& runtime){
+    auto& m=runtime.model;auto& b=m.page.health;
+    const auto forget=[]{nvs_handle_t h;CHECK(nvs_open("suite_system",NVS_READWRITE,&h)==ESP_OK);nvs_erase_key(h,"health_v1");nvs_erase_key(h,"health_cfg");nvs_commit(h);nvs_close(h);};
+    timeval saved{};gettimeofday(&saved,nullptr);
+    const auto setClock=[](time_t at){timeval tv{at,0};settimeofday(&tv,nullptr);};
+    const time_t now=1793080800+3*3600;setClock(now);  // Tuesday 2026-10-27 09:00 (the simulator's local time is UTC)
+    forget();
+    CHECK(runtime.switchTo(App::Health)==Result::Ok&&!b.count&&!m.healthView&&!m.healthPrefs.period);m.livePhase=LivePhase::Ready;m.lastNotice[0]=0;m.clockValid=true;
+    uiRender(runtime);uiCapture("health_empty");
+    runtime.key(Key::Confirm,1000);CHECK(b.count==1&&b.items[0].v1==1&&b.items[0].v2==250&&strstr(m.lastNotice,"第 1 杯"));
+    runtime.key(Key::Confirm,1000);CHECK(b.count==1&&b.items[0].v1==2&&b.items[0].rev==1&&healthPending()==1);
+    runtime.key(Key::Down,1001);CHECK(m.healthKind()==HealthKind::Weight&&m.healthSpoken()&&!*m.lastNotice);
+    CHECK(runtime.addHealth("62.5")&&b.count==2&&b.items[1].v1==625&&strstr(m.lastNotice,"体重"));
+    CHECK(runtime.addHealth("血糖7.4 空腹")&&m.healthKind()==HealthKind::Glucose&&strstr(m.lastNotice,"空腹 7.4")&&strstr(m.lastNotice,"偏高"));
+    CHECK(runtime.addHealth("120 80 心率 70")&&m.healthKind()==HealthKind::Pressure&&b.items[3].v3==70);
+    CHECK(runtime.addHealth("三十七度八")&&m.healthKind()==HealthKind::Temp&&strstr(m.lastNotice,"低烧"));
+    CHECK(!runtime.addHealth("你好")&&b.count==5&&strstr(m.lastNotice,"没听到体温"));
+    CHECK(runtime.addHealth("大姨妈昨天来了 量多")&&m.healthPrefs.period&&m.healthKind()==HealthKind::Period&&strstr(m.lastNotice,"昨天")&&b.count==6);
+    m.lastNotice[0]=0;uiRender(runtime);uiCapture("health_overview");
+    m.healthRow=2;strcpy(m.liveValue,"rec");m.listenAt=1002;uiRender(runtime);uiCapture("health_listening");strcpy(m.liveValue,"--");
+    // The computer takes them; the cup added meanwhile goes again.
+    char out[1600];healthExchange(nullptr,0,out,sizeof(out));
+    CHECK(strstr(out,"\"kind\":\"weight\"")&&strstr(out,"\"tag\":\"空腹\"")&&strstr(out,"\"flag\":\"偏高\"")&&strstr(out,"\"left\":0}"));
+    std::vector<LedgerAck> acks;for(unsigned i=0;i<b.count;++i)acks.push_back({b.items[i].id,b.items[i].rev});
+    m.healthRow=0;runtime.key(Key::Confirm,1003);CHECK(b.items[0].v1==3);
+    healthExchange(acks.data(),acks.size(),out,sizeof(out));
+    CHECK(runtime.healthSynced()&&healthPending()==1&&strstr(out,"\"v\":[3,250,0]")&&(b.items[1].flags&HealthBook::kSynced));
+    // A long Down twice takes a cup back.
+    CHECK(runtime.longKey(false,1004)&&m.healthArmed);uiRender(runtime);uiCapture("health_undo");
+    CHECK(runtime.longKey(false,1004)&&!m.healthArmed&&b.items[0].v1==2&&strstr(m.lastNotice,"2/8"));
+    // 血糖's records: Confirm changes the time of day, a long Down twice deletes (the computer is told).
+    m.healthRow=2;CHECK(runtime.longKey(true,1005)&&m.healthView==1&&m.healthKind()==HealthKind::Glucose);
+    runtime.key(Key::Confirm,1005);CHECK(b.items[2].tag==2&&b.items[2].rev==1&&strstr(m.lastNotice,"早餐后"));
+    m.lastNotice[0]=0;uiRender(runtime);uiCapture("health_records");
+    CHECK(runtime.longKey(false,1006)&&runtime.longKey(false,1006)&&(b.items[2].flags&HealthBook::kDeleted)&&strstr(m.lastNotice,"已删除"));
+    runtime.key(Key::Back,1007);CHECK(runtime.active()==App::Health&&!m.healthView);
+    // 经期 by keys: it started yesterday, so today ends it.
+    m.healthRow=5;CHECK(runtime.longKey(true,1008)&&m.healthView==1&&!m.healthIndex);
+    runtime.key(Key::Confirm,1008);CHECK(strstr(m.lastNotice,"今天结束")&&b.items[b.count-1].tag==1);
+    {const auto s=periodState(b,time(nullptr));CHECK(s.known&&!s.active&&s.length==2);}
+    m.lastNotice[0]=0;uiRender(runtime);uiCapture("health_period");
+    runtime.key(Key::Back,1009);
+    // 亲密: Confirm records one now, its records' Confirm sets the protection; spoken with a day too.
+    m.healthRow=6;CHECK(m.healthKind()==HealthKind::Intimacy&&!m.healthSpoken());
+    runtime.key(Key::Confirm,1009);CHECK(b.items[b.count-1].kind==uint8_t(HealthKind::Intimacy)&&!b.items[b.count-1].tag&&strstr(m.lastNotice,"亲密"));
+    CHECK(runtime.addHealth("前天同房 没戴套")&&b.items[b.count-1].tag==2&&strstr(m.lastNotice,"前天")&&m.healthKind()==HealthKind::Intimacy);
+    CHECK(runtime.longKey(true,1009)&&m.healthView==1);runtime.key(Key::Confirm,1009);CHECK(strstr(m.lastNotice,"有保护"));
+    m.lastNotice[0]=0;uiRender(runtime);uiCapture("health_intimacy");runtime.key(Key::Back,1009);
+    m.lastNotice[0]=0;uiRender(runtime);uiCapture("health_overview_all");
+    // The settings: Confirm steps 喝水提醒 60 -> 90 minutes and saves it.
+    m.healthRow=7;runtime.key(Key::Confirm,1010);CHECK(m.healthView==2);
+    runtime.key(Key::Confirm,1010);CHECK(m.healthPrefs.water==4);
+    {HealthPrefs saved;CHECK(SettingsStore::loadHealthPrefs(saved)&&saved.water==4&&saved.period==1);}
+    uiRender(runtime);uiCapture("health_settings");
+    runtime.key(Key::Back,1011);CHECK(!m.healthView);
+    // 喝水提醒 every 60 minutes: it rings an hour on, in the footer, from another page.
+    // (The simulator's clock runs on meanwhile: within a minute.)
+    m.healthPrefs.water=3;m.waterDueAt=0;runtime.switchTo(App::Menu);runtime.tick(2000);CHECK(m.waterDueAt>=uint32_t(now+3600)&&m.waterDueAt<uint32_t(now+3660));
+    const uint8_t chimes=m.healthChimes;const uint32_t due=m.waterDueAt;setClock(due);runtime.tick(2001);
+    CHECK(strstr(m.macNote,"该喝水了")&&strstr(m.macNote,"2/8")&&m.healthChimes==chimes+1&&m.waterDueAt>=due+3600&&m.waterDueAt<due+3660);
+    m.macNote[0]=0;
+    forget();SettingsStore::loadHealthPrefs(m.healthPrefs);settimeofday(&saved,nullptr);
+    puts("CASE_PASS health");
+}
 // 语音记账: spoken entries, categories, deleting, and the computer taking them (acknowledged by revision).
 void ledgerTests(Runtime& runtime){
     auto& m=runtime.model;auto& b=m.page.ledger;
@@ -484,6 +550,25 @@ void scoreTests(Runtime& runtime){
     t=scoreReplay(s);CHECK(t.points[0]==600&&s.count<=ScoreBoard::kPoints&&s.base[0]>0);
     runtime.key(Key::Down,1012);runtime.key(Key::Down,1012);uiRender(runtime);uiCapture("score_free");
     CHECK(runtime.longKey(false,1013)&&runtime.longKey(false,1013)&&s.fresh());
+    // 多人计分: before the first point long Down goes back (自由计分 -> 8 人); Up/Down pick, Confirm scores, long Up undoes.
+    CHECK(runtime.longKey(false,1014)&&s.players()==8);
+    for(int i=0;i<4;++i)CHECK(runtime.longKey(false,1014));
+    CHECK(s.players()==4&&m.scorePick==0);uiRender(runtime);uiCapture("score_many_empty");
+    for(auto k:{Key::Confirm,Key::Down,Key::Down,Key::Confirm,Key::Confirm,Key::Up,Key::Up,Key::Up})runtime.key(k,1015);
+    CHECK(m.scorePick==3);runtime.key(Key::Confirm,1015);
+    t=scoreReplay(s);CHECK(t.points[0]==1&&t.points[1]==0&&t.points[2]==2&&t.points[3]==1);
+    uiRender(runtime);uiCapture("score_many_4");
+    CHECK(runtime.longKey(true,1016)&&scoreReplay(s).points[3]==0&&strstr(m.lastNotice,"已撤销黄方 1 分"));
+    CHECK(runtime.longKey(true,1016)&&s.players()==4);  // still undoing, not changing the rule
+    CHECK(runtime.switchTo(App::Menu)==Result::Ok);s={};CHECK(runtime.switchTo(App::Score)==Result::Ok&&s.players()==4&&scoreReplay(s).points[2]==1);
+    CHECK(runtime.longKey(false,1017)&&runtime.longKey(false,1017)&&s.fresh());
+    for(int i=0;i<4;++i)CHECK(runtime.longKey(true,1017));
+    CHECK(s.players()==8);
+    for(unsigned i=0;i<8;++i){for(unsigned k=0;k<i*3%7;++k)runtime.key(Key::Confirm,1018);runtime.key(Key::Down,1018);}
+    for(int i=0;i<120;++i)runtime.key(Key::Confirm,1018);  // 红方 to three digits
+    t=scoreReplay(s);CHECK(t.points[0]==120&&t.points[5]==1&&t.points[7]==0);
+    runtime.key(Key::Down,1018);uiRender(runtime);uiCapture("score_many_8");
+    CHECK(runtime.longKey(false,1019)&&runtime.longKey(false,1019)&&s.fresh());while(s.rule)CHECK(runtime.longKey(true,1019));
     puts("CASE_PASS score");
 }
 // 对讲机: a call opens it from any page and goes back when over; keys keep it; the channel and talks.
@@ -1304,9 +1389,9 @@ static MenuLayout sampleCustomMenu(){
 }
 static void menuLayoutTests(Runtime& runtime){
     auto layout=defaultMenuLayout();CHECK(layout.valid());CHECK(runtime.configureMenu(layout));
-    CHECK(runtime.menuView().count==46&&runtime.menuView().pages==6);
+    CHECK(runtime.menuView().count==47&&runtime.menuView().pages==6);
     for(auto app:kFunctions)if(menuCategory(app)==0)layout.show(app,false);
-    CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==5&&runtime.menuView().count==37);
+    CHECK(runtime.configureMenu(layout));printf("MENU_HIDDEN pages=%u count=%u\n",runtime.menuView().pages,runtime.menuView().count);CHECK(runtime.menuView().pages==5&&runtime.menuView().count==39);
     runtime.switchTo(App::Menu);runtime.key(Key::Confirm,0);CHECK(runtime.active()!=App::Chat);
     // Unpaged grid: nine a screen in the user's order, no page names; long Down jumps to the next screen.
     layout=defaultMenuLayout();layout.mode=MenuLayout::Continuous;std::reverse(layout.order[1],layout.order[1]+layout.catalogCount);
@@ -1314,15 +1399,15 @@ static void menuLayoutTests(Runtime& runtime){
     CHECK(runtime.menuPosition()==0&&runtime.menuWindowStart()==0);uiRender(runtime);uiCapture("menu_continuous_top");
     for(unsigned i=0;i<10;++i)runtime.key(Key::Down,0);
     CHECK(runtime.menuPosition()==10&&runtime.menuWindowStart()==9);uiRender(runtime);uiCapture("menu_continuous_scroll");
-    for(unsigned i=0;i<45;++i){const auto before=runtime.menuPosition();runtime.key(Key::Down,0);CHECK(runtime.menuPosition()==(before+1)%46);CHECK(runtime.menuWindowStart()==runtime.menuPosition()/9*9);}
+    for(unsigned i=0;i+1<kFunctions.size();++i){const auto before=runtime.menuPosition();runtime.key(Key::Down,0);CHECK(runtime.menuPosition()==(before+1)%kFunctions.size());CHECK(runtime.menuWindowStart()==runtime.menuPosition()/9*9);}
     CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==18);CHECK(runtime.longKey(true,0)&&runtime.longKey(true,0)&&runtime.longKey(true,0));CHECK(runtime.menuPosition()==45);
     // Compact list: the same order as the grid, seven rows that scroll with the selection.
-    layout.mode=MenuLayout::List;CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==1&&runtime.menuView().count==46);
+    layout.mode=MenuLayout::List;CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==1&&runtime.menuView().count==47);
     runtime.switchTo(App::Settings);runtime.switchTo(App::Menu);CHECK(runtime.menuPosition()==0&&runtime.menuWindowStart()==0);uiRender(runtime);uiCapture("menu_list_top");
     for(unsigned i=0;i<10;++i)runtime.key(Key::Down,0);
     CHECK(runtime.menuPosition()==10&&runtime.menuWindowStart()==4);uiRender(runtime);uiCapture("menu_list_scroll");
-    for(unsigned i=0;i<45;++i){runtime.key(Key::Up,0);CHECK(runtime.menuPosition()>=runtime.menuWindowStart()&&runtime.menuPosition()<runtime.menuWindowStart()+MenuLayout::kListRows&&runtime.menuWindowStart()<=39);}
-    const auto before=runtime.menuPosition();CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==(before+7)%46);
+    for(unsigned i=0;i<45;++i){runtime.key(Key::Up,0);CHECK(runtime.menuPosition()>=runtime.menuWindowStart()&&runtime.menuPosition()<runtime.menuWindowStart()+MenuLayout::kListRows&&runtime.menuWindowStart()<=kFunctions.size()-MenuLayout::kListRows);}
+    const auto before=runtime.menuPosition();CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==(before+7)%kFunctions.size());
     layout.mode=MenuLayout::Continuous;CHECK(runtime.configureMenu(layout));uiRender(runtime);uiCapture("menu_continuous_after_list");
     layout.show(App::Macro,false);CHECK(runtime.configureMenu(layout));const auto selection=runtime.selection();
     CHECK(runtime.switchTo(App::Macro)==Result::Ok);runtime.key(Key::Back,0);CHECK(runtime.active()==App::Menu&&runtime.selection()==selection);
@@ -1645,7 +1730,7 @@ extern "C" void app_main() {
     domainTests(runtime);
     settingsTests(runtime);
     powerTests(runtime);
-    slidesTests(runtime);alertTests(runtime);statusTests(runtime);wheelTests(runtime);translateTests(runtime);guardTests(runtime);todoTests(runtime);ledgerTests(runtime);calcTests(runtime);scoreTests(runtime);feishuTests(runtime);walkieTests(runtime);voiceCommandTests(runtime);voiceAddTests(runtime);toolPagesTests(runtime);
+    slidesTests(runtime);alertTests(runtime);statusTests(runtime);wheelTests(runtime);translateTests(runtime);guardTests(runtime);todoTests(runtime);ledgerTests(runtime);healthTests(runtime);calcTests(runtime);scoreTests(runtime);feishuTests(runtime);walkieTests(runtime);voiceCommandTests(runtime);voiceAddTests(runtime);toolPagesTests(runtime);
     bleTests(runtime);
     identityUploadTests(runtime);
     failureTests(runtime);

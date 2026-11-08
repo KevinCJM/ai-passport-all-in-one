@@ -15,6 +15,7 @@ bool noiseTick(Runtime& runtime,bool codecFree);
 // 语音唤醒: listens for 你好小智 while listen is true (the setting is on and the home page is idle); hearing it
 // opens 小智语音, which starts listening at once. True when the page changed.
 bool wakeTick(Runtime& runtime,bool listen);
+bool wakeListening();
 // True from the wake task's start until its memory is freed: NativeServices waits for that before starting.
 bool wakeHolding();
 // 对讲机: the receiver runs while the page is open or 后台接收对讲 is on (connected: WiFi is up); a new call heard on

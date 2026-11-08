@@ -68,6 +68,7 @@ constexpr Profile kProfiles[] = {
     {"score", "记分牌", 0, false, false},
     {"feishu", "飞书提醒", 0, false, false},
     {"book", "电子书", 0, false, false},
+    {"health", "健康记录", 0, false, false, "健康"},
 };
 static_assert(std::size(kProfiles) == static_cast<unsigned>(App::Count));
 }
@@ -87,6 +88,56 @@ template <class Edit> bool editLedger(LedgerBook& book, Edit edit) {
     ledgerPending = book.pending();
     xSemaphoreGive(ledgerLock);
     return ok;
+}
+// 健康记录: the same, under its own lock. waterCups/waterDay keep today's cups for the reminder on any page.
+StaticSemaphore_t healthLockStorage;
+SemaphoreHandle_t healthLock;
+std::atomic<unsigned> healthWaiting;
+std::atomic<bool> healthTouched;
+std::atomic<int> waterDay{-1};
+std::atomic<unsigned> waterCups;
+template <class Edit> bool editHealth(HealthBook& book, Edit edit) {
+    if (!healthLock || xSemaphoreTake(healthLock, pdMS_TO_TICKS(2000)) != pdTRUE) return false;
+    SettingsStore::loadHealth(book);
+    const bool ok = !edit(book) || SettingsStore::saveHealth(book);
+    healthWaiting = book.pending();
+    if (time(nullptr) > 1700000000) { const int today = healthDay(time(nullptr)); waterCups = book.cups(today); waterDay = today; }
+    xSemaphoreGive(healthLock);
+    return ok;
+}
+// The detail list keeps healthIndex on screen (kHealthRows rows from healthTop).
+void healthScroll(Model& m) {
+    if (m.healthIndex < m.healthTop) m.healthTop = m.healthIndex;
+    else if (m.healthIndex >= m.healthTop + Model::kHealthRows) m.healthTop = static_cast<uint8_t>(m.healthIndex - Model::kHealthRows + 1);
+}
+// 经期 by keys: today starts one, or ends the one going on.
+void periodToday(Model& m) {
+    const time_t now = time(nullptr); bool ending = false, full = false;
+    const bool ok = editHealth(m.page.health, [&](HealthBook& b) {
+        ending = periodState(b, now).active;
+        full = !b.add({0, static_cast<uint32_t>(healthNoon(now, 0)), uint8_t(HealthKind::Period), uint8_t(ending), 0, 0, 0, 0, 0});
+        return !full; });
+    if (full) strcpy(m.lastNotice, "记录已满，请连接电脑同步");
+    else if (!ok) strcpy(m.lastNotice, "保存失败");
+    else strcpy(m.lastNotice, ending ? "已记下 · 经期今天结束" : "已记下 · 经期今天开始");
+}
+// 喝水: a cup more (or one less), on today's one record.
+void addWater(Model& m, bool more) {
+    const time_t now = time(nullptr); const int today = healthDay(now); const auto ml = kCupMl[m.healthPrefs.cup % 5];
+    unsigned cups = 0; bool full = false;
+    const bool ok = editHealth(m.page.health, [&](HealthBook& b) {
+        const int i = b.water(today);
+        if (i < 0) { if (!more) return false; full = !b.add({0, static_cast<uint32_t>(now), uint8_t(HealthKind::Water), 0, 0, 0, 1, int16_t(ml), 0}); cups = 1; return !full; }
+        auto& e = b.items[i];
+        if (!more && e.v1 <= 1) { b.remove(unsigned(i)); return true; }
+        e.v1 = int16_t(e.v1 + (more ? 1 : -1)); if (more) { e.v2 = int16_t(ml); e.at = static_cast<uint32_t>(now); }
+        cups = unsigned(e.v1); b.touch(unsigned(i)); return true; });
+    const unsigned goal = kWaterGoals[m.healthPrefs.goal % 4];
+    if (full) strcpy(m.lastNotice, "记录已满，请连接电脑同步");
+    else if (!ok) strcpy(m.lastNotice, more ? "保存失败" : "今天还没有喝水记录");
+    else if (!more) snprintf(m.lastNotice, sizeof(m.lastNotice), "已减一杯 · 今天 %u/%u 杯", cups, goal);
+    else snprintf(m.lastNotice, sizeof(m.lastNotice), cups >= goal ? "第 %u 杯 · 今天的 %u 杯喝够了" : "第 %u 杯 · 目标 %u 杯", cups, goal);
+    if (ok && more) m.waterDueAt = static_cast<uint32_t>(waterNext(m.healthPrefs, now));
 }
 void ledgerScroll(Model& m) {
     if (!m.ledgerIndex) m.ledgerTop = 0;
@@ -184,6 +235,9 @@ bool Runtime::init(SystemSettings& settings) {
     reloadTodo();
     if (!ledgerLock) ledgerLock = xSemaphoreCreateMutexStatic(&ledgerLockStorage);
     if (std::unique_ptr<LedgerBook> book(new (std::nothrow) LedgerBook); book) editLedger(*book, [](LedgerBook&) { return false; });
+    if (!healthLock) healthLock = xSemaphoreCreateMutexStatic(&healthLockStorage);
+    if (std::unique_ptr<HealthBook> book(new (std::nothrow) HealthBook); book) editHealth(*book, [](HealthBook&) { return false; });
+    SettingsStore::loadHealthPrefs(model.healthPrefs);
     if (screen < static_cast<uint8_t>(HomeScreen::Count)) model.homeScreen = static_cast<HomeScreen>(screen);
     events_ = xQueueCreate(32, sizeof(Event));
     if (events_ && worker_.init(events_)) return true;
@@ -370,14 +424,19 @@ bool Runtime::longKey(bool up, uint64_t now) {
         if(!m.macroDetail){m.macroGroup=(m.macroGroup+(up?2:1))%3;m.macroIndex=0;m.macroLong=false;m.lastNotice[0]=0;m.page.macro=MacroView{};m.page.macro.group=m.macroGroup;}
         return true;
     }
-    // 记分牌: a long Up changes the rule before the first point; a long Down asks to start over, a second one does.
+    // 记分牌: before the first point a long Up/Down picks the next/previous rule. Later a long Down asks to start over
+    // and a second one does; a long Up undoes the last point under 多人计分 (Confirm scores there).
     if (active_ == App::Score) {
         auto& s = m.page.score; m.lastNotice[0] = 0;
-        if (up) {
-            m.scoreArmed = false;
-            if (!s.fresh()) { strcpy(m.lastNotice, "比赛中不能换赛制，长按下键重开后再换"); return true; }
-            s.rule = static_cast<uint8_t>((s.rule + 1) % std::size(kScoreRules));
-        } else if (!m.scoreArmed) { m.scoreArmed = !s.fresh(); return true; }
+        if (s.fresh()) {
+            constexpr unsigned n = std::size(kScoreRules);
+            m.scoreArmed = false; m.scorePick = 0; s.rule = static_cast<uint8_t>((s.rule + (up ? 1 : n - 1)) % n);
+        } else if (up && s.players() > 2) {
+            m.scoreArmed = false; const unsigned side = s.count ? s.side(s.count - 1) : 0;
+            if (!scoreUndo(s)) { strcpy(m.lastNotice, "更早的分已合并，不能再撤销"); return true; }
+            snprintf(m.lastNotice, sizeof(m.lastNotice), "已撤销%s 1 分", kScoreSideNames[side]);
+        } else if (up) { m.scoreArmed = false; strcpy(m.lastNotice, "比赛中不能换赛制，长按下键重开后再换"); return true; }
+        else if (!m.scoreArmed) { m.scoreArmed = true; return true; }
         else { m.scoreArmed = false; const uint8_t rule = s.rule; s = {}; s.rule = rule; strcpy(m.lastNotice, "已清零，重新开始"); }
         if (!SettingsStore::saveScore(s)) strcpy(m.lastNotice, "保存失败");
         return true;
@@ -452,6 +511,30 @@ bool Runtime::longKey(bool up, uint64_t now) {
         if (m.voiceBusy()) return true;
         m.status.awake = !m.status.awake;
         if (!SettingsStore::saveStatus(m.status)) strcpy(m.lastNotice, "保存失败");
+        return true;
+    }
+    // 健康记录: a long Up opens the picked kind's records; a long Down asks to delete (the overview: that kind's latest
+    // record, or one cup), a second one does it; anything else cancels.
+    if (active_ == App::Health) {
+        if (m.voiceBusy()) return true;
+        const HealthKind kind = m.healthKind();
+        if (up) {
+            m.healthArmed = false;
+            if (!m.healthView && kind != HealthKind::Count) { m.healthView = 1; m.healthIndex = m.healthTop = 0; m.lastNotice[0] = 0; }
+            return true;
+        }
+        if (m.healthView == 2 || kind == HealthKind::Count) return true;
+        uint8_t order[HealthBook::kMax]; const unsigned n = m.page.health.list(kind, order, HealthBook::kMax);
+        const unsigned extra = m.healthView == 1 && kind == HealthKind::Period;
+        const unsigned pick = m.healthView == 1 ? m.healthIndex : extra;
+        if (!n || pick < extra || pick >= n + extra) { m.healthArmed = false; strcpy(m.lastNotice, "没有可删除的记录"); return true; }
+        if (!m.healthArmed) { m.healthArmed = true; m.lastNotice[0] = 0; return true; }
+        m.healthArmed = false;
+        if (!m.healthView && kind == HealthKind::Water) { addWater(m, false); return true; }
+        const uint32_t id = m.page.health.items[order[pick - extra]].id;
+        const bool ok = editHealth(m.page.health, [&](HealthBook& b) { const int i = b.find(id); if (i >= 0) b.remove(static_cast<unsigned>(i)); return i >= 0; });
+        if (m.healthView == 1) { const unsigned left = m.page.health.list(kind, order, HealthBook::kMax) + extra; if (m.healthIndex >= left && m.healthIndex) --m.healthIndex; healthScroll(m); }
+        strcpy(m.lastNotice, ok ? "已删除" : "保存失败");
         return true;
     }
     // 语音记账: a long Down asks to delete the selected entry, a second one deletes it; anything else cancels.
@@ -659,6 +742,54 @@ void ledgerExchange(const LedgerAck* acks, unsigned count, int32_t monthOut, int
     }
     book->pendingJson(out, size, 6);
     if (changed || month) ledgerTouched = true;
+}
+unsigned healthPending() { return healthWaiting.load(); }
+void healthExchange(const LedgerAck* acks, unsigned count, char* out, size_t size) {
+    std::unique_ptr<HealthBook> book(new (std::nothrow) HealthBook);
+    bool changed = false;
+    if (!book || !editHealth(*book, [&](HealthBook& b) { for (unsigned i = 0; i < count; ++i) changed |= b.ack(acks[i].id, acks[i].rev); return changed; })) {
+        snprintf(out, size, "{\"error\":\"busy\"}"); return;
+    }
+    healthJson(*book, out, size, 6);
+    if (changed) healthTouched = true;
+}
+bool Runtime::healthSynced() {
+    if (!healthTouched.exchange(false)) return false;
+    if (active_ != App::Health) return true;
+    editHealth(model.page.health, [](HealthBook&) { return false; });
+    return true;
+}
+bool Runtime::addHealth(const char* heard) {
+    auto& m = model; const HealthKind hint = m.healthKind();
+    if (!*heard) { strcpy(m.lastNotice, "没有听清，请再说一次"); return false; }
+    if (!m.clockValid) { strcpy(m.lastNotice, "时间未同步，暂不能记录"); return false; }
+    const time_t now = time(nullptr);
+    const int last = m.page.health.latest(HealthKind::Weight);
+    const auto r = parseHealth(heard, hint == HealthKind::Count ? HealthKind::Weight : hint, now, last < 0 ? 0 : m.page.health.items[last].v1);
+    if (!r.ok) {
+        size_t bytes = 0; while (heard[bytes] && bytes < 60) bytes += voice::charBytes(static_cast<unsigned char>(heard[bytes]));
+        snprintf(m.lastNotice, sizeof(m.lastNotice), "%s：%.*s", r.error, int(bytes), heard); return false;
+    }
+    const bool privy = r.kind == HealthKind::Period || r.kind == HealthKind::Intimacy;
+    if (privy && !m.healthPrefs.periodVoice) { strcpy(m.lastNotice, "经期与亲密已设为仅按键记录"); return false; }
+    const HealthEntry e{0, static_cast<uint32_t>(privy && (r.kind == HealthKind::Period || r.daysAgo) ? healthNoon(now, r.daysAgo) : now), uint8_t(r.kind), r.tag, 0, 0, r.v1, r.v2, r.v3};
+    bool full = false;
+    const bool ok = editHealth(m.page.health, [&](HealthBook& b) { full = !b.add(e); return !full; });
+    if (full) { strcpy(m.lastNotice, "记录已满，请连接电脑同步"); return false; }
+    if (!ok) { strcpy(m.lastNotice, "保存失败"); return false; }
+    // The row follows what was recorded (经期 shown once it is said).
+    if (privy && !m.healthPrefs.period) { m.healthPrefs.period = 1; SettingsStore::saveHealthPrefs(m.healthPrefs); }
+    HealthKind kinds[kHealthKinds]; const unsigned n = m.healthKinds(kinds);
+    for (unsigned i = 0; i < n; ++i) if (kinds[i] == r.kind) m.healthRow = static_cast<uint8_t>(i);
+    char value[24]; healthValue(e, value, sizeof(value)); const auto flag = healthFlag(e);
+    static const char* const days[]{"今天", "昨天", "前天"};
+    char day[16]; if (r.daysAgo < 3) strcpy(day, days[r.daysAgo]); else snprintf(day, sizeof(day), "%u 天前", r.daysAgo);
+    if (r.kind == HealthKind::Period) snprintf(m.lastNotice, sizeof(m.lastNotice), "已记下 · 经期%s%s%s%s", r.tag ? "结束" : "开始", day, r.v1 ? " · " : "", kFlowNames[r.v1]);
+    else if (r.kind == HealthKind::Intimacy) snprintf(m.lastNotice, sizeof(m.lastNotice), "已记下 · 亲密 %s%s%s", day, r.tag ? " · " : "", kProtectNames[r.tag]);
+    else snprintf(m.lastNotice, sizeof(m.lastNotice), "已记下 · %s %s%s%s%s%s%s", kHealthNames[uint8_t(r.kind)], r.kind == HealthKind::Glucose ? kGlucoseTags[r.tag] : "",
+                    r.kind == HealthKind::Glucose ? " " : "", value, healthUnit(r.kind), *flag.text ? " · " : "", flag.text);
+    if (r.converted) strncat(m.lastNotice, r.kind == HealthKind::Weight ? "（已从斤换算）" : r.kind == HealthKind::Glucose ? "（已从 mg/dL 换算）" : "（已从华氏换算）", sizeof(m.lastNotice) - strlen(m.lastNotice) - 1);
+    return true;
 }
 bool Runtime::showBook(int step) {
     auto& m = model; auto& b = m.page.book; BookMeta meta; uint32_t place = 0;
@@ -917,6 +1048,10 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
         m.ledgerIndex = m.ledgerTop = 0; m.ledgerArmed = false; m.listenAt = 0;
     }
     if (target == App::Calc) { model.calcCount = model.calcIndex = 0; model.listenAt = 0; }
+    if (target == App::Health) {
+        auto& m = model; SettingsStore::loadHealthPrefs(m.healthPrefs); editHealth(m.page.health, [](HealthBook&) { return false; });
+        m.healthView = m.healthRow = m.healthIndex = m.healthTop = m.healthSetRow = 0; m.healthArmed = false; m.listenAt = 0;
+    }
     if (target == App::Voice) model.listenAt = 0;
     if (target == App::Walkie) { auto& m = model; m.walkieTalk = m.walkieAuto = false; m.walkiePhase = 0; m.walkieFrom[0] = 0; m.walkieAt = now_; }
     if (target == App::Guard) {
@@ -990,6 +1125,7 @@ void Runtime::key(Key key, uint64_t now) {
         if (active_ == App::Alarm && model.alarmRinging) { model.alarmRinging = false; return; }
         if (active_ == App::Alarm && model.alarmEdit && !model.voiceBusy()) { model.alarmEdit = false; return; }
         if (active_ == App::Todo && model.todoRinging) { endTodoRing(TodoRing::Stop); return; }
+        if (active_ == App::Health && model.healthView && !model.voiceBusy()) { model.healthView = 0; model.healthArmed = false; model.lastNotice[0] = 0; return; }
         if (active_ == App::Home) { screenOff_ = true; return; }
         // A call that opened 对讲机 goes back to the page it interrupted.
         if (active_ == App::Walkie && model.walkieAuto) { switchTo(model.walkieBack); return; }
@@ -1068,6 +1204,67 @@ void Runtime::key(Key key, uint64_t now) {
                 b.items[i].category = static_cast<uint8_t>((b.items[i].category + 1) % kLedgerCount); category = b.items[i].category;
                 b.touch(static_cast<unsigned>(i)); return true; });
             if (ok) snprintf(m.lastNotice, sizeof(m.lastNotice), "分类改为 %s", kLedgerCategories[category]); else strcpy(m.lastNotice, "保存失败");
+        }
+    } else if (active_ == App::Health) {
+        // The overview: Up/Down pick a kind (or 提醒与设置); Confirm adds a cup, opens the settings, records 经期 by
+        // keys (when it is not spoken), or for the rest LiveServices starts listening. The records: Confirm changes a
+        // 血糖's time of day or a 经期's flow (row 0 of 经期 records today). The settings: Confirm steps the value.
+        auto& m = model;
+        if (m.voiceBusy()) return;
+        m.healthArmed = false;
+        if (key == Key::Up || key == Key::Down) m.lastNotice[0] = 0;
+        const bool up = key == Key::Up;
+        if (m.healthView == 2) {
+            constexpr unsigned rows = 6;
+            if (key == Key::Up || key == Key::Down) m.healthSetRow = static_cast<uint8_t>((m.healthSetRow + (up ? rows - 1 : 1)) % rows);
+            if (key == Key::Confirm) {
+                auto& p = m.healthPrefs;
+                switch (m.healthSetRow) {
+                case 0: p.water = (p.water + 1) % 6; break;
+                case 1: p.window = (p.window + 1) % 3; break;
+                case 2: p.cup = (p.cup + 1) % 5; break;
+                case 3: p.goal = (p.goal + 1) % 4; break;
+                case 4: p.period ^= 1; break;
+                default: p.periodVoice ^= 1;
+                }
+                if (m.healthSetRow <= 1) m.waterDueAt = 0;  // worked out again on the next tick
+                if (!SettingsStore::saveHealthPrefs(p)) strcpy(m.lastNotice, "保存失败");
+            }
+            return;
+        }
+        const HealthKind kind = m.healthKind();
+        if (m.healthView == 1) {
+            uint8_t order[HealthBook::kMax]; const unsigned n = m.page.health.list(kind, order, HealthBook::kMax);
+            const unsigned extra = kind == HealthKind::Period, rows = n + extra;
+            if (!rows) return;
+            if (key == Key::Up || key == Key::Down) { m.healthIndex = static_cast<uint8_t>((m.healthIndex + (up ? rows - 1 : 1)) % rows); healthScroll(m); }
+            if (key != Key::Confirm || m.healthIndex >= rows) return;
+            if (extra && !m.healthIndex) { periodToday(m); return; }
+            if (kind != HealthKind::Glucose && kind != HealthKind::Period && kind != HealthKind::Intimacy) return;
+            const uint32_t id = m.page.health.items[order[m.healthIndex - extra]].id; uint8_t value = 0;
+            const bool ok = editHealth(m.page.health, [&](HealthBook& b) {
+                const int i = b.find(id); if (i < 0) return false;
+                auto& e = b.items[i];
+                if (kind == HealthKind::Glucose) value = e.tag = static_cast<uint8_t>((e.tag + 1) % kGlucoseTagCount);
+                else if (kind == HealthKind::Intimacy) value = e.tag = static_cast<uint8_t>((e.tag + 1) % 3);
+                else { e.v1 = int16_t((e.v1 + 1) % 4); value = uint8_t(e.v1); }
+                b.touch(unsigned(i)); return true; });
+            if (!ok) strcpy(m.lastNotice, "保存失败");
+            else if (kind == HealthKind::Glucose) snprintf(m.lastNotice, sizeof(m.lastNotice), "改为 %s", kGlucoseTags[value]);
+            else if (kind == HealthKind::Intimacy) snprintf(m.lastNotice, sizeof(m.lastNotice), "保护措施：%s", value ? kProtectNames[value] : "未记");
+            else snprintf(m.lastNotice, sizeof(m.lastNotice), "流量：%s", value ? kFlowNames[value] : "未记");
+            return;
+        }
+        HealthKind kinds[kHealthKinds]; const unsigned rows = m.healthKinds(kinds) + 1;
+        if (key == Key::Up || key == Key::Down) m.healthRow = static_cast<uint8_t>((m.healthRow + (up ? rows - 1 : 1)) % rows);
+        if (key != Key::Confirm) return;
+        if (kind == HealthKind::Count) { m.healthView = 2; m.healthSetRow = 0; m.lastNotice[0] = 0; }
+        else if (kind == HealthKind::Water) addWater(m, true);
+        else if (kind == HealthKind::Period && !m.healthPrefs.periodVoice) periodToday(m);
+        else if (kind == HealthKind::Intimacy) {
+            bool full = false; const auto at = static_cast<uint32_t>(time(nullptr));
+            const bool ok = editHealth(m.page.health, [&](HealthBook& b) { full = !b.add({0, at, uint8_t(HealthKind::Intimacy), 0, 0, 0, 0, 0, 0}); return !full; });
+            strcpy(m.lastNotice, full ? "记录已满，请连接电脑同步" : !ok ? "保存失败" : "已记下 · 亲密（长按上可补记是否有保护）");
         }
     } else if (active_ == App::Walkie) {
         // Any key keeps the page open after a call. Up/Down set the volume (main hands it to the codec), long Up/Down
@@ -1153,17 +1350,20 @@ void Runtime::key(Key key, uint64_t now) {
             else if (m.newsPage > 1) { m.newsWant = m.newsPage - 1; m.newsFromEnd = true; }
         }
     } else if (active_ == App::Score) {
-        // Up: a point to 红方 (on top), Down: to 蓝方, Confirm: undo the last point.
+        // Up: a point to 红方 (on top), Down: to 蓝方, Confirm: undo the last point. 多人计分: Up/Down pick, Confirm scores.
         auto& m = model; auto& s = m.page.score; m.scoreArmed = false; m.lastNotice[0] = 0;
-        bool changed = false;
-        if (key == Key::Up || key == Key::Down) {
+        bool changed = false; const unsigned n = s.players();
+        if (n > 2) {
+            if (key == Key::Up || key == Key::Down) m.scorePick = static_cast<uint8_t>((m.scorePick % n + (key == Key::Up ? n - 1 : 1)) % n);
+            else if (!(changed = scoreAdd(s, m.scorePick % n))) strcpy(m.lastNotice, "最多 999 分，长按下键重开");
+        } else if (key == Key::Up || key == Key::Down) {
             changed = scoreAdd(s, key == Key::Down);
             if (!changed) strcpy(m.lastNotice, scoreReplay(s).winner != ScoreState::kNone ? "比赛已结束，长按下键重开" : "记录已满，长按下键重开");
             const auto t = scoreReplay(s); const char* side = t.ended ? "蓝方" : "红方";
             if (changed && t.winner != ScoreState::kNone) snprintf(m.lastNotice, sizeof(m.lastNotice), "%s获胜 %u:%u", side, t.games[0], t.games[1]);
             else if (changed && t.ended != ScoreState::kNone) snprintf(m.lastNotice, sizeof(m.lastNotice), "%s拿下第 %u 局 %u:%u", side, t.done, t.history[(t.done - 1) % ScoreState::kGames][0], t.history[(t.done - 1) % ScoreState::kGames][1]);
         }
-        if (key == Key::Confirm) { changed = scoreUndo(s); strcpy(m.lastNotice, changed ? "已撤销上一分" : "还没有得分"); }
+        if (n <= 2 && key == Key::Confirm) { changed = scoreUndo(s); strcpy(m.lastNotice, changed ? "已撤销上一分" : "还没有得分"); }
         if (changed && !SettingsStore::saveScore(s)) strcpy(m.lastNotice, "保存失败");
     } else if (active_ == App::Stopwatch) {
         auto& m = model; const uint64_t us = esp_timer_get_time();
@@ -1516,6 +1716,17 @@ void Runtime::tick(uint64_t now) {
     if (!m.clockValid || now == alarmChecked_) return;
     alarmChecked_ = now;
     const time_t clock = time(nullptr);
+    // 喝水提醒: the footer and a chime, from any page, while the day's cups are short of the goal (the badge asleep
+    // on battery misses them: ponytail: no deep-sleep wake for this, add one if users ask).
+    if (!m.waterDueAt) m.waterDueAt = static_cast<uint32_t>(waterNext(m.healthPrefs, clock));
+    else if (clock >= static_cast<time_t>(m.waterDueAt)) {
+        const unsigned goal = kWaterGoals[m.healthPrefs.goal % 4]; const bool known = waterDay == healthDay(clock); const unsigned cups = known ? waterCups.load() : 0;
+        if (clock - m.waterDueAt < 600 && cups < goal && !m.alarmRinging && !m.todoRinging) {
+            if (known) snprintf(m.macNote, sizeof(m.macNote), "该喝水了 · 今天 %u/%u 杯", cups, goal); else strcpy(m.macNote, "该喝水了");
+            m.macAt = now + 12; ++m.healthChimes; lastInput_ = now; screenOff_ = false;
+        }
+        m.waterDueAt = static_cast<uint32_t>(waterNext(m.healthPrefs, clock));
+    }
     // 待办提醒: the next reminder rings once, from any page. One missed by more than six hours (the badge was off) is
     // only marked: the list shows it overdue.
     if (m.todoNextAt && !m.todoRinging && !m.alarmRinging && clock >= static_cast<time_t>(m.todoNextAt)) {

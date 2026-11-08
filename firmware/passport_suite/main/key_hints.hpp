@@ -53,6 +53,13 @@ inline const char* keyHint(App app,SettingsPage page,bool focusRunning,bool pair
     // 语音记账 tab: 0 the 录音 row, 1 an entry, 2 its delete asked, 3 listening, 4 recognising.
     if(app==App::Ledger){static const char* const hints[]{"上下：选择  |  确认：记一笔  |  长按确认：返回","上下：选择  |  确认：改分类  |  长按下：删除",
         "长按下：确认删除  |  其他键：取消","确认：结束并记账  |  长按确认：放弃","正在识别，请稍候"};return hints[tab%5];}
+    // 健康记录 tab: the overview's row 0 spoken, 1 喝水, 2 提醒与设置, 3 经期 by keys; 4 records, 5 records Confirm changes
+    // (血糖's time of day, 经期's flow, 亲密's protection); 6 delete asked, 7 listening, 8 recognising, 9 the settings,
+    // 10 the overview's 亲密 row.
+    if(app==App::Health){static const char* const hints[]{"上下：选择  |  确认：说数值  |  长按上：看记录","确认：喝一杯  |  长按下：减一杯  |  长按上：看记录",
+        "上下：选择  |  确认：进入  |  长按确认：返回","确认：记今天开始 / 结束  |  长按上：看记录","上下：选择  |  长按下：删除  |  长按确认：返回",
+        "上下：选择  |  确认：修改  |  长按下：删除","长按下：确认删除  |  其他键：取消","确认：结束并记录  |  长按确认：放弃","正在识别，请稍候",
+        "上下：选择  |  确认：修改  |  长按确认：返回","确认：记一次  |  长按上：看记录  |  长按下：删除"};return hints[tab%11];}
     // 语音计算器 tab: 0 ready, 1 listening, 2 recognising.
     if(app==App::Calc){static const char* const hints[]{"确认：说算式  |  上下：翻看结果  |  长按确认：返回","确认：结束并计算  |  长按确认：放弃","正在识别，请稍候"};return hints[tab%3];}
     // 语音指令: tab 0 waiting, 1 listening, 2 recognising.
@@ -82,7 +89,8 @@ inline const char* keyHint(App app,SettingsPage page,bool focusRunning,bool pair
     // tab: 0 the wheel, 1 listening, 2 recognising, 3 a mode's delete asked.
     // tab: 0 no point yet, 1 a match on, 2 starting over asked.
     if(app==App::Book)return "上：上一页  |  下：下一页  |  长按上：字变大  |  长按下：字变小  |  长按确认：返回";
-    if(app==App::Score){static const char* const hints[]{"上：红方 +1  |  下：蓝方 +1  |  长按上：换赛制","上：红方 +1 | 下：蓝方 +1 | 确认：撤销 | 长按下：重开","再长按下：清零重开  |  其他键：取消"};return hints[tab%3];}
+    if(app==App::Score){static const char* const hints[]{"上：红方 +1  |  下：蓝方 +1  |  长按上/下：换赛制","上：红方 +1 | 下：蓝方 +1 | 确认：撤销 | 长按下：重开","再长按下：清零重开  |  其他键：取消",
+    "上/下：选人  |  确认：+1  |  长按上/下：换赛制","上/下：选人 | 确认：+1 | 长按上：撤销 | 长按下：重开"};return hints[tab%5];}
     // AI 控制器; alt: a tool's conversations.
     if(app==App::Codex&&!loading&&!error)return alt?"上下：选择  |  确认：打开并说话  |  长按确认：返回":"上下：选择  |  确认：看对话  |  长按确认：返回";
     // tab: 0 the list, 1 a message open, 2 none yet.

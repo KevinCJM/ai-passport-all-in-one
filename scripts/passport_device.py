@@ -265,6 +265,9 @@ class Device:
     if self.services.ledger.due(self.state):
      try:self.services.ledger.sync(self.request);self.services.details.pop('ledger_error',None)
      except Exception as error:self.services.details['ledger_error']=type(error).__name__
+    if self.services.health.due(self.state):
+     try:self.services.health.sync(self.request);self.services.details.pop('health_error',None)
+     except Exception as error:self.services.details['health_error']=type(error).__name__
     # 电子书: one step a pass (one chunk at most), so the badge's events are never kept waiting long.
     books=self.services.books
     if books.due(self.state):
@@ -332,7 +335,7 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 <h3>电脑功能</h3><div id=aFeatures></div>
 <h3>选项</h3><label class=row><input type=checkbox id=aLogin onchange="assist({action:'login',on:this.checked})"> 开机后自动启动助手</label>
 <label class=row><input type=checkbox id=aIp onchange="assist({action:'location',on:this.checked})"> 允许按 IP 定位城市（天气、空气质量）</label><p class=hint>会向 ipwho.is 发送这台电脑的公网 IP。不开也可以在胸牌上说城市名。</p>
-<div class=actions><button onclick="assist({action:'ledger'})">记账表格</button><button id=aToggle onclick="assist({action:'toggle'})">暂停助手</button><button onclick="$('#aHelp').hidden=!$('#aHelp').hidden">使用说明</button><span id=aResult class=out></span></div>
+<div class=actions><button onclick="assist({action:'ledger'})">记账表格</button><button onclick="assist({action:'health'})">健康表格</button><button id=aToggle onclick="assist({action:'toggle'})">暂停助手</button><button onclick="$('#aHelp').hidden=!$('#aHelp').hidden">使用说明</button><span id=aResult class=out></span></div>
 <pre id=aHelp hidden></pre></section>
 
 <section id=menu><h2>菜单自定义</h2><p class=muted>选择显示哪些功能、怎么分页和排序，保存后胸牌菜单马上更新。隐藏的功能仍可以用语音打开。</p><div id=menu-editor></div></section>

@@ -25,6 +25,27 @@ extern "C" int passport_memory_report(char* out,size_t size){
     bool first=true;for(const char* n:names)if(auto t=xTaskGetHandle(n)){used+=snprintf(out+used,size-used,"%s\"%s\":%u",first?"":",",n,unsigned(uxTaskGetStackHighWaterMark(t)));first=false;}
     used+=snprintf(out+used,size-used,"}}");return used;
 }
+// Each task's share of the CPU since the last ask (since boot the first time), largest first, in tenths of a percent.
+extern "C" int passport_cpu_report(char* out,size_t size){
+    constexpr unsigned kMax=28;struct Seen{TaskHandle_t task;uint32_t time;};static Seen last[kMax];static uint32_t lastTotal=0;
+    auto* tasks=static_cast<TaskStatus_t*>(malloc(sizeof(TaskStatus_t)*kMax));  // not on the httpd task's small stack
+    if(!tasks)return snprintf(out,size,"{\"error\":\"memory\"}");
+    uint32_t total=0;const unsigned n=uxTaskGetSystemState(tasks,kMax,&total);
+    uint32_t spent[kMax];
+    for(unsigned i=0;i<n;++i){spent[i]=tasks[i].ulRunTimeCounter;for(auto& l:last)if(l.task==tasks[i].xHandle){if(spent[i]>=l.time)spent[i]-=l.time;break;}}
+    const uint32_t span=std::max<uint32_t>(1,total-lastTotal);
+    int used=snprintf(out,size,"{\"window_ms\":%lu,\"tasks\":{",static_cast<unsigned long>(span/1000));
+    bool first=true;
+    for(unsigned k=0;k<n;++k){
+        unsigned best=k;for(unsigned i=k+1;i<n;++i)if(spent[i]>spent[best])best=i;
+        std::swap(spent[k],spent[best]);std::swap(tasks[k],tasks[best]);
+        const unsigned tenths=static_cast<unsigned>(uint64_t(spent[k])*1000/span);
+        if(tenths&&used<int(size)-48){used+=snprintf(out+used,size-used,"%s\"%s\":%u.%u",first?"":",",tasks[k].pcTaskName,tenths/10,tenths%10);first=false;}
+    }
+    for(unsigned i=0;i<kMax;++i)last[i]=i<n?Seen{tasks[i].xHandle,tasks[i].ulRunTimeCounter}:Seen{};
+    lastTotal=total;free(tasks);
+    return used+snprintf(out+used,size-used,"}}");
+}
 extern "C" bool passport_codec_arena(void* memory,size_t size){
     if(memory){
         auto handle=multi_heap_register(memory,size);if(!handle)return false;

@@ -41,6 +41,7 @@ extern const lv_font_t passport_ui_font, passport_status_font, passport_ui_font_
 #define ICON_CALC "\xEE\x80\x8B"
 #define ICON_TROPHY "\xEE\x80\x8C"
 #define ICON_FEISHU "\xEE\x80\x8D"
+#define ICON_HEART "\xEE\x80\x8E"
 namespace {
 // Status sign fallback: the 16 px UI font drawn three times larger, so any GB2312 text typed on the
 // computer still shows at sign size. Softer than the 48 px preset glyphs, but needs no extra flash.
@@ -111,10 +112,20 @@ constexpr int kCells = 9;  // menu: a 3 x 3 page of icons
 constexpr unsigned kDrawRows = 20;
 struct Badge { const char* symbol; uint32_t color; uint32_t ink{}; };  // ink: the icon on its tile (0: the page's dark)
 // Pages that draw their own title and body (no hero card, heading or notice line).
-constexpr bool ownPage(App app){return app==App::Book||app==App::Feishu||app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Score||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Voice||app==App::Walkie;}
+constexpr bool ownPage(App app){return app==App::Book||app==App::Feishu||app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Score||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Health||app==App::Calc||app==App::Voice||app==App::Walkie;}
 // Once these pages show content, a refresh or the next item loads behind it instead of under the loading screen.
 bool keepsContent(App app,const Model& m){
     return (app==App::Podcast&&m.podcastCount)||(app==App::Daily&&*m.page.daily.en)||(app==App::Quiz&&m.quizCount)||(app==App::Quake&&m.quakeCount)||(app==App::Hacker&&m.storyCount)||(app==App::Forecast&&m.page.forecast.days)||(app==App::Stock&&m.stockCount)||app==App::Macro||(app==App::Typhoon&&m.page.typhoon.count)||(app==App::Hot&&m.hotCount)||app==App::Memo||app==App::Translate||app==App::Guard||(app==App::Feishu&&m.page.feishu.count);
+}
+// 健康记录's key hints (key_hints.hpp has the tabs).
+unsigned healthTab(const Model& m){
+    if(m.listening())return 7;
+    if(m.voiceBusy())return 8;
+    if(m.healthArmed)return 6;
+    if(m.healthView==2)return 9;
+    const auto kind=m.healthKind();
+    if(m.healthView==1)return kind==HealthKind::Glucose||kind==HealthKind::Period||kind==HealthKind::Intimacy?5:4;
+    return kind==HealthKind::Water?1:kind==HealthKind::Count?2:kind==HealthKind::Period&&!m.healthPrefs.periodVoice?3:kind==HealthKind::Intimacy?10:0;
 }
 // The footer: 0 the 录音 row, 1 a note in the list, 2 an open note, 3 its delete asked, 4 listening, 5 recognising.
 unsigned memoTab(const Model& m){return m.listening()?4:m.voiceBusy()?5:m.memoArmed?3:m.memoDetail?2:m.memoIndex?1:0;}
@@ -166,6 +177,7 @@ Badge appBadge(App app){
     case App::Guard: return {LV_SYMBOL_EYE_CLOSE,0x22c55e};
     case App::Todo: return {LV_SYMBOL_OK,0xf5a524};
     case App::Ledger: return {ICON_WALLET,0x34d399};
+    case App::Health: return {ICON_HEART,0xf87171};
     case App::Calc: return {ICON_CALC,0xfbbf24};
     case App::Voice: return {ICON_MIC,0x5fd3ff};
     case App::Walkie: return {LV_SYMBOL_CALL,0x4ade80};
@@ -276,7 +288,7 @@ void renderChrome(const Runtime& runtime){
     const bool alt=app==App::Codex?m.aiLevel>0:app==App::Dictation?m.aiDictation:app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Stock?m.stockDetail:app==App::Macro?m.macroDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Walkie?m.walkieAuto:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
     const auto* hint=keyHint(app,m.settingsPage,m.focusRunning,*m.pairingCode,m.live&&m.livePhase==LivePhase::Loading,m.live&&m.livePhase==LivePhase::Error,alt,app==App::Wifi?m.wifiTab:app==App::Settings?(m.settingsPage==SettingsPage::City?dictationTab(m):m.settingsPage==SettingsPage::Idle?m.idleRow:m.wifiSetup?0u:m.wifiArmed?3u:m.wifiRow?2u:1u):
         app==App::Rate?voiceTab(m,m.rateArmed):app==App::Stock?voiceTab(m,m.stockArmed):app==App::Macro?0u:app==App::Countdown?voiceTab(m,m.countdownArmed):
-        app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:m.page.score.fresh()?0u:1u):app==App::Feishu?(m.feishuDetail?1u:m.page.feishu.count?0u:2u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:app==App::Podcast?unsigned(m.podcastEpisodes):m.soundView);
+        app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:(m.page.score.players()>2?3u:0u)+(m.page.score.fresh()?0u:1u)):app==App::Feishu?(m.feishuDetail?1u:m.page.feishu.count?0u:2u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Health?healthTab(m):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:app==App::Podcast?unsigned(m.podcastEpisodes):m.soundView);
     if(app==App::Menu&&runtime.menuLayout().mode==MenuLayout::List)hint="上下：选择 | 长按上下：快移 | 确认：进入";
     char text[256];
     // 打开 Mac 程序: what the computer is doing takes the key hints' place for a few seconds, on any page.
@@ -2201,6 +2213,160 @@ void initLedger(lv_obj_t* screen){
     ledgerView=lv_obj_create(ledgerRoot);box(ledgerView,8,2,224,255,kBg);lv_obj_add_event_cb(ledgerView,drawLedger,LV_EVENT_DRAW_MAIN,nullptr);
 }
 void renderLedger(const Model& m){drawModel=&m;lv_obj_invalidate(ledgerView);}
+// 健康记录: the overview (a row a kind: its latest record; 喝水's cups against the goal; 经期's day or the next one),
+// one kind's records under its latest value and a line of the last ones, or the settings; or the listening screen.
+lv_obj_t *healthRoot,*healthView;
+constexpr uint32_t kHealthColors[]{0x38bdf8,0x34d399,0xf472b6,0xfb923c,0xf87171,0xe879f9,0xfb7185};
+static_assert(std::size(kHealthColors)==kHealthKinds);
+uint32_t healthInk(const HealthEntry& e){static constexpr uint32_t inks[]{kText,0x60a5fa,kWarn,0xff5a5a};return inks[healthFlag(e).level];}
+// When: "08:12" today, then 昨天, "3天前" and "11/03".
+void healthWhen(time_t at,time_t now,char* out,size_t size){
+    const int days=healthDay(now)-healthDay(at);tm t{};localtime_r(&at,&t);
+    if(days<=0)snprintf(out,size,"%02d:%02d",t.tm_hour,t.tm_min);else if(days==1)snprintf(out,size,"昨天");
+    else if(days<7)snprintf(out,size,"%d天前",days);else snprintf(out,size,"%d/%02d",t.tm_mon+1,t.tm_mday);
+}
+// 亲密: how many in the last `days` days (0: this calendar month).
+unsigned intimacyCount(const HealthBook& b,time_t now,int days){
+    tm t{};localtime_r(&now,&t);const int today=healthDay(now),from=days?today-days+1:today-t.tm_mday+1;unsigned n=0;
+    for(unsigned i=0;i<b.count;++i)if(b.items[i].kind==uint8_t(HealthKind::Intimacy)&&b.live(i)&&healthDay(b.items[i].at)>=from)++n;
+    return n;
+}
+void healthHeader(Painter& p,const Model& m,const char* armed,const char* title){
+    char text[64];
+    if(m.healthArmed){p.rect(0,0,223,21,kMemoRed,6);p.text(armed,0,1,223,0xffffff,LV_TEXT_ALIGN_CENTER);return;}
+    if(*m.lastNotice){p.text(m.lastNotice,0,0,223,kWarn);return;}
+    p.text(title,0,0,150,kMuted);
+    if(const unsigned waiting=healthPending()){snprintf(text,sizeof(text),"%u 条待同步",waiting);p.rect(132,7,138,13,kWarn,3);p.text(text,142,0,223,kWarn,LV_TEXT_ALIGN_RIGHT);}
+}
+void drawHealthOverview(Painter& p,const Model& m,time_t now){
+    const auto& b=m.page.health;char text[64],value[32];
+    tm t{};localtime_r(&now,&t);static const char* const week[]{"周日","周一","周二","周三","周四","周五","周六"};
+    snprintf(text,sizeof(text),"%d月%d日 %s",t.tm_mon+1,t.tm_mday,week[t.tm_wday]);
+    healthHeader(p,m,m.healthKind()==HealthKind::Water?"再长按下键减一杯":"再长按下键删除最近一条",text);
+    HealthKind kinds[kHealthKinds];const unsigned n=m.healthKinds(kinds);const int pitch=n+1>7?28:32;
+    for(unsigned row=0;row<=n;++row){
+        const int y=26+int(row)*pitch;const bool picked=m.healthRow==row;
+        p.rect(0,y,223,y+pitch-4,picked?kBorder:kPanel,7);
+        if(row==n){
+            p.rect(4,y+4,28,y+24,kMuted,6);p.text(LV_SYMBOL_SETTINGS,4,y+5,28,kBg,LV_TEXT_ALIGN_CENTER,&lv_font_montserrat_14);
+            p.text("提醒与设置",36,y+5,150,kText);
+            const unsigned every=kWaterEvery[m.healthPrefs.water%6];if(every)snprintf(text,sizeof(text),"每 %u 分钟",every);else strcpy(text,"提醒关");
+            p.text(text,120,y+5,216,kMuted,LV_TEXT_ALIGN_RIGHT);continue;
+        }
+        const auto kind=kinds[row];const uint32_t color=kHealthColors[unsigned(kind)];
+        static const char* const marks[]{"水","重","糖","温","压","经","亲"};p.rect(4,y+4,28,y+24,color,6);p.text(marks[unsigned(kind)],4,y+5,28,kBg,LV_TEXT_ALIGN_CENTER);
+        p.text(kHealthNames[unsigned(kind)],36,y+5,80,kText);
+        if(kind==HealthKind::Water){
+            const unsigned cups=b.cups(healthDay(now)),goal=kWaterGoals[m.healthPrefs.goal%4];
+            p.rect(80,y+12,150,y+17,kBg,3);if(cups)p.rect(80,y+12,80+70*std::min(cups,goal)/goal,y+17,color,3);
+            snprintf(text,sizeof(text),"%u/%u 杯",cups,goal);p.text(text,150,y+5,216,cups>=goal?color:kText,LV_TEXT_ALIGN_RIGHT);continue;
+        }
+        if(kind==HealthKind::Period){
+            const auto s=periodState(b,now);
+            if(!s.known){p.text("未记录",120,y+5,216,kMuted,LV_TEXT_ALIGN_RIGHT);continue;}
+            if(s.active){p.text("经期中",80,y+5,140,kMuted);snprintf(text,sizeof(text),"第 %d 天",s.day);}
+            else if(s.nextIn>=0){p.text(s.fertile?"易孕期":"预计",80,y+5,140,s.fertile?color:kMuted);snprintf(text,sizeof(text),s.nextIn?"%d 天后":"今天",s.nextIn);}
+            else{p.text("预计",80,y+5,140,kMuted);snprintf(text,sizeof(text),"已推迟 %d 天",-s.nextIn);}
+            p.text(text,120,y+5,216,color,LV_TEXT_ALIGN_RIGHT);continue;
+        }
+        const int i=b.latest(kind);
+        if(i<0){p.text("未记录",120,y+5,216,kMuted,LV_TEXT_ALIGN_RIGHT);continue;}
+        const auto& e=b.items[i];
+        if(kind==HealthKind::Intimacy){
+            healthWhen(e.at,now,text,sizeof(text));p.text(text,80,y+5,150,kMuted);
+            snprintf(text,sizeof(text),"本月 %u 次",intimacyCount(b,now,0));p.text(text,120,y+5,216,kText,LV_TEXT_ALIGN_RIGHT);continue;
+        }
+        if(kind==HealthKind::Glucose)snprintf(text,sizeof(text),"%s",kGlucoseTags[e.tag%kGlucoseTagCount]);else healthWhen(e.at,now,text,sizeof(text));
+        p.text(text,80,y+5,150,kMuted);
+        healthValue(e,value,sizeof(value));
+        snprintf(text,sizeof(text),"%s%s",value,kind==HealthKind::Weight?" kg":kind==HealthKind::Temp?"℃":"");
+        p.text(text,120,y+5,216,healthInk(e),LV_TEXT_ALIGN_RIGHT);
+    }
+}
+void drawHealthRecords(Painter& p,const Model& m,time_t now){
+    const auto& b=m.page.health;const auto kind=m.healthKind();const unsigned k=unsigned(kind);char text[64],value[32],when[40];
+    uint8_t order[HealthBook::kMax];const unsigned n=b.list(kind,order,HealthBook::kMax);const unsigned extra=kind==HealthKind::Period;
+    snprintf(text,sizeof(text),"%s · %u 条",kHealthNames[k],n);healthHeader(p,m,"再长按下键删除这一条",text);
+    // The latest, large, and the last ones as a line (the systolic for 血压); 经期 shows its prediction instead.
+    p.rect(0,24,223,84,kPanel,8);
+    if(kind==HealthKind::Period){
+        const auto s=periodState(b,now);
+        if(s.active)snprintf(text,sizeof(text),"经期第 %d 天",s.day);else if(!s.known)strcpy(text,"还没有记录");
+        else if(s.nextIn>=0)snprintf(text,sizeof(text),"下次约 %d 天后",s.nextIn);else snprintf(text,sizeof(text),"已推迟 %d 天",-s.nextIn);
+        p.text(text,10,30,215,kText);
+        if(s.known&&!s.active&&s.ovulationIn>=-1&&s.ovulationIn<=5)snprintf(text,sizeof(text),"易孕期 · 周期约 %d 天（仅供参考）",s.cycle);
+        else snprintf(text,sizeof(text),"周期约 %d 天 · 经期约 %d 天",s.cycle,s.length);
+        p.text(text,10,56,215,s.fertile?kHealthColors[k]:kMuted);
+    }else if(kind==HealthKind::Intimacy){
+        snprintf(text,sizeof(text),"本月 %u 次",intimacyCount(b,now,0));p.text(text,10,30,215,kText);
+        snprintf(text,sizeof(text),"近 30 天 %u 次",intimacyCount(b,now,30));p.text(text,10,56,215,kMuted);
+    }else if(n){
+        const auto& e=b.items[order[0]];healthValue(e,value,sizeof(value));
+        p.text(value,10,30,120,healthInk(e),LV_TEXT_ALIGN_LEFT,&lv_font_montserrat_24);
+        const auto flag=healthFlag(e);
+        snprintf(text,sizeof(text),"%s%s%s",healthUnit(kind),*flag.text?" · ":"",flag.text);p.text(text,10,58,120,*flag.text?healthInk(e):kMuted);
+        const unsigned points=std::min(n,14u);
+        if(points>=2&&kind!=HealthKind::Water){
+            int low=INT16_MAX,high=INT16_MIN;for(unsigned i=0;i<points;++i){low=std::min<int>(low,b.items[order[i]].v1);high=std::max<int>(high,b.items[order[i]].v1);}
+            if(high==low){--low;++high;}
+            int px=0,py=0;
+            for(unsigned i=0;i<points;++i){const int x=210-int(i)*84/int(points-1),yy=74-(b.items[order[i]].v1-low)*40/(high-low);if(i)p.line(x,yy,px,py,kHealthColors[k]);px=x;py=yy;}
+        }
+    }else p.text("还没有记录",10,40,215,kMuted);
+    if(!n&&!extra){p.text("回到上一页按确认记录",0,140,223,0x5f7f94,LV_TEXT_ALIGN_CENTER);return;}
+    for(unsigned row=0;row<Model::kHealthRows&&m.healthTop+row<n+extra;++row){
+        const unsigned at=m.healthTop+row;const int y=90+int(row)*26;const bool picked=m.healthIndex==at;
+        p.rect(0,y,223,y+23,picked?kBorder:kPanel,6);
+        if(extra&&!at){p.text(periodState(b,now).active?"按确认：经期今天结束":"按确认：经期今天开始",8,y+3,215,kHealthColors[k]);continue;}
+        const auto& e=b.items[order[at-extra]];
+        tm t{};const time_t when0=e.at;localtime_r(&when0,&t);
+        if(kind==HealthKind::Water||kind==HealthKind::Period||(kind==HealthKind::Intimacy&&t.tm_hour==12&&!t.tm_min))snprintf(when,sizeof(when),"%d/%02d",t.tm_mon+1,t.tm_mday);
+        else snprintf(when,sizeof(when),"%d/%02d %02d:%02d",t.tm_mon+1,t.tm_mday,t.tm_hour,t.tm_min);
+        p.text(when,8,y+3,110,kMuted);
+        healthValue(e,value,sizeof(value));
+        if(kind==HealthKind::Water)snprintf(text,sizeof(text),"%s 杯 · %d ml",value,e.v1*e.v2);
+        else if(kind==HealthKind::Period)snprintf(text,sizeof(text),"%s %s",value,kFlowNames[e.v1%4]);
+        else if(kind==HealthKind::Intimacy)snprintf(text,sizeof(text),"%s",e.tag?kProtectNames[e.tag%3]:"未记保护");
+        else if(kind==HealthKind::Glucose)snprintf(text,sizeof(text),"%s %s",kGlucoseTags[e.tag%kGlucoseTagCount],value);
+        else if(kind==HealthKind::Pressure&&e.v3)snprintf(text,sizeof(text),"%s ♥%d",value,e.v3);
+        else snprintf(text,sizeof(text),"%s",value);
+        p.text(text,100,y+3,206,healthInk(e),LV_TEXT_ALIGN_RIGHT);
+        if(!(e.flags&HealthBook::kSynced))p.rect(212,y+4,216,y+8,kWarn,2);
+    }
+}
+void drawHealthSettings(Painter& p,const Model& m){
+    const auto& s=m.healthPrefs;char value[32];
+    healthHeader(p,m,"","提醒与设置");
+    static const char* const names[]{"喝水提醒","提醒时段","每杯","每日目标","经期与亲密","私密项录入"};
+    for(unsigned row=0;row<6;++row){
+        const int y=26+int(row)*34;
+        p.rect(0,y,223,y+30,m.healthSetRow==row?kBorder:kPanel,7);p.text(names[row],10,y+6,110,kText);
+        switch(row){
+        case 0:if(const unsigned every=kWaterEvery[s.water%6])snprintf(value,sizeof(value),"每 %u 分钟",every);else strcpy(value,"关");break;
+        case 1:snprintf(value,sizeof(value),"%d:00 - %d:00",kWaterWindows[s.window%3][0],kWaterWindows[s.window%3][1]);break;
+        case 2:snprintf(value,sizeof(value),"%u ml",kCupMl[s.cup%5]);break;
+        case 3:snprintf(value,sizeof(value),"%u 杯",kWaterGoals[s.goal%4]);break;
+        case 4:strcpy(value,s.period?"显示":"隐藏");break;
+        default:strcpy(value,s.periodVoice?"语音和按键":"仅按键");
+        }
+        p.text(value,100,y+6,214,kAccent,LV_TEXT_ALIGN_RIGHT);
+    }
+    p.text("连电脑时自动同步到 健康.csv",0,236,223,0x5f7f94,LV_TEXT_ALIGN_CENTER);
+}
+void drawHealth(lv_event_t* e){
+    const auto& m=*drawModel;auto p=painter(e);const uint64_t now=esp_timer_get_time()/1000000;
+    if(m.voiceBusy()){
+        static const char* const examples[]{"","例：62.5 · 125 斤","例：6.2 空腹 · 餐后 8.1","例：36.8 · 三十七度五","例：120 80 心率 72","例：月经来了 · 昨天结束了","例：昨天同房 有保护"};
+        const auto kind=m.healthKind();drawListening(p,m,now,kind<HealthKind::Count?examples[unsigned(kind)]:"","识别后自动记下");return;
+    }
+    const time_t clock=time(nullptr);
+    if(m.healthView==2)drawHealthSettings(p,m);else if(m.healthView==1)drawHealthRecords(p,m,clock);else drawHealthOverview(p,m,clock);
+}
+void initHealth(lv_obj_t* screen){
+    healthRoot=lv_obj_create(screen);box(healthRoot,0,35,240,257,kBg);
+    healthView=lv_obj_create(healthRoot);box(healthView,8,2,224,255,kBg);lv_obj_add_event_cb(healthView,drawHealth,LV_EVENT_DRAW_MAIN,nullptr);
+}
+void renderHealth(const Model& m){drawModel=&m;lv_obj_invalidate(healthView);}
 // 语音计算器: the picked sum and its result in the largest type that fits, then this visit's sums (newest first).
 lv_obj_t *calcRoot,*calcView;
 constexpr uint32_t kCalc=0xfbbf24;
@@ -2496,15 +2662,41 @@ void renderFeishu(const Model& m){drawModel=&m;lv_obj_invalidate(feishuView);}
 // 记分牌: 红方 on top (Up scores), 蓝方 below (Down), each score in large seven-segment digits that read across a table.
 lv_obj_t *scoreRoot,*scoreView;
 struct ScoreColors{uint32_t panel,dim,lit;};
-constexpr ScoreColors kScoreSides[]{{0x2a1218,0x3d1a22,0xff5a5f},{0x0e1c34,0x172a4d,0x4f8dff}};
+constexpr uint32_t scoreShade(uint32_t c,unsigned k){return (((c>>16&255)*k/256)<<16)|(((c>>8&255)*k/256)<<8)|((c&255)*k/256);}
+constexpr ScoreColors scoreSide(uint32_t lit){return {scoreShade(lit,42),scoreShade(lit,64),lit};}
+constexpr ScoreColors kScoreSides[]{{0x2a1218,0x3d1a22,0xff5a5f},{0x0e1c34,0x172a4d,0x4f8dff},scoreSide(0x34d399),scoreSide(0xfbbf24),
+    scoreSide(0xa78bfa),scoreSide(0xfb923c),scoreSide(0x22d3ee),scoreSide(0xf472b6)};
+static_assert(std::size(kScoreSides)==ScoreBoard::kSides&&std::size(kScoreSideNames)==ScoreBoard::kSides);
 void scoreDigit(Painter& p,unsigned digit,int x,int y,int w,int h,int t,const ScoreColors& c){
     static constexpr uint8_t kSegments[]{0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7d,0x07,0x7f,0x6f};  // bit 0 top ... bit 6 middle
     const int mid=y+h/2;
     const int r[7][4]{{x,y,x+w,y+t},{x+w-t,y,x+w,mid},{x+w-t,mid,x+w,y+h},{x,y+h-t,x+w,y+h},{x,mid,x+t,y+h},{x,y,x+t,mid},{x,mid-t/2,x+w,mid+t/2}};
     for(unsigned on:{0u,1u})for(unsigned s=0;s<7;++s)if(bool(kSegments[digit]>>s&1)==bool(on))p.rect(r[s][0],r[s][1],r[s][2],r[s][3],on?c.lit:c.dim,2);
 }
+// 多人计分: one card per side (two columns from 5 sides), the picked one outlined, the leader marked.
+void drawScoreMany(Painter& p,const Model& m){
+    const auto& s=m.page.score;const auto t=scoreReplay(s);const unsigned n=s.players(),cols=n>4?2:1,rows=(n+cols-1)/cols;char text[64];
+    snprintf(text,sizeof(text),"%s · %s",s.kind().name,s.kind().note);p.text(text,0,0,223,kText);
+    unsigned top=0,leader=ScoreState::kNone;
+    for(unsigned i=0;i<n;++i)if(t.points[i]>top){top=t.points[i];leader=i;}else if(t.points[i]==top)leader=ScoreState::kNone;
+    constexpr int gap=6;const int cw=(224-int(cols-1)*gap)/int(cols),ch=(206-int(rows-1)*gap)/int(rows);
+    for(unsigned i=0;i<n;++i){
+        const auto& c=kScoreSides[i];const int x=int(i%cols)*(cw+gap),y=26+int(i/cols)*(ch+gap),pad=(ch-42)/2;
+        if(i==m.scorePick%n){p.rect(x,y,x+cw-1,y+ch-1,c.lit,10);p.rect(x+3,y+3,x+cw-4,y+ch-4,c.dim,8);}
+        else p.rect(x,y,x+cw-1,y+ch-1,c.panel,10);
+        p.text(kScoreSideNames[i],x+10,y+pad,x+60,c.lit);
+        if(i==leader)p.text("领先",x+10,y+pad+22,x+60,kAccent);
+        unsigned v=t.points[i],digits=v>99?3:v>9?2:1;
+        const int h=std::min(ch-16,60),dg=std::max(3,h/10),room=cw-64,w=std::min(h/2,(room-int(digits-1)*dg)/int(digits)),th=std::max(3,h/9);
+        int dx=x+cw-10;do{dx-=w;scoreDigit(p,v%10,dx,y+(ch-h)/2,w,h,th,c);dx-=dg;v/=10;}while(v);
+    }
+    const char* line=*m.lastNotice?m.lastNotice:m.scoreArmed?"再长按下键：清零重开":s.fresh()?"长按上/下：换赛制":nullptr;
+    if(line)p.text(line,0,236,223,*m.lastNotice||m.scoreArmed?kWarn:kMuted,LV_TEXT_ALIGN_CENTER);
+}
 void drawScore(lv_event_t* e){
-    const auto& m=*drawModel;auto p=painter(e);const auto& s=m.page.score;const auto& rule=kScoreRules[s.rule];const auto t=scoreReplay(s);char text[64];
+    const auto& m=*drawModel;auto p=painter(e);const auto& s=m.page.score;
+    if(s.players()>2){drawScoreMany(p,m);return;}
+    const auto& rule=s.kind();const auto t=scoreReplay(s);char text[64];
     snprintf(text,sizeof(text),"%s · %s",rule.name,rule.note);p.text(text,0,0,170,kText);
     if(rule.points){if(t.winner==ScoreState::kNone)snprintf(text,sizeof(text),"第 %u 局",t.done+1u);else strcpy(text,"已结束");p.text(text,150,0,223,kMuted,LV_TEXT_ALIGN_RIGHT);}
     for(unsigned side=0;side<2;++side){
@@ -2520,7 +2712,7 @@ void drawScore(lv_event_t* e){
     }
     const char* line=*m.lastNotice?m.lastNotice:m.scoreArmed?"再长按下键：清零重开":nullptr;
     if(!line&&t.done){text[0]=0;for(unsigned i=t.done>ScoreState::kGames?t.done-ScoreState::kGames:0;i<t.done;++i){char g[12];snprintf(g,sizeof(g),"%s%u:%u",*text?"  ":"",t.history[i%ScoreState::kGames][0],t.history[i%ScoreState::kGames][1]);strcat(text,g);}line=text;}
-    if(!line&&s.fresh())line="长按上键：换赛制";
+    if(!line&&s.fresh())line="长按上/下：换赛制";
     if(line)p.text(line,0,236,223,*m.lastNotice||m.scoreArmed?kWarn:kMuted,LV_TEXT_ALIGN_CENTER);
 }
 // 电子书's sizes: the UI font and its 5/4, 3/2 and doubled copies. A page is 224 px wide and 222 px tall.
@@ -2868,6 +3060,7 @@ void uiInit() {
     else if(guiApp==App::Guard)initGuard(screen);
     else if(guiApp==App::Todo)initTodo(screen);
     else if(guiApp==App::Ledger)initLedger(screen);
+    else if(guiApp==App::Health)initHealth(screen);
     else if(guiApp==App::Calc)initCalc(screen);
     else if(guiApp==App::Voice)initVoice(screen);
     else if(guiApp==App::Walkie)initWalkie(screen);
@@ -3042,6 +3235,7 @@ void uiRender(const Runtime& runtime) {
     } else if(app==App::Guard){renderGuard(model);
     } else if(app==App::Todo){renderTodo(model);
     } else if(app==App::Ledger){renderLedger(model);
+    } else if(app==App::Health){renderHealth(model);
     } else if(app==App::Calc){renderCalc(model);
     } else if(app==App::Voice){renderVoice(model);
     } else if(app==App::Walkie){renderWalkie(model);
@@ -3148,16 +3342,13 @@ void uiRender(const Runtime& runtime) {
     renderConnection(runtime);
     lv_timer_handler();lv_refr_now(display);trackUiMemory();
 }
+bool bodyAnimating(const Runtime& runtime);
 void uiAnimate(const Runtime& runtime){
-    const auto& m=runtime.model;
-    // The main loop calls uiRender for keys, data and power changes. An idle Macro
-    // animation tick only advances LVGL's footer; invalidating macroView here
-    // repaints 57,120 pixels and holds up the next key for about 200 ms on the C3.
-    // Listening, pairing and the initial loading overlay still need their body frames.
-    if(runtime.active()!=App::Macro||!uiPreparedFor(App::Macro)||m.listening()||*m.pairingCode||
-       (m.live&&m.livePhase==LivePhase::Loading&&!keepsContent(App::Macro,m))){
-        uiRender(runtime);return;
-    }
+    // The main loop calls uiRender for keys, data and power changes, and each second on pages with a clock
+    // (LiveServices::tick). When only the footer scrolls (most pages' key hints, the home page's among them) a frame
+    // just advances LVGL's footer strip: a whole uiRender at 8 Hz took about 65 ms each on the home page, half the CPU
+    // beside 语音唤醒, and more on the hand-drawn pages, which repaint their whole body.
+    if(bodyAnimating(runtime)||!uiPreparedFor(runtime.active())){uiRender(runtime);return;}
     renderChrome(runtime);
     lv_timer_handler();lv_refr_now(display);trackUiMemory();
 }
@@ -3167,7 +3358,9 @@ unsigned uiMemoryFree(){return uiFree.load();}
 unsigned uiFlushPixels(){return flushPixels.load();}
 unsigned uiFlushMicros(){return flushMicros.load();}
 unsigned uiMemoryPeak(){return uiPeak.load();}
-bool uiAnimating(const Runtime& runtime) {return runtime.power(esp_timer_get_time()/1000000)==Power::Awake&&(runtime.active()==App::Alert||(runtime.active()==App::Torch&&esp_timer_get_time()/1000000-runtime.model.torchChanged<3)||(runtime.active()==App::Stopwatch&&runtime.model.swRunning)||(runtime.active()==App::News&&*runtime.model.liveLines[0])||runtime.active()==App::Sound||(runtime.active()==App::Memo&&(runtime.model.listening()||(runtime.model.memoSavedAt&&esp_timer_get_time()/1000000-runtime.model.memoSavedAt<5)))||((runtime.active()==App::Status||runtime.active()==App::Translate)&&runtime.model.listening())||(runtime.active()==App::Todo&&(runtime.model.listening()||runtime.model.todoRinging))||((runtime.active()==App::Ledger||runtime.active()==App::Calc||runtime.active()==App::Voice||runtime.active()==App::Alarm||runtime.active()==App::Countdown||speaksToo(runtime.active()))&&runtime.model.listening())||(runtime.active()==App::Wheel&&(runtime.model.listening()||(runtime.model.wheelSpunAt&&uint64_t(esp_timer_get_time())-runtime.model.wheelSpunAt<Model::kWheelSpin+500000)))||(runtime.active()==App::Dictation&&(runtime.model.listening()||(runtime.model.dictationAt&&esp_timer_get_time()/1000000-runtime.model.dictationAt<5)))||footerScrolling||*runtime.model.pairingCode||(runtime.model.live&&runtime.model.livePhase==LivePhase::Loading&&runtime.active()!=App::Home&&runtime.active()!=App::Focus&&runtime.active()!=App::Menu&&runtime.active()!=App::Settings&&runtime.active()!=App::Words&&!keepsContent(runtime.active(),runtime.model)));}
+// Whether the page itself moves; a footer too long for the bar only scrolls itself (uiAnimate).
+bool bodyAnimating(const Runtime& runtime) {return runtime.power(esp_timer_get_time()/1000000)==Power::Awake&&(runtime.active()==App::Alert||(runtime.active()==App::Torch&&esp_timer_get_time()/1000000-runtime.model.torchChanged<3)||(runtime.active()==App::Stopwatch&&runtime.model.swRunning)||(runtime.active()==App::News&&*runtime.model.liveLines[0])||runtime.active()==App::Sound||(runtime.active()==App::Memo&&(runtime.model.listening()||(runtime.model.memoSavedAt&&esp_timer_get_time()/1000000-runtime.model.memoSavedAt<5)))||((runtime.active()==App::Status||runtime.active()==App::Translate)&&runtime.model.listening())||(runtime.active()==App::Todo&&(runtime.model.listening()||runtime.model.todoRinging))||((runtime.active()==App::Ledger||runtime.active()==App::Health||runtime.active()==App::Calc||runtime.active()==App::Voice||runtime.active()==App::Alarm||runtime.active()==App::Countdown||speaksToo(runtime.active()))&&runtime.model.listening())||(runtime.active()==App::Wheel&&(runtime.model.listening()||(runtime.model.wheelSpunAt&&uint64_t(esp_timer_get_time())-runtime.model.wheelSpunAt<Model::kWheelSpin+500000)))||(runtime.active()==App::Dictation&&(runtime.model.listening()||(runtime.model.dictationAt&&esp_timer_get_time()/1000000-runtime.model.dictationAt<5)))||*runtime.model.pairingCode||(runtime.model.live&&runtime.model.livePhase==LivePhase::Loading&&runtime.active()!=App::Home&&runtime.active()!=App::Focus&&runtime.active()!=App::Menu&&runtime.active()!=App::Settings&&runtime.active()!=App::Words&&!keepsContent(runtime.active(),runtime.model)));}
+bool uiAnimating(const Runtime& runtime) {return bodyAnimating(runtime)||(footerScrolling&&runtime.power(esp_timer_get_time()/1000000)==Power::Awake);}
 void uiCapture(const char* name) {
 #ifdef PASSPORT_DEVICE
     (void)name;return;

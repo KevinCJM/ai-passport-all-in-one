@@ -16,3 +16,7 @@ target_compile_definitions(${COMPONENT_LIB} PUBLIC LV_KCONFIG_IGNORE LV_CONF_INC
 if(CMAKE_PROJECT_NAME STREQUAL "passport_device" OR CMAKE_PROJECT_NAME STREQUAL "passport_suite")
   target_compile_definitions(${COMPONENT_LIB} PUBLIC PASSPORT_LVGL_HEAP=1)
 endif()
+# Drawing is the UI's CPU cost on the C3; build it for speed, not size (the app slot has room).
+if(CMAKE_PROJECT_NAME STREQUAL "passport_device")
+  target_compile_options(${COMPONENT_LIB} PRIVATE -O2)
+endif()

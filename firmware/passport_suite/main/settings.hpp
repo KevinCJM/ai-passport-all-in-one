@@ -1,4 +1,5 @@
 #pragma once
+#include "health.hpp"
 #include "ledger.hpp"
 #include "score.hpp"
 #include <cstddef>
@@ -187,6 +188,11 @@ public:
     static bool saveTodo(const TodoList& list);
     static bool loadLedger(LedgerBook& book);
     static bool saveLedger(const LedgerBook& book);
+    // 健康记录: the records (health_v1) and the reminder and display settings (health_cfg).
+    static bool loadHealth(HealthBook& book);
+    static bool saveHealth(const HealthBook& book);
+    static bool loadHealthPrefs(HealthPrefs& prefs);
+    static bool saveHealthPrefs(const HealthPrefs& prefs);
     static bool loadGuard(GuardPrefs& prefs);
     static bool saveGuard(const GuardPrefs& prefs);
     static bool loadScore(ScoreBoard& board);

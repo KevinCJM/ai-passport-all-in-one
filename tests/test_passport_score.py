@@ -27,7 +27,17 @@ int main(){
     s={};repeat(s,"ab",700);t=scoreReplay(s);assert(t.points[0]==700&&t.points[1]==700&&s.count<=ScoreBoard::kPoints&&s.valid());
     while(scoreUndo(s)){}t=scoreReplay(s);assert(t.points[0]+t.points[1]==s.base[0]+s.base[1]&&!s.fresh());
     s={};repeat(s,"a",999);assert(!scoreAdd(s,0)&&scoreAdd(s,1));
-    ScoreBoard bad;bad.rule=9;assert(!bad.valid());bad={};bad.rule=1;bad.base[0]=1;assert(!bad.valid());
+    ScoreBoard bad;bad.rule=99;assert(!bad.valid());bad={};bad.rule=1;bad.base[0]=1;assert(!bad.valid());
+    bad={};bad.rule=4;bad.base[2]=1;assert(bad.valid());bad.base[3]=1;assert(!bad.valid());  // 多人计分 · 3 人 has sides 0-2
+    // 多人计分: 4 bits a point, any side; undo drops the last; 128 points kept, older ones fold into base.
+    s={};s.rule=9;assert(s.players()==8&&s.capacity()==128);
+    for(unsigned i=0;i<8;++i)for(unsigned k=0;k<=i;++k)assert(scoreAdd(s,i));
+    t=scoreReplay(s);for(unsigned i=0;i<8;++i)assert(t.points[i]==i+1);
+    assert(t.winner==ScoreState::kNone&&t.server==ScoreState::kNone&&!scoreAdd(s,8));
+    assert(s.side(s.count-1)==7&&scoreUndo(s)&&scoreReplay(s).points[7]==7);
+    for(unsigned i=0;i<300;++i)assert(scoreAdd(s,i%8));
+    t=scoreReplay(s);unsigned sum=0;for(unsigned i=0;i<8;++i)sum+=t.points[i];assert(sum==35+300&&s.count<=128&&s.valid());
+    s={};s.rule=4;assert(scoreAdd(s,2)&&!scoreAdd(s,3));
     puts("SCORE_OK");
 }
 '''

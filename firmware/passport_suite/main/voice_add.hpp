@@ -269,7 +269,8 @@ inline constexpr AppWord kAppWords[]{
     {App::Todo,"待办提醒"},{App::Todo,"待办"},{App::Todo,"提醒"},{App::Guard,"离座锁屏"},{App::Guard,"锁屏"},
     {App::Ledger,"语音记账"},{App::Ledger,"记账"},{App::Ledger,"账本"},
     {App::Calc,"语音计算器"},{App::Calc,"计算器"},{App::Calc,"语音计算"},{App::Calc,"计算"},
-    {App::Walkie,"对讲机"},{App::Walkie,"对讲"}};
+    {App::Walkie,"对讲机"},{App::Walkie,"对讲"},
+    {App::Health,"健康记录"},{App::Health,"健康"},{App::Health,"喝水"},{App::Health,"体重"},{App::Health,"血糖"},{App::Health,"血压"},{App::Health,"体温"},{App::Health,"经期"}};
 inline App spokenApp(const char* heard) {
     std::string s = voice::bare(heard);
     for (auto& c : s) if (c >= 'A' && c <= 'Z') c += 'a' - 'A';

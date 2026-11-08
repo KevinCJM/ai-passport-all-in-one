@@ -148,6 +148,9 @@ bool LiveServices::snapshotJson(char* output,size_t size){
      // 语音记账: entries in the book, today's shown, selected row, delete asked, waiting for the computer; the notice.
      if(a==App::Ledger){const auto& l=m.page.ledger;uint8_t order[LedgerBook::kMax];snprintf(values,sizeof(values),",\"ledger\":[%u,%u,%u,%u,%u]",l.count,l.shown(ledgerToday(),order),m.ledgerIndex,unsigned(m.ledgerArmed),ledgerStatus().pending);json.append(values);
          json.append(",\"notice\":");json.string(m.lastNotice);}
+     // 健康记录: view, row, record, delete asked, waiting for the computer; the notice.
+     if(a==App::Health){snprintf(values,sizeof(values),",\"health\":[%u,%u,%u,%u,%u]",m.healthView,m.healthRow,m.healthIndex,unsigned(m.healthArmed),healthPending());json.append(values);
+         json.append(",\"notice\":");json.string(m.lastNotice);}
      // 语音计算器: sums, the one on show; that sum and its result; the notice.
      if(a==App::Calc){snprintf(values,sizeof(values),",\"calc\":[%u,%u]",m.calcCount,m.calcIndex);json.append(values);
          const auto* row=m.calcCount?&m.page.calc[m.calcIndex]:nullptr;json.append(",\"calc_sum\":");json.string(row?row->shown:"");
@@ -322,7 +325,7 @@ void LiveServices::action(Key key) {
         if(m.livePhase==LivePhase::Error){if(!nativeIdle())return;m.livePhase=LivePhase::Ready;copy(m.liveState,"本地功能");}
         // 语音计算器 speaks on any Confirm; 待办提醒, 语音记账 and 闹钟 speak from their 录音 row (Confirm on a todo ticks it off, on an entry changes its
         // category, on an alarm opens it); a Confirm that stopped a ring or a snooze does nothing more.
-        if(key==Key::Confirm&&m.livePhase==LivePhase::Ready&&!m.confirmTaken&&(active==App::Status||active==App::Calc||(active==App::Todo&&!m.todoIndex&&!m.todoRinging)||(active==App::Ledger&&!m.ledgerIndex)
+        if(key==Key::Confirm&&m.livePhase==LivePhase::Ready&&!m.confirmTaken&&(active==App::Status||active==App::Calc||(active==App::Todo&&!m.todoIndex&&!m.todoRinging)||(active==App::Ledger&&!m.ledgerIndex)||(active==App::Health&&!m.healthView&&m.healthSpoken())
            ||(active==App::Alarm&&!m.alarmIndex&&!m.alarmRinging&&!m.alarmEdit)||m.voiceBusy()))request("toggle");
         return;
     }
@@ -429,6 +432,7 @@ bool LiveServices::tick(uint64_t now) {
         request(audioReady ? "enter" : "audio_unavailable"); renderLocal(now);
     }
     if(runtime_.ledgerSynced()&&active==App::Ledger)dirty=true;
+    if(runtime_.healthSynced()&&active==App::Health)dirty=true;
     if(runtime_.bookSynced())dirty=true;
 #ifdef PASSPORT_DEVICE
     native_->poll();
@@ -436,7 +440,7 @@ bool LiveServices::tick(uint64_t now) {
     if(active==App::Memo||speaksOnce(active)||active==App::Rate||active==App::Voice)if(const char* heard=native_->memoHeard()){
         App go=App::Count;
         if(active==App::Voice)go=command(heard,now);
-        else if(active==App::Status)runtime_.addStatus(heard);else if(active==App::Wheel)runtime_.addWheel(heard);else if(active==App::Todo)runtime_.addTodo(heard);else if(active==App::Ledger)runtime_.addLedger(heard);else if(active==App::Calc)runtime_.addCalc(heard);
+        else if(active==App::Status)runtime_.addStatus(heard);else if(active==App::Wheel)runtime_.addWheel(heard);else if(active==App::Todo)runtime_.addTodo(heard);else if(active==App::Ledger)runtime_.addLedger(heard);else if(active==App::Health)runtime_.addHealth(heard);else if(active==App::Calc)runtime_.addCalc(heard);
         else if(active==App::Alarm)runtime_.addAlarm(heard);else if(active==App::Countdown)runtime_.addCountdown(heard);
         else if(active==App::Rate){if(runtime_.addRate(heard)){voiceJob_=0;request("refresh");}}
         else if(*heard)runtime_.addMemo(heard,now);else copy(model.lastNotice,"没有听清，请再说一次");

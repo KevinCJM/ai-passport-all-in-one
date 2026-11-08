@@ -21,7 +21,7 @@ from passport_computer_link import start_gateway
 from passport_identity import paired_port
 from passport_paths import helper, user_data, codex_command, PACKAGED
 
-VERSION='0.1.21-preview'
+VERSION='0.1.22-preview'
 LABEL='local.ai-passport.assistant'
 WINDOWS=sys.platform=='win32'
 UI_PORT=8768
@@ -151,6 +151,12 @@ class Controller:
         if not path.exists():raise ValueError('还没有记账记录：在胸牌「语音记账」记一笔，胸牌连上电脑后会自动同步到这里。')
         open_file(path)
 
+    def health(self):
+        """健康记录: the CSV passport_services keeps in sync with the badge."""
+        path=self.directory/'健康.csv'
+        if not path.exists():raise ValueError('还没有健康记录：在胸牌「健康记录」记一条，胸牌连上电脑后会自动同步到这里。')
+        open_file(path)
+
     def web_state(self):
         """The web page's 电脑助手 section."""
         state=self.snapshot()
@@ -172,6 +178,7 @@ class Controller:
             except ValueError:raise
             except Exception:raise ValueError('设置开机启动失败')
         elif action=='ledger':self.ledger()
+        elif action=='health':self.health()
         else:raise ValueError('未知操作')
         return {'ok':True}
 
@@ -411,7 +418,7 @@ def gui(controller,background=False):
             webRows=[stack(self.webButtons[:4]),stack(self.webButtons[4:])]
             for row in webRows:row.setDistribution_(A.NSStackViewDistributionFillEqually)
             self.toggle=self.button('暂停助手','toggle:')
-            actions=stack([self.button('记账表格','ledger:'),self.button('使用说明','help:'),spacer(),self.toggle])
+            actions=stack([self.button('记账表格','ledger:'),self.button('健康表格','health:'),self.button('使用说明','help:'),spacer(),self.toggle])
             sections=[header,self.card,heading('设备'),device,importing,heading('电脑功能'),*features,heading('网页设置（在浏览器打开）'),*webRows,heading('选项'),self.login,ip,ip_note,actions]
             root=stack(sections,True,10);root.setEdgeInsets_((20,24,20,24))
             for view in sections[1:]:
@@ -431,7 +438,7 @@ def gui(controller,background=False):
             menu.addItem_(A.NSMenuItem.separatorItem());entry('打开助手窗口','show:')
             self.webItems=[entry(title+'…','webPage:') for title,_ in WEB_PAGES]
             for index,item in enumerate(self.webItems):item.setTag_(index)
-            entry('记账表格','ledger:');menu.addItem_(A.NSMenuItem.separatorItem())
+            entry('记账表格','ledger:');entry('健康表格','health:');menu.addItem_(A.NSMenuItem.separatorItem())
             self.menuToggle=entry('暂停助手','toggle:');entry('退出 AI Passport 助手','quit:','q');self.item.setMenu_(menu)
             self.timer=NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(1,self,'refresh:',None,True)
             self.current_choices=[];self.refresh_(None)
@@ -531,6 +538,10 @@ def gui(controller,background=False):
             try:controller.ledger()
             except ValueError as error:
                 alert=A.NSAlert.alloc().init();alert.setMessageText_('还没有记账记录');alert.setInformativeText_(str(error).split('：',1)[-1]);alert.runModal()
+        def health_(self,_):
+            try:controller.health()
+            except ValueError as error:
+                alert=A.NSAlert.alloc().init();alert.setMessageText_('还没有健康记录');alert.setInformativeText_(str(error).split('：',1)[-1]);alert.runModal()
         def show_(self,_):self.window.makeKeyAndOrderFront_(None);A.NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
         def quit_(self,_):A.NSApplication.sharedApplication().terminate_(None)
         def applicationShouldTerminateAfterLastWindowClosed_(self,_):return False
@@ -555,10 +566,13 @@ def tray(controller,background=False):
     def ledger():
         try:controller.ledger()
         except ValueError:open_page()
+    def health():
+        try:controller.health()
+        except ValueError:open_page()
     Item=pystray.MenuItem
     menu=pystray.Menu(Item(lambda _:controller.snapshot()['status'],None,enabled=False),pystray.Menu.SEPARATOR,
         Item('打开助手',page('assistant'),default=True),Item('网页设置',pystray.Menu(*[Item(title,page(key)) for title,key in WEB_PAGES])),
-        Item('记账表格',ledger),pystray.Menu.SEPARATOR,Item(lambda _:'暂停助手' if controller.enabled else '恢复助手',toggle),
+        Item('记账表格',ledger),Item('健康表格',health),pystray.Menu.SEPARATOR,Item(lambda _:'暂停助手' if controller.enabled else '恢复助手',toggle),
         Item('开机自动启动',login,checked=lambda _:login_enabled()),Item('退出 AI Passport 助手',lambda icon:icon.stop()))
     icon=pystray.Icon('ai-passport',Image.open(Path(getattr(sys,'_MEIPASS',Path(__file__).parent/'assets'))/'assistant_icon.png'),'AI Passport 助手',menu)
     def watch(icon):

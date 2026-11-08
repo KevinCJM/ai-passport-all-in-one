@@ -182,6 +182,7 @@ struct Model {
         ScoreBoard score;  // 记分牌, loaded on entry and saved on every point
         TodoList todo;
         LedgerBook ledger;
+        HealthBook health;  // 健康记录
         // 语音计算器: the sums worked out on this visit, newest first (calcCount of them).
         std::array<calc::Row,8> calc;
         // 中英翻译: what was said and its translation (toEnglish: Chinese was said), by engine 1 腾讯翻译君 / 2 MyMemory
@@ -269,6 +270,7 @@ struct Model {
     uint8_t aiRows[kAiTools][2]{},aiLevel{},aiIndex{};bool aiDictation{};
     // 记分牌: page.score; scoreArmed: a long Down asked to start over.
     bool scoreArmed{};
+    uint8_t scorePick{};  // 多人计分: the side Confirm scores for
     // 待办提醒: page.todo while the page is open. todoNextAt/todoNext: the next reminder (epoch, 0 = none) and its text,
     // kept so it rings from any page; it rings on the page from todoRingAt (monotonic) for at most 3 minutes.
     // todoIndex 0 is the 录音 row, n the todo n-1; kTodoRows show from todoTop. todoArmed: a long Down asked to delete.
@@ -279,6 +281,19 @@ struct Model {
     // kLedgerRows show from ledgerTop. ledgerArmed: a long Down asked to delete.
     static constexpr unsigned kLedgerRows=3;
     uint8_t ledgerIndex{},ledgerTop{};bool ledgerArmed{};
+    // 健康记录: page.health while the page is open. healthView 0 the overview (healthRow: the kinds healthKinds() shows (经期
+    // and 亲密 when healthPrefs.period),
+    // then 提醒与设置), 1 one kind's records (healthIndex, from healthTop; 经期's row 0 records today by keys), 2 the
+    // settings (healthSetRow). healthArmed: a long Down asked to delete. waterDueAt: the next 喝水提醒 (epoch, 0: not
+    // worked out yet); healthChimes counts reminders, for the device's chime.
+    static constexpr unsigned kHealthRows=6;
+    HealthPrefs healthPrefs;uint8_t healthView{},healthRow{},healthIndex{},healthTop{},healthSetRow{};bool healthArmed{};
+    uint32_t waterDueAt{};uint8_t healthChimes{};
+    unsigned healthKinds(HealthKind* out) const {unsigned n=0;for(unsigned k=0;k<kHealthKinds;++k)if((k!=unsigned(HealthKind::Period)&&k!=unsigned(HealthKind::Intimacy))||healthPrefs.period)out[n++]=HealthKind(k);return n;}
+    // The kind on show (the overview's row, or the one opened); Count on the 设置 row.
+    HealthKind healthKind() const {HealthKind kinds[kHealthKinds];const unsigned n=healthKinds(kinds);return healthRow<n?kinds[healthRow]:HealthKind::Count;}
+    // The overview's row takes a spoken record: the measured kinds, and 经期 unless it is set to keys only.
+    bool healthSpoken() const {const auto k=healthKind();return k==HealthKind::Weight||k==HealthKind::Glucose||k==HealthKind::Temp||k==HealthKind::Pressure||(k==HealthKind::Period&&healthPrefs.periodVoice);}
     // 语音计算器: page.calc holds calcCount sums; calcIndex is the one on show (0 the newest), which a sum that
     // starts with an operator goes on from.
     uint8_t calcCount{},calcIndex{};
@@ -334,6 +349,7 @@ struct Model {
 // Every list above has a fixed count, so the state that stays in RAM is known: about 9 KB (0.4.8). A feature that
 // needs more raises this budget on purpose, not by accident.
 static_assert(sizeof(Model) <= 10 * 1024);
+static_assert(sizeof(HealthBook) <= 1360, "健康记录 must fit the page block other pages already need (0.5.37: 1360 B)");
 
 class Worker {
     enum class Op : uint8_t { Bind, Stop, Halt };
@@ -418,6 +434,10 @@ public:
     // 语音记账: what the cloud heard becomes an entry (false: nothing added, lastNotice says why). ledgerSynced:
     // the computer took or acknowledged entries since the last call (the open page is reloaded).
     bool addLedger(const char* heard);
+    // 健康记录: what the cloud heard becomes a record of the row's kind (false: nothing added, lastNotice says why);
+    // healthSynced: the computer took or acknowledged records since the last call (the open page is reloaded).
+    bool addHealth(const char* heard);
+    bool healthSynced();
     // 语音计算器: works out what the cloud heard, going on from the picked result (false: lastNotice says why).
     bool addCalc(const char* heard);
     bool ledgerSynced();
@@ -466,6 +486,10 @@ public:
 // totals for the month yyyymm (0: none sent). Writes the entries it has not got yet as JSON (LedgerBook::pendingJson).
 struct LedgerAck { uint32_t id; uint8_t rev; };
 void ledgerExchange(const LedgerAck* acks, unsigned count, int32_t monthOut, int32_t monthIn, uint32_t month, char* out, size_t size);
+// 健康记录's hand-over, the same way: acks are the records (id, revision) the computer has saved; out gets the ones it
+// has not got yet (healthJson). healthPending: how many wait.
+void healthExchange(const LedgerAck* acks, unsigned count, char* out, size_t size);
+unsigned healthPending();
 // Entries waiting for the computer, and its month totals (known: sent for this month).
 struct LedgerStatus { unsigned pending; bool monthKnown; int32_t monthOut, monthIn; };
 LedgerStatus ledgerStatus();

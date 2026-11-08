@@ -12,6 +12,8 @@ target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=esp_panic_handler")
 # codec_memory.cpp replaces esp_audio_codec's weak allocators; nothing else references it, so pull it in.
 target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,-u,media_lib_module_malloc")
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Werror)
+# The pages' drawing code, like LVGL itself (suite_lvgl), is built for speed.
+set_source_files_properties("${SUITE}/ui.cpp" "${SUITE}/home_ui.cpp" "${SUITE}/status_bar.cpp" PROPERTIES COMPILE_OPTIONS "-O2;-Wno-format-truncation")  # -O2 sees more snprintf cuts; they are meant
 target_compile_definitions(${COMPONENT_LIB} PRIVATE PASSPORT_DEVICE=1)
 # The fixed-point echo loop must share one C3 core with Opus in real time.
 set_source_files_properties("${LIVE}/audio_pipe.cpp" PROPERTIES COMPILE_OPTIONS "-O2")

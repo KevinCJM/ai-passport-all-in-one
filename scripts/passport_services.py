@@ -24,6 +24,7 @@ from passport_dictation import BluetoothDictation,paste
 from passport_ai_sessions import AISessions,TOOLS as AI_TOOLS
 from passport_guard import Guard
 from passport_ledger import Ledger
+from passport_health import Health
 from passport_books import Books
 from passport_mac_open import MacOpener
 from passport_feishu import Feishu,BUNDLE as FEISHU_BUNDLE
@@ -250,6 +251,7 @@ class Services:
         self.dictation_ble=BluetoothDictation(self)
         self.guard=None;self.guard_context=None
         self.ledger=Ledger(user_data()/'记账.csv')
+        self.health=Health(user_data()/'健康.csv')
         self.books=Books(user_data()/'电子书')
         self.mac=MacOpener(lambda:self.settings.get('mac_app_aliases',{}))
         if getattr(simulator,'physical_device',False):
@@ -705,6 +707,7 @@ class Services:
         details=dict(self.details,audio=dict(self.audio.stats),media=dict(self.media.details))
         details['bluetooth_dictation']=dict(self.dictation_ble.stats)
         details['ledger']=dict(self.ledger.stats,rows=len(self.ledger.rows),path=str(self.ledger.path))
+        details['health']=dict(self.health.stats,rows=len(self.health.rows),path=str(self.health.path))
         details['books']=dict(self.books.stats,badge=self.books.badge)
         if self.cloud: details['chat']=dict(self.cloud.stats,ready=self.hello_ready(),listening=self.cloud.listening)
         return {'active':self.active,'details':details,'metrics':self.metrics,'source_sha256':self.sources}

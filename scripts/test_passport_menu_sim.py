@@ -44,7 +44,7 @@ def main():
     original=(BUILD/'merged_flash.bin').read_bytes();digest=hashlib.sha256(original).hexdigest()
     image=bytearray(original);image.extend(b'\xff'*(0x800000-len(image)));fixture=identity_fixture();image[0x6a0000:0x6a0000+len(fixture)]=fixture
     flash=OUT/'simulation-flash.bin';flash.write_bytes(image)
-    command=[str(EMU),'--chip','esp32c3','--firmware',str(flash),'--wifi-auth','wpa2-psk','--net','user','--log-color','never','--save-state','--exit-on','SUITE_DONE','--timeout','590s']
+    command=[str(EMU),'--chip','esp32c3','--firmware',str(flash),'--wifi-auth','wpa2-psk','--net','user','--log-color','never','--save-state','--exit-on','SUITE_DONE','--timeout','1790s']
     started=time.monotonic();proc=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
     frames=[];cases=[];memory=[];active=None;pending=b'';failures=[]
     colors=[bytes((((p>>11)&31)*255//31,((p>>5)&63)*255//63,(p&31)*255//31)) for p in range(65536)]
@@ -52,7 +52,7 @@ def main():
         selector.register(proc.stdout,selectors.EVENT_READ)
         try:
             while selector.get_map():
-                if time.monotonic()-started>600:raise TimeoutError('C3 suite timed out')
+                if time.monotonic()-started>1800:raise TimeoutError('C3 suite timed out')
                 for key,_ in selector.select(.25):
                     raw=key.fileobj.read1(65536)
                     if not raw:selector.unregister(key.fileobj);continue

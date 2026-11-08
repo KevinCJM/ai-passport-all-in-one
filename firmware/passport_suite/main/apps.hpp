@@ -2,18 +2,18 @@
 #include <array>
 #include <cstdint>
 namespace passport {
-enum class App : uint8_t { Home, Chat, Dictation, Codex, Focus, Monitor, Menu=7, RetiredOtp, Radio, Settings, Words, Slides, Alert, Status, Calendar, Countdown, Torch, Qr, News, Sonar, Rate, Stopwatch, History, Daily, Quake, Quiz, Hacker, Wifi, Sound, Motion, Podcast, Forecast, Noise, Alarm, Stock, Typhoon, Hot, Memo, Wheel, Translate, Guard, Todo, Ledger, Calc, Voice, Walkie, Macro, Score, Feishu, Book, Count };
+enum class App : uint8_t { Home, Chat, Dictation, Codex, Focus, Monitor, Menu=7, RetiredOtp, Radio, Settings, Words, Slides, Alert, Status, Calendar, Countdown, Torch, Qr, News, Sonar, Rate, Stopwatch, History, Daily, Quake, Quiz, Hacker, Wifi, Sound, Motion, Podcast, Forecast, Noise, Alarm, Stock, Typhoon, Hot, Memo, Wheel, Translate, Guard, Todo, Ledger, Calc, Voice, Walkie, Macro, Score, Feishu, Book, Health, Count };
 enum class SettingsPage : uint8_t { List, Wifi, Bluetooth, Brightness, Volume, Idle, Wake, City, Contact };
 inline constexpr uint8_t kSettingsRows = 8;
 // Menu order: themed pages of up to eight (< 9, fitting 3 x 3 grid with breathing room);
 // kMenuPages names them and kMenuStarts holds each page's first entry. The voice pages come first, 系统设置 ends the last page.
-inline constexpr std::array<App,46> kFunctions{
+inline constexpr std::array<App,47> kFunctions{
     App::Chat,App::Memo,App::Dictation, App::Translate,App::Ledger,App::Calc, App::Todo,App::Walkie,
     App::Codex,App::Feishu,App::Monitor, App::Guard,App::Slides,App::Status, App::Focus,App::Alarm,
     App::Calendar,App::Countdown,App::Stopwatch, App::Forecast,App::Typhoon,App::Quake, App::Rate,App::History,
     App::Stock,App::Macro,App::News, App::Hot,App::Hacker,App::Quiz, App::Daily,
     App::Book,App::Words,App::Radio, App::Podcast,App::Noise,App::Sound, App::Sonar,App::Score,
-    App::Torch,App::Alert,App::Wheel, App::Motion,App::Wifi,App::Qr, App::Settings};
+    App::Torch,App::Alert,App::Wheel, App::Motion,App::Wifi,App::Qr, App::Health,App::Settings};
 inline constexpr const char* kMenuPages[]{"小智 · 语音","电脑 · 办公","时间 · 气象","财经 · 资讯","学习 · 影音","工具 · 设置"};
 inline constexpr uint8_t kMenuStarts[]{0,8,16,24,31,39,kFunctions.size()};  // the last marks the end
 static_assert(std::size(kMenuStarts)==std::size(kMenuPages)+1);
@@ -61,7 +61,7 @@ inline constexpr StatusLabel kStatusLabels[]{
 // status-font-end
 // Local pages where Confirm-to-Confirm speech becomes one line of text (语音笔记's cloud task, one phrase a turn):
 // 状态牌's label, 随机转盘's mode or options, a todo, a ledger entry, an alarm, a 倒数日 event, a sum to work out.
-constexpr bool speaksOnce(App app){return app==App::Status||app==App::Wheel||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Alarm||app==App::Countdown;}
+constexpr bool speaksOnce(App app){return app==App::Status||app==App::Wheel||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Alarm||app==App::Countdown||app==App::Health;}
 // Pages that also take one spoken phrase ("speak" to the device's task) though they are not local: 汇率 and 自选股
 // (a long Up), and Settings > 所在城市.
 constexpr bool speaksToo(App app){return app==App::Rate||app==App::Stock||app==App::Settings;}
