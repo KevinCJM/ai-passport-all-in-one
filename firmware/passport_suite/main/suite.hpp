@@ -183,6 +183,7 @@ struct Model {
         TodoList todo;
         LedgerBook ledger;
         HealthBook health;  // 健康记录
+        TrainView train;    // 高铁查询
         // 语音计算器: the sums worked out on this visit, newest first (calcCount of them).
         std::array<calc::Row,8> calc;
         // 中英翻译: what was said and its translation (toEnglish: Chinese was said), by engine 1 腾讯翻译君 / 2 MyMemory
@@ -294,6 +295,14 @@ struct Model {
     HealthKind healthKind() const {HealthKind kinds[kHealthKinds];const unsigned n=healthKinds(kinds);return healthRow<n?kinds[healthRow]:HealthKind::Count;}
     // The overview's row takes a spoken record: the measured kinds, and 经期 unless it is set to keys only.
     bool healthSpoken() const {const auto k=healthKind();return k==HealthKind::Weight||k==HealthKind::Glucose||k==HealthKind::Temp||k==HealthKind::Pressure||(k==HealthKind::Period&&healthPrefs.periodVoice);}
+    // 高铁查询: page.train. trainTrips trips are saved; trainTrip is the one on show (kTrainNone: a train asked for by
+    // voice, not saved yet; with no code either, nothing to show). trainView 0 the trip's card, 1 the stops
+    // (trainIndex picked, kTrainRows from trainTop). trainFrom: the stop picked to get on, waiting for the one to get
+    // off (kTrainNone: none). trainArmed: a long Down asked to delete the trip. trainNextAt/trainNext: today's next trip
+    // (its departure, epoch; 0 none) for the home page's footer.
+    static constexpr unsigned kTrainRows=7;
+    uint8_t trainTrips{},trainTrip{kTrainNone},trainView{},trainIndex{},trainTop{},trainFrom{kTrainNone};bool trainArmed{};
+    uint32_t trainNextAt{};char trainNext[64]{};
     // 语音计算器: page.calc holds calcCount sums; calcIndex is the one on show (0 the newest), which a sum that
     // starts with an operator goes on from.
     uint8_t calcCount{},calcIndex{};
@@ -350,6 +359,7 @@ struct Model {
 // needs more raises this budget on purpose, not by accident.
 static_assert(sizeof(Model) <= 10 * 1024);
 static_assert(sizeof(HealthBook) <= 1360, "健康记录 must fit the page block other pages already need (0.5.37: 1360 B)");
+static_assert(sizeof(TrainView) <= 1360, "高铁查询 must fit the same page block");
 
 class Worker {
     enum class Op : uint8_t { Bind, Stop, Halt };
@@ -438,6 +448,12 @@ public:
     // healthSynced: the computer took or acknowledged records since the last call (the open page is reloaded).
     bool addHealth(const char* heard);
     bool healthSynced();
+    // 高铁查询: what the cloud heard becomes the train on show (its stops; false: no train number, lastNotice says why);
+    // reloadTrain rereads the trips (and today's next for the home page); trainFetched keeps a trip's 检票口 as fetched.
+    bool addTrain(const char* heard);
+    void reloadTrain();
+    // A station renamed or moved in the timetable moves the trip's stops (fromAt, toAt) instead.
+    void trainFetched(const char* code, uint32_t date, uint8_t fromAt, uint8_t toAt, const char* gate);
     // 语音计算器: works out what the cloud heard, going on from the picked result (false: lastNotice says why).
     bool addCalc(const char* heard);
     bool ledgerSynced();

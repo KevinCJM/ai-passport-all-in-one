@@ -54,7 +54,7 @@ using namespace passport;
 int main(int argc,char** argv){
     assert(argc==2);auto d=defaultMenuLayout();assert(d.valid());
     std::ofstream file(argv[1],std::ios::binary);file.write(reinterpret_cast<char*>(&d),sizeof(d));file.close();
-    MenuView view;view.build(d);assert(view.count==47&&view.pages==6);
+    MenuView view;view.build(d);assert(view.count==48&&view.pages==6);
     for(auto app:kFunctions)d.show(app,app==App::Settings);
     view.build(d);assert(d.valid()&&view.count==1&&view.pages==1&&kFunctions[view.items[0]]==App::Settings);
     auto bad=d;bad.show(App::Settings,false);assert(!bad.valid());bad=d;bad.order[0][0]=0;assert(!bad.valid());
@@ -90,12 +90,12 @@ int main(int argc,char** argv){
             node = r'''
 const fs=require('fs'),vm=require('vm');vm.runInThisContext(fs.readFileSync(process.argv[1],'utf8'));
 const input=process.argv[2],decoded=PassportMenu.decode(input);
-if(decoded.orders[0].length!==47||decoded.names[0]!=='小智语音')throw Error('wrong layout');
+if(decoded.orders[0].length!==48||decoded.names[0]!=='小智语音')throw Error('wrong layout');
 if(PassportMenu.encode(decoded)!==input)throw Error('wire roundtrip mismatch');
 decoded.mode=2;decoded.names[0]='我的常用';decoded.orders[2].reverse();
 if(PassportMenu.decode(PassportMenu.encode(decoded)).names[0]!=='我的常用')throw Error('UTF8 mismatch');
 decoded.names[0]='a'.repeat(9);let rejected=false;try{PassportMenu.encode(decoded)}catch(e){rejected=true}if(!rejected)throw Error('name bound');
-console.log(JSON.stringify({bytes:482,apps:47,random_layouts:1000,wire_roundtrip:true}));
+console.log(JSON.stringify({bytes:482,apps:48,random_layouts:1000,wire_roundtrip:true}));
 '''
             subprocess.run(['node','-e',node,str(ROOT/'scripts/passport_menu.js'),base64.b64encode(raw).decode()],check=True)
 

@@ -2,20 +2,20 @@
 #include <array>
 #include <cstdint>
 namespace passport {
-enum class App : uint8_t { Home, Chat, Dictation, Codex, Focus, Monitor, Menu=7, RetiredOtp, Radio, Settings, Words, Slides, Alert, Status, Calendar, Countdown, Torch, Qr, News, Sonar, Rate, Stopwatch, History, Daily, Quake, Quiz, Hacker, Wifi, Sound, Motion, Podcast, Forecast, Noise, Alarm, Stock, Typhoon, Hot, Memo, Wheel, Translate, Guard, Todo, Ledger, Calc, Voice, Walkie, Macro, Score, Feishu, Book, Health, Count };
+enum class App : uint8_t { Home, Chat, Dictation, Codex, Focus, Monitor, Menu=7, RetiredOtp, Radio, Settings, Words, Slides, Alert, Status, Calendar, Countdown, Torch, Qr, News, Sonar, Rate, Stopwatch, History, Daily, Quake, Quiz, Hacker, Wifi, Sound, Motion, Podcast, Forecast, Noise, Alarm, Stock, Typhoon, Hot, Memo, Wheel, Translate, Guard, Todo, Ledger, Calc, Voice, Walkie, Macro, Score, Feishu, Book, Health, Train, Count };
 enum class SettingsPage : uint8_t { List, Wifi, Bluetooth, Brightness, Volume, Idle, Wake, City, Contact };
 inline constexpr uint8_t kSettingsRows = 8;
 // Menu order: themed pages of up to eight (< 9, fitting 3 x 3 grid with breathing room);
 // kMenuPages names them and kMenuStarts holds each page's first entry. The voice pages come first, 系统设置 ends the last page.
-inline constexpr std::array<App,47> kFunctions{
+inline constexpr std::array<App,48> kFunctions{
     App::Chat,App::Memo,App::Dictation, App::Translate,App::Ledger,App::Calc, App::Todo,App::Walkie,
     App::Codex,App::Feishu,App::Monitor, App::Guard,App::Slides,App::Status, App::Focus,App::Alarm,
-    App::Calendar,App::Countdown,App::Stopwatch, App::Forecast,App::Typhoon,App::Quake, App::Rate,App::History,
-    App::Stock,App::Macro,App::News, App::Hot,App::Hacker,App::Quiz, App::Daily,
+    App::Calendar,App::Countdown,App::Stopwatch, App::Forecast,App::Typhoon,App::Quake, App::Train,App::History,
+    App::Rate,App::Stock,App::Macro, App::News,App::Hot,App::Hacker, App::Quiz,App::Daily,
     App::Book,App::Words,App::Radio, App::Podcast,App::Noise,App::Sound, App::Sonar,App::Score,
     App::Torch,App::Alert,App::Wheel, App::Motion,App::Wifi,App::Qr, App::Health,App::Settings};
 inline constexpr const char* kMenuPages[]{"小智 · 语音","电脑 · 办公","时间 · 气象","财经 · 资讯","学习 · 影音","工具 · 设置"};
-inline constexpr uint8_t kMenuStarts[]{0,8,16,24,31,39,kFunctions.size()};  // the last marks the end
+inline constexpr uint8_t kMenuStarts[]{0,8,16,24,32,40,kFunctions.size()};  // the last marks the end
 static_assert(std::size(kMenuStarts)==std::size(kMenuPages)+1);
 inline constexpr unsigned menuPageOf(unsigned index){unsigned p=0;while(index>=kMenuStarts[p+1])++p;return p;}
 // 百度热搜: the items kept, and the tag of the pinned one (Baidu's own tags: 1 新, 3 热).
@@ -63,14 +63,14 @@ inline constexpr StatusLabel kStatusLabels[]{
 // 状态牌's label, 随机转盘's mode or options, a todo, a ledger entry, an alarm, a 倒数日 event, a sum to work out.
 constexpr bool speaksOnce(App app){return app==App::Status||app==App::Wheel||app==App::Todo||app==App::Ledger||app==App::Calc||app==App::Alarm||app==App::Countdown||app==App::Health;}
 // Pages that also take one spoken phrase ("speak" to the device's task) though they are not local: 汇率 and 自选股
-// (a long Up), and Settings > 所在城市.
-constexpr bool speaksToo(App app){return app==App::Rate||app==App::Stock||app==App::Settings;}
+// (a long Up), Settings > 所在城市, and 高铁查询's train (Confirm on its card).
+constexpr bool speaksToo(App app){return app==App::Rate||app==App::Stock||app==App::Settings||app==App::Train;}
 // Pages whose cloud connection stays open between phrases (Confirm starts and ends each): 语音笔记 and 中英翻译.
 constexpr bool keepsListening(App app){return app==App::Memo||app==App::Translate;}
 // 语音指令 (App::Voice, not in the menu): 你好小智 opens it; one phrase, heard through 语音笔记's own XiaoZhi identity so
 // nothing reaches 小智语音's history or memory, opens a badge page or a Mac program.
 constexpr bool needsComputer(App app){return app==App::Dictation||app==App::Codex||app==App::Monitor||app==App::Guard||app==App::Feishu;}
-constexpr bool needsInternet(App app){return app==App::Home||app==App::Chat||app==App::Radio||app==App::Words||app==App::News||app==App::Rate||app==App::History||app==App::Daily||app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Podcast||app==App::Forecast||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Translate||app==App::Voice;}
+constexpr bool needsInternet(App app){return app==App::Home||app==App::Chat||app==App::Radio||app==App::Words||app==App::News||app==App::Rate||app==App::History||app==App::Daily||app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Podcast||app==App::Forecast||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Translate||app==App::Voice||app==App::Train;}
 // 汇率: currencies offered on the phone setup page and by voice (ISO code, Chinese name).
 struct Currency { const char* code; const char* name; };
 inline constexpr Currency kCurrencies[]{{"CNY","人民币"},{"USD","美元"},{"EUR","欧元"},{"JPY","日元"},{"HKD","港币"},{"GBP","英镑"},{"KRW","韩元"},

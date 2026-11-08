@@ -689,6 +689,7 @@ int companionRequest(const char* raw,char* output,size_t size){
         if(!cJSON_IsString(name)||!cJSON_IsNumber(id)||id->valuedouble<1||id->valuedouble>4294967295.0||id->valuedouble!=static_cast<unsigned>(id->valuedouble))return 400;
         const char* allowed[]={"up","down","ok","back","settings","wake","refresh_service","status_labels","countdowns","qr_code"};bool valid=false;
         for(auto* value:allowed)valid|=!strcmp(name->valuestring,value);
+        valid|=!strncmp(name->valuestring,"train:",6)&&strlen(name->valuestring)<sizeof(Command::name);  // 高铁查询: a train typed on the computer
         if(!valid||!saveContent(name->valuestring,data))return 400;
         Command command{};command.id=static_cast<unsigned>(id->valuedouble);strcpy(command.name,name->valuestring);
         if(xQueueSend(commands,&command,0)!=pdTRUE)return 500;
@@ -774,6 +775,8 @@ int execute(const char* name) {
         restoreBleAfterAudio=true; puts("BLE_PAUSED_FOR_AUDIO");
     }
     if (!strcmp(name,"wake")) {runtime.wake(now);return 0;}
+    // 高铁查询: "train:G7 明天" from the computer asks for a train as if it were said.
+    if (!strncmp(name,"train:",6)) {runtime.wake(now);if(previous!=App::Train)runtime.switchTo(App::Train);return runtime.addTrain(name+6)?0:-9;}
     // The radio reuses the long Up/Down presses (otherwise hotspot / settings shortcuts): long Up tunes to the next station
     // (a podcast's player: 选期, its episode list), long Down steps the sleep timer.
     if (previous==App::Podcast&&!strcmp(name,"ap_on")) {runtime.podcastEpisodes(now);return 0;}
@@ -807,7 +810,7 @@ int execute(const char* name) {
     // Long presses: the menu turns a page, the calendar steps a month, the sonar switches its filter,
     // the WiFi toolbox and the sound page change tab, the motion monitor turns its alarm on or off.
     // 白噪音 sets the volume with them, 闹钟 the hour; 语音笔记 deletes the open note with a long Down; 状态牌 switches 常亮.
-    if ((previous==App::Menu||previous==App::Calendar||previous==App::Sonar||previous==App::Wifi||previous==App::Sound||previous==App::Motion||previous==App::Noise||previous==App::Alarm||previous==App::Memo||previous==App::Status||previous==App::Wheel||previous==App::Todo||previous==App::Ledger||previous==App::Calc||previous==App::Rate||previous==App::Countdown||previous==App::Walkie||previous==App::Score||previous==App::Book||previous==App::Health)&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {
+    if ((previous==App::Menu||previous==App::Calendar||previous==App::Sonar||previous==App::Wifi||previous==App::Sound||previous==App::Motion||previous==App::Noise||previous==App::Alarm||previous==App::Memo||previous==App::Status||previous==App::Wheel||previous==App::Todo||previous==App::Ledger||previous==App::Calc||previous==App::Rate||previous==App::Countdown||previous==App::Walkie||previous==App::Score||previous==App::Book||previous==App::Health||previous==App::Train)&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {
         runtime.longKey(!strcmp(name,"ap_on"),now);
 #ifdef PASSPORT_DEVICE
         if(previous==App::Noise&&!board::setVolume(runtime.model.volume)){runtime.model.volume=board::volume();return -10;}
@@ -1090,6 +1093,7 @@ extern "C" void app_main() {
         bool known = false;
         for (auto *value : allowed)
             known |= !strcmp(value, cmd.name);
+        known |= !strncmp(cmd.name, "train:", 6);  // 高铁查询: a train typed on the computer
         if (!known) {
             cJSON_Delete(object);
             return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "unsupported");

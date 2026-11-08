@@ -42,6 +42,7 @@ extern const lv_font_t passport_ui_font, passport_status_font, passport_ui_font_
 #define ICON_TROPHY "\xEE\x80\x8C"
 #define ICON_FEISHU "\xEE\x80\x8D"
 #define ICON_HEART "\xEE\x80\x8E"
+#define ICON_TRAIN "\xEE\x80\x8F"
 namespace {
 // Status sign fallback: the 16 px UI font drawn three times larger, so any GB2312 text typed on the
 // computer still shows at sign size. Softer than the 48 px preset glyphs, but needs no extra flash.
@@ -112,12 +113,20 @@ constexpr int kCells = 9;  // menu: a 3 x 3 page of icons
 constexpr unsigned kDrawRows = 20;
 struct Badge { const char* symbol; uint32_t color; uint32_t ink{}; };  // ink: the icon on its tile (0: the page's dark)
 // Pages that draw their own title and body (no hero card, heading or notice line).
-constexpr bool ownPage(App app){return app==App::Book||app==App::Feishu||app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Score||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Health||app==App::Calc||app==App::Voice||app==App::Walkie;}
+constexpr bool ownPage(App app){return app==App::Book||app==App::Feishu||app==App::Quake||app==App::Quiz||app==App::Hacker||app==App::Wifi||app==App::Sound||app==App::Motion||app==App::Forecast||app==App::Noise||app==App::Alarm||app==App::Stock||app==App::Macro||app==App::Typhoon||app==App::Hot||app==App::Memo||app==App::Dictation||app==App::Wheel||app==App::Score||app==App::Translate||app==App::Guard||app==App::Todo||app==App::Ledger||app==App::Health||app==App::Calc||app==App::Voice||app==App::Walkie||app==App::Train;}
 // Once these pages show content, a refresh or the next item loads behind it instead of under the loading screen.
 bool keepsContent(App app,const Model& m){
-    return (app==App::Podcast&&m.podcastCount)||(app==App::Daily&&*m.page.daily.en)||(app==App::Quiz&&m.quizCount)||(app==App::Quake&&m.quakeCount)||(app==App::Hacker&&m.storyCount)||(app==App::Forecast&&m.page.forecast.days)||(app==App::Stock&&m.stockCount)||app==App::Macro||(app==App::Typhoon&&m.page.typhoon.count)||(app==App::Hot&&m.hotCount)||app==App::Memo||app==App::Translate||app==App::Guard||(app==App::Feishu&&m.page.feishu.count);
+    return (app==App::Podcast&&m.podcastCount)||(app==App::Daily&&*m.page.daily.en)||(app==App::Quiz&&m.quizCount)||(app==App::Quake&&m.quakeCount)||(app==App::Hacker&&m.storyCount)||(app==App::Forecast&&m.page.forecast.days)||(app==App::Stock&&m.stockCount)||app==App::Macro||(app==App::Typhoon&&m.page.typhoon.count)||(app==App::Hot&&m.hotCount)||app==App::Memo||app==App::Translate||app==App::Guard||(app==App::Feishu&&m.page.feishu.count)||app==App::Train;
 }
 // 健康记录's key hints (key_hints.hpp has the tabs).
+// 高铁查询's key hints (key_hints.hpp has the tabs).
+unsigned trainTab(const Model& m){
+    if(m.voiceBusy())return m.listening()?0:1;
+    if(m.trainArmed)return 2;
+    if(m.trainView)return m.trainFrom!=kTrainNone?7:6;
+    if(m.trainTrip==kTrainNone)return 5;
+    return m.trainTrips>1?3:4;
+}
 unsigned healthTab(const Model& m){
     if(m.listening())return 7;
     if(m.voiceBusy())return 8;
@@ -178,6 +187,7 @@ Badge appBadge(App app){
     case App::Todo: return {LV_SYMBOL_OK,0xf5a524};
     case App::Ledger: return {ICON_WALLET,0x34d399};
     case App::Health: return {ICON_HEART,0xf87171};
+    case App::Train: return {ICON_TRAIN,0x38bdf8};
     case App::Calc: return {ICON_CALC,0xfbbf24};
     case App::Voice: return {ICON_MIC,0x5fd3ff};
     case App::Walkie: return {LV_SYMBOL_CALL,0x4ade80};
@@ -288,15 +298,17 @@ void renderChrome(const Runtime& runtime){
     const bool alt=app==App::Codex?m.aiLevel>0:app==App::Dictation?m.aiDictation:app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Stock?m.stockDetail:app==App::Macro?m.macroDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Walkie?m.walkieAuto:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
     const auto* hint=keyHint(app,m.settingsPage,m.focusRunning,*m.pairingCode,m.live&&m.livePhase==LivePhase::Loading,m.live&&m.livePhase==LivePhase::Error,alt,app==App::Wifi?m.wifiTab:app==App::Settings?(m.settingsPage==SettingsPage::City?dictationTab(m):m.settingsPage==SettingsPage::Idle?m.idleRow:m.wifiSetup?0u:m.wifiArmed?3u:m.wifiRow?2u:1u):
         app==App::Rate?voiceTab(m,m.rateArmed):app==App::Stock?voiceTab(m,m.stockArmed):app==App::Macro?0u:app==App::Countdown?voiceTab(m,m.countdownArmed):
-        app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:(m.page.score.players()>2?3u:0u)+(m.page.score.fresh()?0u:1u)):app==App::Feishu?(m.feishuDetail?1u:m.page.feishu.count?0u:2u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Health?healthTab(m):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:app==App::Podcast?unsigned(m.podcastEpisodes):m.soundView);
+        app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:(m.page.score.players()>2?3u:0u)+(m.page.score.fresh()?0u:1u)):app==App::Feishu?(m.feishuDetail?1u:m.page.feishu.count?0u:2u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Health?healthTab(m):app==App::Train?trainTab(m):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:app==App::Podcast?unsigned(m.podcastEpisodes):m.soundView);
     if(app==App::Menu&&runtime.menuLayout().mode==MenuLayout::List)hint="上下：选择 | 长按上下：快移 | 确认：进入";
     char text[256];
     // 打开 Mac 程序: what the computer is doing takes the key hints' place for a few seconds, on any page.
     if(*m.macNote)snprintf(text,sizeof(text),"%s",m.macNote);
+    // 高铁查询: on the day of a trip the home page shows it (and its 检票口) instead of the key hints.
+    else if(app==App::Home&&*m.trainNext&&time(nullptr)<static_cast<time_t>(m.trainNextAt)+600)snprintf(text,sizeof(text),"今天 %s",m.trainNext);
     else if(runtime.active()==App::Words&&!*m.pairingCode&&!m.wordSession.size)snprintf(text,sizeof(text),"确认：再学 10 个  |  长按确认：返回");
     else snprintf(text,sizeof(text),"%s",hint);
     if(strcmp(lv_label_get_text(footer),text)){
-        setLabel(footer,text);setTextColor(footer,lv_color_hex(!strncmp(m.macNote,"飞书·",8)?(m.feishuVip?0xff5a5a:0x5fb0ff):*m.macNote?kAccent:kMuted),0);lv_point_t size{};
+        setLabel(footer,text);setTextColor(footer,lv_color_hex(!strncmp(m.macNote,"飞书·",8)?(m.feishuVip?0xff5a5a:0x5fb0ff):*m.macNote||!strncmp(text,"今天 ",7)?kAccent:kMuted),0);lv_point_t size{};
         lv_text_get_size(&size,text,LV_FONT_DEFAULT,0,0,LV_COORD_MAX,LV_TEXT_FLAG_NONE);
         footerScrolling=size.x>222;
     }
@@ -2367,6 +2379,111 @@ void initHealth(lv_obj_t* screen){
     healthView=lv_obj_create(healthRoot);box(healthView,8,2,224,255,kBg);lv_obj_add_event_cb(healthView,drawHealth,LV_EVENT_DRAW_MAIN,nullptr);
 }
 void renderHealth(const Model& m){drawModel=&m;lv_obj_invalidate(healthView);}
+// 高铁查询: the trip's card (times, the 检票口 large, 候车, 出站, how late or how long until it leaves), or the train's
+// stops (where you get on and off marked; the picked stop's 检票口 and 出站 below), or what to say.
+lv_obj_t *trainRoot,*trainView;
+constexpr uint32_t kTrain=0x38bdf8,kTrainLate=0xff6b6b,kTrainOnTime=0x34d399;
+void trainClock(uint16_t minutes,char* out,size_t size){if(minutes==kTrainNoTime)snprintf(out,size,"--:--");else snprintf(out,size,"%02u:%02u",minutes%1440/60,minutes%60);}
+// "今天 周日", "明天 周一", "11月10日 周二" for the day `minutes` after 00:00 on date falls on.
+void trainDay(uint32_t date,unsigned minutes,time_t now,char* out,size_t size){
+    static const char* const week[]{"周日","周一","周二","周三","周四","周五","周六"};
+    const time_t at=train::epoch(date,minutes);tm t{};localtime_r(&at,&t);
+    const int days=int((train::epoch(train::dateOf(at),0)-train::epoch(train::dateOf(now),0)+43200)/86400);
+    if(days>=0&&days<=2)snprintf(out,size,"%s %s",days==0?"今天":days==1?"明天":"后天",week[t.tm_wday]);
+    else snprintf(out,size,"%d月%d日 %s",t.tm_mon+1,t.tm_mday,week[t.tm_wday]);
+}
+// The header: a delete asked, a notice, or the title (left) and a note (right).
+void trainHeader(Painter& p,const Model& m,const char* title,const char* note){
+    if(m.trainArmed){p.rect(0,0,223,21,kMemoRed,6);p.text("再长按下键删除这个行程",0,1,223,0xffffff,LV_TEXT_ALIGN_CENTER);return;}
+    if(*m.lastNotice){p.text(m.lastNotice,0,0,223,kWarn);return;}
+    p.text(title,0,0,170,kText);if(note)p.text(note,120,0,223,kMuted,LV_TEXT_ALIGN_RIGHT);
+}
+// The 检票口: large when it fits one line, else two lines of the normal size.
+void trainGate(Painter& p,const char* gate,int y){
+    if(!*lineEnd(gate,208,&passport_ui_font_x15)){p.text(gate,8,y,215,kTrain,LV_TEXT_ALIGN_LEFT,&passport_ui_font_x15);return;}
+    paragraph(p,gate,y,2,kTrain,8,215);
+}
+void drawTrainCard(Painter& p,const Model& m,time_t now){
+    const auto& v=m.page.train;const auto& t=v.trip;char text[96],when[32],a[8],b[8];
+    trainDay(t.date,t.depart,now,when,sizeof(when));snprintf(text,sizeof(text),"%s · %s",t.code,when);
+    char note[24]="";if(m.trainTrips>1)snprintf(note,sizeof(note),"%u/%u",m.trainTrip+1u,unsigned(m.trainTrips));else if(*v.style)snprintf(note,sizeof(note),"%s",v.style);
+    trainHeader(p,m,text,note);
+    // Times and stations, the ride's length between them (+1 when it arrives a day later).
+    p.rect(0,24,223,92,kPanel,8);trainClock(t.depart,a,sizeof(a));trainClock(t.arrive,b,sizeof(b));
+    p.text(a,10,28,110,kText,LV_TEXT_ALIGN_LEFT,&lv_font_montserrat_24);p.text(b,114,28,213,kText,LV_TEXT_ALIGN_RIGHT,&lv_font_montserrat_24);
+    p.text(t.from,10,62,110,kText);p.text(t.to,114,62,213,kText,LV_TEXT_ALIGN_RIGHT);
+    const unsigned ride=t.arrive-t.depart;snprintf(text,sizeof(text),"%u:%02u",ride/60,ride%60);p.text(text,80,30,143,kMuted,LV_TEXT_ALIGN_CENTER,&lv_font_montserrat_14);
+    p.line(86,52,137,52,kBorder);p.line(131,47,137,52,kBorder);p.line(131,57,137,52,kBorder);
+    if(t.arrive/1440>t.depart/1440){snprintf(text,sizeof(text),"+%u",t.arrive/1440-t.depart/1440);p.text(text,190,12,223,kWarn,LV_TEXT_ALIGN_RIGHT,&lv_font_montserrat_14);}
+    // The 检票口: as just fetched for the stop you get on, else as last kept with the trip.
+    const bool fresh=v.count&&v.pick==v.from&&v.from!=kTrainNone;const char* gate=fresh?v.gate:t.gate;
+    p.rect(0,98,223,160,kPanel,8);p.rect(0,98,4,160,kTrain,2);p.text("检票口",12,102,120,kMuted);
+    const bool later=train::dateOf(train::epoch(t.date,t.depart))>train::dateOf(now);
+    if(*gate)trainGate(p,gate,124);else p.text(later?"发车当天公布":v.count?"暂无":"正在查询…",12,128,215,kMuted);
+    const char* rows[][2]{{"候车",fresh?v.wait:""},{"出站",v.count&&v.to!=kTrainNone?v.toExit:""}};
+    for(unsigned i=0;i<2;++i){const int y=168+int(i)*24;p.text(rows[i][0],0,y,40,kMuted);p.text(*rows[i][1]?rows[i][1]:"--",44,y,223,*rows[i][1]?kText:kMuted);}
+    // How it goes: late (12306's 正晚点), and the time left until it leaves.
+    const time_t leaves=train::epoch(t.date,t.depart),arrives=train::epoch(t.date,t.arrive);uint32_t color=kMuted;text[0]=0;
+    if(m.livePhase==LivePhase::Error)snprintf(text,sizeof(text),"%s",m.liveState);
+    else if(now>=arrives+(v.late[1]!=kTrainNoLate?v.late[1]*60:0))snprintf(text,sizeof(text),"已到达");
+    else{
+        const int late=now<leaves?v.late[0]:v.late[1];
+        if(late!=kTrainNoLate){color=late>0?kTrainLate:kTrainOnTime;if(late>0)snprintf(text,sizeof(text),"%s晚点 %d 分钟",now<leaves?"":"到站",late);else snprintf(text,sizeof(text),"正点");}
+        char left[48]="";const long until=long(leaves-now)/60+(late>0&&now<leaves?late:0);
+        if(now>=leaves)snprintf(left,sizeof(left),"已发车");else if(until<1440)snprintf(left,sizeof(left),"还有 %ld:%02ld 发车",until/60,until%60);else snprintf(left,sizeof(left),"%ld 天后发车",until/1440);
+        if(*text){strncat(text," · ",sizeof(text)-strlen(text)-1);strncat(text,left,sizeof(text)-strlen(text)-1);}else{snprintf(text,sizeof(text),"%s",left);color=kText;}
+    }
+    p.rect(0,220,223,248,kBg,0);p.text(text,0,224,223,color,LV_TEXT_ALIGN_CENTER);
+}
+void drawTrainStops(Painter& p,const Model& m,time_t now){
+    const auto& v=m.page.train;char text[96],when[32],a[8],b[8];
+    trainDay(v.date,0,now,when,sizeof(when));snprintf(text,sizeof(text),"%s · %s",v.code,when);
+    char note[16]="";if(v.total)snprintf(note,sizeof(note),"共 %u 站",unsigned(v.total));
+    trainHeader(p,m,text,note);
+    if(!v.count){p.text(m.livePhase==LivePhase::Ready&&*m.liveState?m.liveState:m.livePhase==LivePhase::Error?m.liveState:"正在查询…",0,110,223,kMuted,LV_TEXT_ALIGN_CENTER);return;}
+    const uint8_t from=m.trainFrom!=kTrainNone?m.trainFrom:v.from,to=m.trainFrom!=kTrainNone?kTrainNone:v.to;
+    const bool today=v.date==train::dateOf(now);
+    for(unsigned row=0;row<Model::kTrainRows&&m.trainTop+row<v.count;++row){
+        const unsigned i=m.trainTop+row;const int y=24+int(row)*26;const auto& s=v.stops[i];const bool picked=i==m.trainIndex;
+        p.rect(0,y,223,y+23,picked?kBorder:kPanel,6);
+        int x=8;
+        if(i==from||i==to){p.rect(6,y+3,24,y+20,i==from?kTrain:kWarn,4);p.text(i==from?"上":"下",6,y+2,24,kBg,LV_TEXT_ALIGN_CENTER);x=30;}
+        const bool gone=today&&s.depart!=kTrainNoTime&&train::epoch(v.date,s.depart)<now;
+        p.text(s.name,x,y+2,110,gone?kMuted:kText);
+        if(!i){trainClock(s.depart,a,sizeof(a));snprintf(text,sizeof(text),"始发 %s",a);}
+        else if(i+1==v.count&&v.count==v.total){trainClock(s.arrive,a,sizeof(a));snprintf(text,sizeof(text),"终到 %s",a);}
+        else{trainClock(s.arrive,a,sizeof(a));trainClock(s.depart,b,sizeof(b));snprintf(text,sizeof(text),"%s  %s",a,b);}
+        p.text(text,100,y+2,206,gone?kMuted:kText,LV_TEXT_ALIGN_RIGHT);
+        const uint16_t last=s.depart!=kTrainNoTime?s.depart:s.arrive;
+        if(last!=kTrainNoTime&&last/1440)p.rect(212,y+9,216,y+13,kWarn,2);  // a later day
+    }
+    // The picked stop's 检票口 and 出站 (fetched as it is picked).
+    p.rect(0,210,223,252,kPanel,8);
+    if(v.pick!=m.trainIndex){p.text("正在读取检票口…",8,220,215,kMuted);return;}
+    snprintf(text,sizeof(text),"检票 %s",*v.gate?v.gate:"--");p.text(text,8,212,215,*v.gate?kTrain:kMuted);
+    if(*v.exit)snprintf(text,sizeof(text),"出站 %s",v.exit);else snprintf(text,sizeof(text),"候车 %s",*v.wait?v.wait:"--");
+    p.text(text,8,231,215,kMuted);
+}
+void drawTrain(lv_event_t* e){
+    const auto& m=*drawModel;auto p=painter(e);const uint64_t now=esp_timer_get_time()/1000000;
+    if(m.voiceBusy()){drawListening(p,m,now,"例：G7 · 明天的 D701","识别后查询经停和检票口");return;}
+    const time_t clock=time(nullptr);
+    if(m.trainView)drawTrainStops(p,m,clock);
+    else if(m.trainTrip!=kTrainNone)drawTrainCard(p,m,clock);
+    else{
+        if(*m.lastNotice)p.text(m.lastNotice,0,0,223,kWarn,LV_TEXT_ALIGN_CENTER);
+        p.rect(112-40,40,112+40,120,kPanel,40);p.text(ICON_TRAIN,62,68,162,kTrain,LV_TEXT_ALIGN_CENTER,&passport_icon_font_24);
+        p.text("按确认，说出车次",0,140,223,kText,LV_TEXT_ALIGN_CENTER);
+        p.text("例：G7 · 明天的 D701",0,168,223,kMuted,LV_TEXT_ALIGN_CENTER);
+        p.text("选好上下车站就存为行程",0,200,223,0x5f7f94,LV_TEXT_ALIGN_CENTER);
+        p.text("当天首页显示检票口",0,222,223,0x5f7f94,LV_TEXT_ALIGN_CENTER);
+    }
+}
+void initTrain(lv_obj_t* screen){
+    trainRoot=lv_obj_create(screen);box(trainRoot,0,35,240,257,kBg);
+    trainView=lv_obj_create(trainRoot);box(trainView,8,2,224,255,kBg);lv_obj_add_event_cb(trainView,drawTrain,LV_EVENT_DRAW_MAIN,nullptr);
+}
+void renderTrain(const Model& m){drawModel=&m;lv_obj_invalidate(trainView);}
 // 语音计算器: the picked sum and its result in the largest type that fits, then this visit's sums (newest first).
 lv_obj_t *calcRoot,*calcView;
 constexpr uint32_t kCalc=0xfbbf24;
@@ -3061,6 +3178,7 @@ void uiInit() {
     else if(guiApp==App::Todo)initTodo(screen);
     else if(guiApp==App::Ledger)initLedger(screen);
     else if(guiApp==App::Health)initHealth(screen);
+    else if(guiApp==App::Train)initTrain(screen);
     else if(guiApp==App::Calc)initCalc(screen);
     else if(guiApp==App::Voice)initVoice(screen);
     else if(guiApp==App::Walkie)initWalkie(screen);
@@ -3236,6 +3354,7 @@ void uiRender(const Runtime& runtime) {
     } else if(app==App::Todo){renderTodo(model);
     } else if(app==App::Ledger){renderLedger(model);
     } else if(app==App::Health){renderHealth(model);
+    } else if(app==App::Train){renderTrain(model);
     } else if(app==App::Calc){renderCalc(model);
     } else if(app==App::Voice){renderVoice(model);
     } else if(app==App::Walkie){renderWalkie(model);

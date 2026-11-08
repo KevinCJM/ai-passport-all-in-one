@@ -32,6 +32,11 @@ inline const char* keyHint(App app,SettingsPage page,bool focusRunning,bool pair
     // 汇率, 自选股 (its list) and 倒数日 tab: 0 the page, 1 listening, 2 recognising, 3 a delete asked.
     static const char* const spoken[]{"","确认：结束并添加  |  长按确认：放弃","正在识别，请稍候","长按下：确认删除  |  其他键：取消"};
     if(app==App::Countdown)return tab%4?spoken[tab%4]:"上下：切换 | 确认：列表 | 长按上：说话添加 | 长按下：删除";
+    // 高铁查询 tab: 0 listening, 1 recognising, 2 a delete asked, 3 the card of one of several trips, 4 the card, 5 nothing
+    // to show, 6 the stops, 7 the stops with where to get on picked.
+    if(app==App::Train&&!error){static const char* const hints[]{"确认：结束并查询  |  长按确认：放弃","正在识别，请稍候","长按下：确认删除  |  其他键：取消",
+        "上下：切换行程 | 确认：查车次 | 长按上：经停 | 长按下：删除","确认：查车次 | 长按上：看经停 | 长按下：删除","确认：说车次查询  |  长按确认：返回",
+        "上下：选站 | 确认：选上车站 | 长按上下：翻页","上下：选站 | 确认：选下车站 | 长按确认：返回"};return hints[tab%8];}
     if(app==App::Torch)return "上下：亮度  |  确认：颜色";
     if(app==App::Qr)return "上下：切换  |  确认：提亮屏幕";
     if(app==App::Sonar)return "上下：选设备  |  确认：雷达 / 列表  |  长按上下：有 / 未标识  |  长按确认：返回";

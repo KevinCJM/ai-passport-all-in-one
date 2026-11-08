@@ -49,6 +49,10 @@ class LiveServices {
     uint8_t warnAsked_{};   // the 预警 detail (1-based) last asked for, 0 none
     int typhoonAsked_{-1};  // the 台风 row whose track was last asked for
     int hotAsked_{-1};      // the 热榜 item last asked for in full
+    char trainAsked_[32]{};  // 高铁查询: the train last fetched ("t:<train>:<day>:<from>:<to>")
+    int trainPickAsked_{-1}; // and the stop whose 检票口 was last asked for
+    uint64_t trainAskedAt_{};  // when (monotonic seconds)
+    char trainHeard_[160]{};  // 语音指令: a train said, for 高铁查询 once it opens
     uint32_t voiceJob_{};   // a phrase being spoken on 汇率, 自选股 or 所在城市 (its request): timed refreshes wait
 #ifdef PASSPORT_DEVICE
     NativeServices* native_{};bool deferredAudio_{};

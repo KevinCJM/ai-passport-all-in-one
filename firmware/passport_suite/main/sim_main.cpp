@@ -115,7 +115,7 @@ void domainTests(Runtime& runtime) {
     puts("CASE_PASS foreground_only_timer_pause_notifications");
 }
 void settingsTests(Runtime& runtime){
-    CHECK(kFunctions.size()==47&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
+    CHECK(kFunctions.size()==48&&kFunctions.back()==App::Settings&&kFunctions[0]==App::Chat);
     // Physical long-confirm emits Back: each step must follow the hierarchy.
     for(auto app:kFunctions){
         CHECK(runtime.switchTo(app)==Result::Ok);runtime.model.settingsPage=SettingsPage::List;
@@ -358,6 +358,58 @@ void todoTests(Runtime& runtime){
 }
 // 健康记录: a cup by key, spoken records of each kind, 经期 by voice and keys, the records, deleting, the settings, the
 // computer taking them, and the 喝水提醒.
+// 高铁查询: a train heard opens its stops; Confirm on two stops saves the trip and shows its card; today's trip goes
+// in the home footer with its 检票口; Up/Down switch trips, a long Up opens the stops, a long Down twice deletes.
+void trainTests(Runtime& runtime){
+    auto& m=runtime.model;auto& v=m.page.train;
+    const auto forget=[]{nvs_handle_t h;CHECK(nvs_open("suite_system",NVS_READWRITE,&h)==ESP_OK);nvs_erase_key(h,"train_v1");nvs_commit(h);nvs_close(h);};
+    timeval saved{};gettimeofday(&saved,nullptr);
+    const auto setClock=[](time_t at){timeval tv{at,0};settimeofday(&tv,nullptr);};
+    forget();setClock(train::epoch(20261108,7*60));
+    CHECK(runtime.switchTo(App::Train)==Result::Ok&&m.trainTrip==kTrainNone&&!*v.code&&!m.trainView&&!m.trainTrips);
+    m.livePhase=LivePhase::Ready;m.liveState[0]=0;m.lastNotice[0]=0;m.clockValid=true;
+    uiRender(runtime);uiCapture("train_empty");
+    CHECK(!runtime.addTrain("你好")&&strstr(m.lastNotice,"车次"));
+    CHECK(runtime.addTrain("鸡七")&&!strcmp(v.code,"G7")&&v.date==20261108&&m.trainView==1&&!v.count&&!*m.lastNotice);
+    uiRender(runtime);uiCapture("train_loading");
+    // The stops as the device's reply fills them (LiveServices).
+    const auto fill=[&](std::initializer_list<const char*> names,std::initializer_list<std::array<uint16_t,2>> times){
+        v.count=v.total=0;auto t=times.begin();for(const char* n:names){auto& s=v.stops[v.count++];strcpy(s.name,n);s.arrive=(*t)[0];s.depart=(*t)[1];++t;}v.total=v.count;
+    };
+    fill({"北京南","济南西","南京南","上海虹桥"},{{kTrainNoTime,540},{623,625},{744,746},{817,kTrainNoTime}});
+    strcpy(v.style,"CR400AF");v.pick=1;strcpy(v.gate,"6A-7A检票口,6B-7B检票口");strcpy(v.exit,"A3到达口,B3到达口");
+    runtime.key(Key::Down,3000);CHECK(m.trainIndex==1);
+    uiRender(runtime);uiCapture("train_stops");
+    runtime.key(Key::Up,3001);runtime.key(Key::Confirm,3001);CHECK(m.trainFrom==0&&strstr(m.lastNotice,"北京南 上车")&&m.confirmTaken);
+    uiRender(runtime);uiCapture("train_pick");
+    runtime.key(Key::Down,3002);runtime.key(Key::Down,3002);runtime.key(Key::Confirm,3002);
+    CHECK(!m.trainView&&m.trainTrip==0&&m.trainTrips==1&&v.trip.fromAt==0&&v.trip.toAt==2&&v.trip.depart==540&&v.trip.arrive==744&&strstr(m.lastNotice,"已保存"));
+    {TrainTrips trips;CHECK(SettingsStore::loadTrain(trips)&&trips.count==1&&!strcmp(trips.items[0].to,"南京南"));}
+    CHECK(!strcmp(m.trainNext,"G7 09:00 北京南"));
+    runtime.trainFetched("G7",20261108,0,2,"10检票口,11检票口");CHECK(!strcmp(m.trainNext,"G7 09:00 北京南 · 10检票口,11检票口")&&!strcmp(v.trip.gate,"10检票口,11检票口"));
+    v.pick=0;strcpy(v.gate,"10检票口,11检票口");strcpy(v.wait,"京沪候车区");v.late[0]=5;v.late[1]=kTrainNoLate;strcpy(v.toExit,"东1东2出站口");m.lastNotice[0]=0;
+    uiRender(runtime);uiCapture("train_card");
+    // A second trip, tomorrow: saved after the first; Up/Down switch between them.
+    CHECK(runtime.addTrain("明天的动车七零一")&&m.trainTrip==kTrainNone&&!strcmp(v.code,"D701")&&v.date==20261109&&m.trainView==1);
+    fill({"北京西","保定东","石家庄"},{{kTrainNoTime,600},{640,642},{700,kTrainNoTime}});
+    runtime.key(Key::Confirm,3003);runtime.key(Key::Down,3003);runtime.key(Key::Down,3003);runtime.key(Key::Confirm,3003);
+    CHECK(m.trainTrips==2&&m.trainTrip==1&&!strcmp(v.trip.code,"D701")&&!m.trainView);
+    m.lastNotice[0]=0;uiRender(runtime);uiCapture("train_card_tomorrow");
+    runtime.key(Key::Up,3004);CHECK(m.trainTrip==0&&!strcmp(v.code,"G7")&&!v.count&&!strcmp(v.trip.gate,"10检票口,11检票口"));
+    CHECK(runtime.addTrain("G7")&&m.trainTrip==0&&!m.trainView);  // a saved train opens as its trip
+    fill({"北京南","济南西","南京南","上海虹桥"},{{kTrainNoTime,540},{623,625},{744,746},{817,kTrainNoTime}});
+    CHECK(runtime.longKey(true,3005)&&m.trainView==1&&m.trainIndex==0);
+    CHECK(runtime.longKey(false,3005)&&m.trainIndex==3);runtime.key(Key::Back,3006);CHECK(runtime.active()==App::Train&&!m.trainView);
+    // A long Down twice deletes the trip on show.
+    CHECK(runtime.longKey(false,3007)&&m.trainArmed);uiRender(runtime);uiCapture("train_delete");
+    runtime.key(Key::Confirm,3008);CHECK(!m.trainArmed&&m.trainTrips==2&&m.trainTrip==0);
+    CHECK(runtime.longKey(false,3009)&&runtime.longKey(false,3009)&&m.trainTrips==1&&m.trainTrip==0&&!strcmp(v.code,"D701")&&strstr(m.lastNotice,"已删除")&&!*m.trainNext);
+    strcpy(m.liveValue,"rec");m.listenAt=3010;uiRender(runtime);uiCapture("train_listening");strcpy(m.liveValue,"--");
+    // Trips that ended over two hours ago go.
+    setClock(train::epoch(20261109,700+121));runtime.reloadTrain();CHECK(!m.trainTrips);
+    runtime.switchTo(App::Menu);forget();runtime.reloadTrain();settimeofday(&saved,nullptr);
+    puts("CASE_PASS train");
+}
 void healthTests(Runtime& runtime){
     auto& m=runtime.model;auto& b=m.page.health;
     const auto forget=[]{nvs_handle_t h;CHECK(nvs_open("suite_system",NVS_READWRITE,&h)==ESP_OK);nvs_erase_key(h,"health_v1");nvs_erase_key(h,"health_cfg");nvs_commit(h);nvs_close(h);};
@@ -1389,9 +1441,9 @@ static MenuLayout sampleCustomMenu(){
 }
 static void menuLayoutTests(Runtime& runtime){
     auto layout=defaultMenuLayout();CHECK(layout.valid());CHECK(runtime.configureMenu(layout));
-    CHECK(runtime.menuView().count==47&&runtime.menuView().pages==6);
+    CHECK(runtime.menuView().count==48&&runtime.menuView().pages==6);
     for(auto app:kFunctions)if(menuCategory(app)==0)layout.show(app,false);
-    CHECK(runtime.configureMenu(layout));printf("MENU_HIDDEN pages=%u count=%u\n",runtime.menuView().pages,runtime.menuView().count);CHECK(runtime.menuView().pages==5&&runtime.menuView().count==39);
+    CHECK(runtime.configureMenu(layout));printf("MENU_HIDDEN pages=%u count=%u\n",runtime.menuView().pages,runtime.menuView().count);CHECK(runtime.menuView().pages==5&&runtime.menuView().count==40);
     runtime.switchTo(App::Menu);runtime.key(Key::Confirm,0);CHECK(runtime.active()!=App::Chat);
     // Unpaged grid: nine a screen in the user's order, no page names; long Down jumps to the next screen.
     layout=defaultMenuLayout();layout.mode=MenuLayout::Continuous;std::reverse(layout.order[1],layout.order[1]+layout.catalogCount);
@@ -1402,7 +1454,7 @@ static void menuLayoutTests(Runtime& runtime){
     for(unsigned i=0;i+1<kFunctions.size();++i){const auto before=runtime.menuPosition();runtime.key(Key::Down,0);CHECK(runtime.menuPosition()==(before+1)%kFunctions.size());CHECK(runtime.menuWindowStart()==runtime.menuPosition()/9*9);}
     CHECK(runtime.longKey(false,0));CHECK(runtime.menuPosition()==18);CHECK(runtime.longKey(true,0)&&runtime.longKey(true,0)&&runtime.longKey(true,0));CHECK(runtime.menuPosition()==45);
     // Compact list: the same order as the grid, seven rows that scroll with the selection.
-    layout.mode=MenuLayout::List;CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==1&&runtime.menuView().count==47);
+    layout.mode=MenuLayout::List;CHECK(runtime.configureMenu(layout));CHECK(runtime.menuView().pages==1&&runtime.menuView().count==48);
     runtime.switchTo(App::Settings);runtime.switchTo(App::Menu);CHECK(runtime.menuPosition()==0&&runtime.menuWindowStart()==0);uiRender(runtime);uiCapture("menu_list_top");
     for(unsigned i=0;i<10;++i)runtime.key(Key::Down,0);
     CHECK(runtime.menuPosition()==10&&runtime.menuWindowStart()==4);uiRender(runtime);uiCapture("menu_list_scroll");
@@ -1566,7 +1618,7 @@ extern "C" void app_main() {
     runtime.key(Key::Up, 0); CHECK(runtime.selection() == kFunctions.size()-1);
     uiRender(runtime); uiCapture("menu_2");
     // The middle pages under their themes (6 pages of < 9 items each), then 系统设置 at the end of the last.
-    CHECK(runtime.longKey(true,0)&&runtime.selection()==31);uiRender(runtime);uiCapture("menu_page5");
+    CHECK(runtime.longKey(true,0)&&runtime.selection()==32);uiRender(runtime);uiCapture("menu_page5");
     CHECK(runtime.longKey(true,0)&&runtime.selection()==24);uiRender(runtime);uiCapture("menu_page4");
     CHECK(runtime.longKey(true,0)&&runtime.selection()==16);uiRender(runtime);uiCapture("menu_page3");
     CHECK(runtime.longKey(true,0)&&runtime.selection()==8);uiRender(runtime);uiCapture("menu_page2");
@@ -1730,7 +1782,7 @@ extern "C" void app_main() {
     domainTests(runtime);
     settingsTests(runtime);
     powerTests(runtime);
-    slidesTests(runtime);alertTests(runtime);statusTests(runtime);wheelTests(runtime);translateTests(runtime);guardTests(runtime);todoTests(runtime);ledgerTests(runtime);healthTests(runtime);calcTests(runtime);scoreTests(runtime);feishuTests(runtime);walkieTests(runtime);voiceCommandTests(runtime);voiceAddTests(runtime);toolPagesTests(runtime);
+    slidesTests(runtime);alertTests(runtime);statusTests(runtime);wheelTests(runtime);translateTests(runtime);guardTests(runtime);todoTests(runtime);ledgerTests(runtime);healthTests(runtime);trainTests(runtime);calcTests(runtime);scoreTests(runtime);feishuTests(runtime);walkieTests(runtime);voiceCommandTests(runtime);voiceAddTests(runtime);toolPagesTests(runtime);
     bleTests(runtime);
     identityUploadTests(runtime);
     failureTests(runtime);

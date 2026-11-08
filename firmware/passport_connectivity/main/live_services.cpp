@@ -35,6 +35,19 @@ void stockOperation(const Model& m,char (&out)[16]) {
 void macroOperation(const Model& m,char (&out)[16]) {
     if(m.macroDetail)snprintf(out,sizeof(out),"chart:%u:%u",m.macroGroup,m.macroIndex);else snprintf(out,sizeof(out),"list:%u",m.macroGroup);
 }
+// 高铁查询 fetches the train on show (and for a trip its stops, for 正晚点); "" when there is none.
+void trainOperation(const Model& m,char (&out)[32]) {
+    const auto& v=m.page.train;
+    if(!*v.code){out[0]=0;return;}
+    snprintf(out,sizeof(out),"t:%s:%lu:%u:%u",v.code,static_cast<unsigned long>(v.date),m.trainTrip!=kTrainNone?v.trip.fromAt:kTrainNone,m.trainTrip!=kTrainNone?v.trip.toAt:kTrainNone);
+}
+// The stop whose 检票口 the page shows: the picked one in the stops, the boarding one on the card (kTrainNone: none).
+unsigned trainPick(const Model& m) {
+    const auto& v=m.page.train;
+    if(!v.count)return kTrainNone;
+    if(m.trainView)return std::min<unsigned>(m.trainIndex,v.count-1);
+    return v.from<v.count?v.from:kTrainNone;
+}
 template<size_t N> void copy(char (&to)[N],const char* from) {
     size_t count=std::min(strlen(from),N-1);
     // Truncate at a UTF-8 boundary, never halfway through a Chinese character.
@@ -109,6 +122,9 @@ bool LiveServices::snapshotJson(char* output,size_t size){
      if(a==App::Hacker)snprintf(values,sizeof(values),",\"stories\":%u",m.storyCount);
      // rows, the one picked, the one whose track is shown, track points, forecast points.
      if(a==App::Typhoon){const auto& t=m.page.typhoon;snprintf(values,sizeof(values),",\"typhoon\":[%u,%u,%u,%u,%u]",t.count,m.typhoonIndex,t.shown,t.points,t.ahead);}
+     // 高铁查询: view, trip on show, trips, stop picked, boarding picked, stops held, stop whose 检票口 is held, its bytes,
+     // minutes late leaving and arriving (-32768: not known).
+     if(a==App::Train){const auto& v=m.page.train;snprintf(values,sizeof(values),",\"train\":[%u,%u,%u,%u,%u,%u,%u,%u,%d,%d]",m.trainView,m.trainTrip,m.trainTrips,m.trainIndex,m.trainFrom,v.count,v.pick,unsigned(strlen(v.gate)),v.late[0],v.late[1]);}
      // items, the one picked, detail open, the one held in full, summary bytes.
      if(a==App::Hot)snprintf(values,sizeof(values),",\"hot\":[%u,%u,%u,%u,%u]",m.hotCount,m.hotIndex,unsigned(m.hotDetail),m.page.hot.detailFor,unsigned(strlen(m.page.hot.desc)));
      // alarms, the row picked, its clock open, delete asked, ringing, snooze epoch, then the picked one's hour, minute, repeat.
@@ -217,6 +233,14 @@ void LiveServices::request(const char* operation) {
     if(runtime_.active()==App::Dictation&&runtime_.model.aiDictation&&!strcmp(operation,"enter"))operation="enter:ai";
     // 台风 too: its list with the picked typhoon's track.
     if(runtime_.active()==App::Typhoon&&(!strcmp(operation,"refresh")||!strcmp(operation,"enter"))){typhoonAsked_=runtime_.model.typhoonIndex;snprintf(stock,sizeof(stock),"show:%u",runtime_.model.typhoonIndex);operation=stock;}
+    // 高铁查询: the train on show; with none, nothing to fetch (the page asks what to say).
+    char trainWant[32];
+    if(runtime_.active()==App::Train&&(!strcmp(operation,"refresh")||!strcmp(operation,"enter"))){
+        trainOperation(runtime_.model,trainWant);
+        if(!*trainWant){auto& m=runtime_.model;if(m.livePhase!=LivePhase::Ready){m.livePhase=LivePhase::Ready;m.liveState[0]=0;}return;}
+        operation=trainWant;
+    }
+    if(runtime_.active()==App::Train&&!strncmp(operation,"t:",2)){copy(trainAsked_,operation);trainPickAsked_=-1;trainAskedAt_=esp_timer_get_time()/1000000;}
     // 语音笔记's task (and 状态牌's) reads every Confirm itself, in order; a deferred one would start or stop listening late.
     if(pending_&&!keepsListening(runtime_.active())&&!speaksOnce(runtime_.active())&&!voiceJob_&&(!strcmp(operation,"toggle")||!strcmp(operation,"next")||!strcmp(operation,"prev"))) { copy(deferred_,operation);return; }
     pending_=++requestId_; pendingGeneration_=runtime_.generation();
@@ -239,6 +263,8 @@ App LiveServices::command(const char* heard,uint64_t now){
     auto& m=runtime_.model;
     const App page=spokenApp(heard);
     if(page==App::Chat||(page!=App::Count&&m.voiceJump))return page;
+    // "查一下 G7" opens 高铁查询 on that train (说功能名跳转 on).
+    if(const auto ask=train::parse(heard,time(nullptr));m.voiceJump&&ask.ok&&ask.code[0]>'9'){copy(trainHeard_,heard);return App::Train;}
     if(m.macOpen)if(const auto name=spokenMac(heard);!name.empty()){openOnMac(name.c_str(),now);return App::Home;}
     copy(m.lastNotice,*heard?(std::string("没听懂：")+heard).c_str():"没有听清");
     return App::Count;
@@ -343,6 +369,11 @@ void LiveServices::action(Key key) {
         request(m.cityRow?"locate":"speak");return;
     }
     if(key==Key::Confirm&&active==App::Codex&&runtime_.model.aiLevel&&!runtime_.model.confirmTaken&&runtime_.model.page.ai.count){openConversation(esp_timer_get_time()/1000000);return;}
+    // 高铁查询: Confirm on the card (or with nothing shown) asks for a train by voice; in the stops it picked a stop.
+    if(key==Key::Confirm&&active==App::Train&&!runtime_.model.trainView&&!runtime_.model.confirmTaken&&!runtime_.model.voiceBusy()&&!voiceJob_&&(runtime_.model.livePhase!=LivePhase::Error||runtime_.model.trainTrip==kTrainNone)){
+        auto& m=runtime_.model;
+        m.trainArmed=false;copy(m.lastNotice,"正在连接小智…");m.livePhase=LivePhase::Ready;request("speak");return;
+    }
     if(key==Key::Confirm&&runtime_.model.livePhase==LivePhase::Error&&active!=App::Macro) { request("enter");runtime_.model.livePhase=LivePhase::Loading;loadingAt_=requestedAt_=esp_timer_get_time()/1000000;return; }
     if(key==Key::Confirm&&active==App::Daily) { request("say"); return; }
     // Confirm on the list opens the player (tick asks for the program); in the player it plays or pauses.
@@ -422,7 +453,7 @@ bool LiveServices::tick(uint64_t now) {
         audioReady=audio_.start(active,runtime_.generation());
 #endif
         copy(model.liveValue,"--"); copy(model.liveState,"连接中"); for(auto& line:model.liveLines) line[0]=0;
-        model.mediaCount=0;model.mediaPlaying=false;model.podcastCount=0;newsAsked_=0;newsItemAsked_=-1;dailyAsked_=wordAsked_=podcastAsked_=-1;quizAsked_=false;stockAsked_[0]=macroAsked_[0]=0;warnAsked_=0;typhoonAsked_=hotAsked_=-1;
+        model.mediaCount=0;model.mediaPlaying=false;model.podcastCount=0;newsAsked_=0;newsItemAsked_=-1;dailyAsked_=wordAsked_=podcastAsked_=-1;quizAsked_=false;stockAsked_[0]=macroAsked_[0]=0;warnAsked_=0;typhoonAsked_=hotAsked_=-1;trainAsked_[0]=0;trainPickAsked_=-1;
 #ifdef PASSPORT_DEVICE
         if(active==App::Settings)native_->cityName(model.cityName,sizeof(model.cityName));
 #endif
@@ -437,15 +468,17 @@ bool LiveServices::tick(uint64_t now) {
 #ifdef PASSPORT_DEVICE
     native_->poll();
     // 语音笔记: the text the cloud heard, saved once; the device's task waits until it is.
-    if(active==App::Memo||speaksOnce(active)||active==App::Rate||active==App::Voice)if(const char* heard=native_->memoHeard()){
+    if(active==App::Memo||speaksOnce(active)||active==App::Rate||active==App::Voice||active==App::Train)if(const char* heard=native_->memoHeard()){
         App go=App::Count;
         if(active==App::Voice)go=command(heard,now);
         else if(active==App::Status)runtime_.addStatus(heard);else if(active==App::Wheel)runtime_.addWheel(heard);else if(active==App::Todo)runtime_.addTodo(heard);else if(active==App::Ledger)runtime_.addLedger(heard);else if(active==App::Health)runtime_.addHealth(heard);else if(active==App::Calc)runtime_.addCalc(heard);
         else if(active==App::Alarm)runtime_.addAlarm(heard);else if(active==App::Countdown)runtime_.addCountdown(heard);
         else if(active==App::Rate){if(runtime_.addRate(heard)){voiceJob_=0;request("refresh");}}
+        // 高铁查询: the train heard is fetched once the phrase's task has ended (tick, trainOperation).
+        else if(active==App::Train)runtime_.addTrain(heard);
         else if(*heard)runtime_.addMemo(heard,now);else copy(model.lastNotice,"没有听清，请再说一次");
         native_->memoTaken();dirty=true;
-        if(go!=App::Count){runtime_.switchTo(go);return true;}
+        if(go!=App::Count){runtime_.switchTo(go);if(go==App::Train&&*trainHeard_){runtime_.addTrain(trainHeard_);trainHeard_[0]=0;}return true;}
     }
     if(voiceJob_&&native_->idle()&&!native_->busy()){voiceJob_=0;dirty=true;}
     if(active==App::Translate)if(const auto* t=native_->translated()){
@@ -548,6 +581,9 @@ bool LiveServices::tick(uint64_t now) {
             }
             if(active==App::Home){
                 if(message.native&&model.livePhase==LivePhase::Ready)requestedAt_=now;
+                // 高铁查询: today's trip's 检票口, read with the weather.
+                if(const auto* g=field(json,"train_gate");cJSON_IsObject(g)&&*string(g,"g"))
+                    runtime_.trainFetched(string(g,"c"),uint32_t(std::clamp(number(g,"d",0),0.0,99991231.0)),uint8_t(std::clamp(number(g,"f",0),0.0,255.0)),uint8_t(std::clamp(number(g,"t",0),0.0,255.0)),string(g,"g"));
                 const auto* w=field(json,"weather");
                 const auto decimal=[&](const char* key){const auto* v=field(w,key);return cJSON_IsNumber(v)?v->valuedouble:NAN;};
                 if(cJSON_IsObject(w)&&model.weatherReading.update(string(w,"city"),string(w,"condition"),decimal("temperature"),decimal("minimum"),decimal("maximum"),decimal("humidity"),decimal("code"),decimal("aqi"))){
@@ -707,6 +743,29 @@ bool LiveServices::tick(uint64_t now) {
                 if(t.shown>=t.count||!t.points)t.shown=255;
                 if(model.typhoonIndex>=t.count)model.typhoonIndex=0;
             }
+            // 高铁查询: the train fetched (only the one still on show), the picked stop's 检票口, 正晚点.
+            if(active==App::Train&&cJSON_IsObject(field(json,"train"))){
+                auto& v=model.page.train;const auto* o=field(json,"train");
+                const auto at=[](const cJSON* a,int i){const auto* x=cJSON_GetArrayItem(a,i);return cJSON_IsNumber(x)&&x->valuedouble>=0&&x->valuedouble<kTrainNoTime?uint16_t(x->valuedouble):kTrainNoTime;};
+                if(!strcmp(string(o,"c"),v.code)&&number(o,"d",0)==v.date){
+                    v.total=uint8_t(std::clamp(number(o,"n",0),0.0,255.0));
+                    if(const auto* stops=field(o,"s");cJSON_IsArray(stops)){
+                        v.count=0;const cJSON* item;copy(v.style,string(o,"y"));
+                        cJSON_ArrayForEach(item,stops){if(v.count==kTrainStops)break;auto& st=v.stops[v.count++];const char* name=cJSON_GetStringValue(cJSON_GetArrayItem(item,0));copy(st.name,name?name:"");st.arrive=at(item,1);st.depart=at(item,2);}
+                        if(model.trainIndex>=v.count)model.trainIndex=0;
+                        // A saved trip whose stations moved in the timetable follows them by name.
+                        if(model.trainTrip!=kTrainNone&&v.count){
+                            const auto& t=v.trip;const auto find=[&](const char* name,unsigned guess){if(guess<v.count&&!strcmp(v.stops[guess].name,name))return guess;for(unsigned i=0;i<v.count;++i)if(!strcmp(v.stops[i].name,name))return i;return unsigned(kTrainNone);};
+                            const unsigned from=find(t.from,t.fromAt),to=find(t.to,t.toAt);
+                            if(from<to&&to<v.count&&(from!=t.fromAt||to!=t.toAt))runtime_.trainFetched(t.code,t.date,uint8_t(from),uint8_t(to),"");
+                        }
+                    }
+                    const bool trip=model.trainTrip!=kTrainNone&&number(o,"f",kTrainNone)==v.trip.fromAt&&number(o,"t",kTrainNone)==v.trip.toAt;
+                    if(trip){const auto* late=field(o,"l");for(unsigned i=0;i<2;++i){const auto* x=cJSON_GetArrayItem(late,i);v.late[i]=cJSON_IsNumber(x)?int16_t(std::clamp(x->valuedouble,-720.0,1440.0)):kTrainNoLate;}copy(v.toExit,string(o,"x"));}
+                    if(cJSON_IsNumber(field(o,"p"))){v.pick=uint8_t(std::clamp(number(o,"p",0),0.0,255.0));copy(v.gate,string(o,"g"));copy(v.wait,string(o,"w"));copy(v.exit,string(o,"e"));
+                        if(trip&&v.pick==v.trip.fromAt&&*v.gate)runtime_.trainFetched(v.trip.code,v.trip.date,v.trip.fromAt,v.trip.toAt,v.gate);}
+                }
+            }
             if(active==App::Hot&&cJSON_IsObject(field(json,"hot"))){
                 // Rows: [title, heat, tag]; item i in full.
                 auto& m=model;auto& h=m.page.hot;const auto* o=field(json,"hot");const cJSON* row;
@@ -750,7 +809,7 @@ bool LiveServices::tick(uint64_t now) {
         cJSON_Delete(json); mbedtls_platform_zeroize(&message,sizeof(message)); renderLocal(now);
         printf("SERVICE_APPLIED received=%lu stale=%lu\n",static_cast<unsigned long>(received_),static_cast<unsigned long>(stale_));
     }
-    const uint64_t interval=active==App::Monitor ? 2 : active==App::Codex ? 10 : active==App::Guard ? 30 : active==App::News ? (model.newsPage==1?120:0) : active==App::Rate||active==App::Forecast||active==App::Macro ? 1800 : active==App::Stock ? 20 : active==App::Quake ? 300 : active==App::Hacker ? 900 : active==App::Typhoon ? 1800 : active==App::Hot ? 600 : (active==App::Home) ?
+    const uint64_t interval=active==App::Monitor ? 2 : active==App::Codex ? 10 : active==App::Guard ? 30 : active==App::News ? (model.newsPage==1?120:0) : active==App::Rate||active==App::Forecast||active==App::Macro ? 1800 : active==App::Stock ? 20 : active==App::Quake ? 300 : active==App::Hacker ? 900 : active==App::Typhoon ? 1800 : active==App::Train ? 300 : active==App::Hot ? 600 : (active==App::Home) ?
 #ifdef PASSPORT_DEVICE
         weatherRefreshSeconds(model.weatherReading.known)
 #else
@@ -811,6 +870,19 @@ bool LiveServices::tick(uint64_t now) {
     if(active==App::Stock&&!pending_&&!voiceJob_){char want[16];stockOperation(model,want);if(strcmp(want,stockAsked_)){request(want);dirty=true;}}
     if(active==App::Macro&&!voiceJob_&&!model.voiceBusy()){char want[16];macroOperation(model,want);if(strcmp(want,macroAsked_)){request(want);dirty=true;}}
     if(active==App::Quiz&&model.quizWant&&!quizAsked_&&!pending_){quizAsked_=true;request("next");dirty=true;}
+    // 高铁查询: the train on show (a trip switched, a train heard, a trip saved); then the picked stop's 检票口 (the task
+    // holds every stop's, so no download). Not while a phrase's task runs: its queue would swallow the request.
+    if(active==App::Train&&!voiceJob_&&!model.voiceBusy()&&!pending_){
+        char want[32];trainOperation(model,want);const unsigned pick=trainPick(model);
+        // A phrase's task replaced the train's (which held the stops): fetch again, at most every 30 s.
+#ifdef PASSPORT_DEVICE
+        const bool held=!nativeIdle();
+#else
+        const bool held=true;
+#endif
+        if(*want&&(strcmp(want,trainAsked_)||(!held&&now>=trainAskedAt_+30))){request(want);dirty=true;}
+        else if(*want&&held&&pick!=kTrainNone&&pick!=model.page.train.pick&&int(pick)!=trainPickAsked_){trainPickAsked_=int(pick);char operation[12];snprintf(operation,sizeof(operation),"p:%u",pick);request(operation);dirty=true;}
+    }
     // 台风: the picked typhoon's track; 热榜: the picked item in full (the device holds the board, so no download).
     if(active==App::Typhoon&&!pending_&&model.page.typhoon.count&&model.typhoonIndex!=typhoonAsked_){request("refresh");dirty=true;}
     if(active==App::Hot&&!pending_&&model.hotCount&&model.hotIndex!=model.page.hot.detailFor&&model.hotIndex!=hotAsked_){

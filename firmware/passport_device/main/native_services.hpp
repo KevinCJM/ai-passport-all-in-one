@@ -6,13 +6,14 @@
 #include "podcast_catalog.hpp"
 #include "stock_catalog.hpp"
 #include "hot_board.hpp"
+#include "train.hpp"
 #include <atomic>
 
 namespace passport {
 // 中英翻译: what was heard and its translation (toEnglish: Chinese was heard), by engine 1 腾讯翻译君 / 2 MyMemory, 0 none.
 struct TranslationText{char source[600],result[900];bool toEnglish;uint8_t engine;};
 class NativeServices {
-    struct Job{App app{};uint32_t generation{},request{};char operation[16]{};};
+    struct Job{App app{};uint32_t generation{},request{};char operation[32]{};};  // 32: 高铁查询's "t:<train>:<day>:<from>:<to>"
     using Reply=bool(*)(void*,const char*);
     AudioPipe& audio_;Reply reply_;void* context_;
     QueueHandle_t actions_{};TaskHandle_t task_{};
@@ -51,7 +52,7 @@ class NativeServices {
     char sayText_[256]{};  // 飞书提醒: the message to read aloud, set before its "say" request
     void sayText();
     void addStock(const char*);void macro();void setCity(const char*);void locate();
-    void work();void home();void chat();void media();void podcast();void words();void news();void rates();void history();void daily();void quake();void hacker();void quiz();void forecast();void stock();void typhoon();void hot();bool newsList();void memo();void translate();void sayTranslation();bool hotBoard();bool air(double,double,WeatherForecast&);bool warnings(const MediaPrefs&,WeatherWarning*,uint8_t&,unsigned);bool warningText(const char*,char*,size_t);
+    void work();void home();void chat();void media();void podcast();void words();void news();void rates();void history();void daily();void quake();void hacker();void quiz();void forecast();void stock();void typhoon();void train();bool trainFetch();void homeTrain();int16_t trainLate(const char* station,uint32_t date,unsigned minutes,bool leaving);void hot();bool newsList();void memo();void translate();void sayTranslation();bool hotBoard();bool air(double,double,WeatherForecast&);bool warnings(const MediaPrefs&,WeatherWarning*,uint8_t&,unsigned);bool warningText(const char*,char*,size_t);
     bool playMp3(esp_http_client_handle_t client,uint8_t* bytes,size_t size,int count);
     // 财经新闻 while its page is open (the task's own block): publish() sends the six titles and item newsIndex_
     // in full, which stays under the 2 KiB message (a longer one is dropped, leaving the page loading).
@@ -64,9 +65,16 @@ class NativeServices {
     struct StoryItem{char title[90];char site[26];uint16_t points,comments;uint32_t at;};
     struct Quiz{uint32_t serial;char question[256];char answers[4][72];char category[40];char level[8];uint8_t correct;};
     struct PodcastRow{char name[40];char note[48];};
+    // 高铁查询 while its page is open (the task's own block): every stop's 检票口, 候车室 and 出站口; trainStops_: the
+    // next update sends the stops too (only after a fetch: a picked stop sends just its own).
+    struct TrainExtra{char gate[64],wait[32],exit[48];};TrainExtra* trainExtra_{};bool trainStops_{};
+    // The home page: today's trip's 检票口 as last read (homeTrip_.code empty: none), sent with every home update.
+    struct HomeTrip{char code[8];uint32_t date;uint8_t fromAt,toAt;} homeTrip_{};char homeGate_[48]{};
     // 百度热搜 while its page is open (the task's own block): full titles and summaries, item hotIndex_ on show.
     HotItem* hot_{};unsigned hotCount_{},hotIndex_{};uint32_t hotUpdated_{};
     union Page{TranslationText translation;QuakeItem quakes[16];StoryItem stories[10];Quiz quiz;PodcastRow podcasts[PodcastList::kMax];WeatherForecast forecast;TyphoonView typhoon;MacroView macro;
+        // 高铁查询: the train fetched (stops as TrainView's), the stop picked, the trip's stops and how late it is there.
+        struct Train{char code[8];uint32_t date;char style[16];uint8_t count,total,pick,from,to;int16_t late[2];TrainStop stops[kTrainStops];} train;
         // 自选股: the quotes, and for row chartFor (-1 = none) its chart scaled 0-999 between low and high.
         struct Stocks{struct Row{char name[24];char code[10];char tag[4];uint8_t decimals;float v[8];} rows[StockList::kMax];unsigned count;uint32_t updated;
             int chartFor;bool days;unsigned chartCount,chartTotal;int16_t chart[ChartPoints::kMax];float low,high;char from[8],mid[16],to[12];} stocks;} page_{};unsigned quakeCount_{},storyCount_{},podcastCount_{};

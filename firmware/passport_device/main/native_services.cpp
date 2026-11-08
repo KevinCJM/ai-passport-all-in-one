@@ -151,6 +151,20 @@ void NativeServices::publish(const Job& job,const char* state,const char* phase,
         }
         if(t.cityLat!=INT16_MIN){auto* c=cJSON_AddArrayToObject(o,"c");cJSON_AddItemToArray(c,cJSON_CreateString(t.city));cJSON_AddItemToArray(c,cJSON_CreateNumber(t.cityLon));cJSON_AddItemToArray(c,cJSON_CreateNumber(t.cityLat));}
     }
+    // 高铁查询: c, d the train and day; n its stops; f, t the trip's; s the stops [name, arrive, depart] (-1: none) and y
+    // the train type, after a fetch; p the picked stop with its 检票口 g, 候车室 w, 出站口 e; x the 出站口 where you get
+    // off; l how late it leaves f and reaches t (null: not known).
+    if(job.app==App::Train&&!strcmp(phase,"ready")&&!spoken){const auto& t=page_.train;auto* o=cJSON_AddObjectToObject(j.value,"train");
+        cJSON_AddStringToObject(o,"c",t.code);cJSON_AddNumberToObject(o,"d",t.date);cJSON_AddNumberToObject(o,"n",t.total);cJSON_AddNumberToObject(o,"f",t.from);cJSON_AddNumberToObject(o,"t",t.to);
+        if(trainStops_){
+            cJSON_AddStringToObject(o,"y",t.style);auto* stops=cJSON_AddArrayToObject(o,"s");
+            for(unsigned i=0;i<t.count;++i){const auto& s=t.stops[i];auto* r=cJSON_CreateArray();cJSON_AddItemToArray(r,cJSON_CreateString(s.name));
+                cJSON_AddItemToArray(r,cJSON_CreateNumber(s.arrive==kTrainNoTime?-1:s.arrive));cJSON_AddItemToArray(r,cJSON_CreateNumber(s.depart==kTrainNoTime?-1:s.depart));cJSON_AddItemToArray(stops,r);}
+        }
+        if(trainExtra_&&t.pick<t.count){const auto& e=trainExtra_[t.pick];cJSON_AddNumberToObject(o,"p",t.pick);cJSON_AddStringToObject(o,"g",e.gate);cJSON_AddStringToObject(o,"w",e.wait);cJSON_AddStringToObject(o,"e",e.exit);}
+        if(trainExtra_&&t.to<t.count)cJSON_AddStringToObject(o,"x",trainExtra_[t.to].exit);
+        auto* late=cJSON_AddArrayToObject(o,"l");for(const auto l:t.late)cJSON_AddItemToArray(late,l==kTrainNoLate?cJSON_CreateNull():cJSON_CreateNumber(l));
+    }
     // 百度热搜: rows [title cut to the list, heat, tag]; item i in full; at: when fetched.
     if(job.app==App::Hot&&!strcmp(phase,"ready")&&hot_){auto* o=cJSON_AddObjectToObject(j.value,"hot");auto* rows=cJSON_AddArrayToObject(o,"r");
         for(unsigned i=0;i<hotCount_;++i){char title[40];copy(title,hot_[i].title);auto* r=cJSON_CreateArray();cJSON_AddItemToArray(r,cJSON_CreateString(title));
@@ -158,6 +172,8 @@ void NativeServices::publish(const Job& job,const char* state,const char* phase,
         if(hotIndex_<hotCount_){cJSON_AddNumberToObject(o,"i",hotIndex_);cJSON_AddStringToObject(o,"t",hot_[hotIndex_].title);cJSON_AddStringToObject(o,"d",hot_[hotIndex_].desc);}
         cJSON_AddNumberToObject(o,"at",hotUpdated_);
     }
+    if(job.app==App::Home&&*homeTrip_.code&&*homeGate_){auto* g=cJSON_AddObjectToObject(j.value,"train_gate");const auto& t=homeTrip_;
+        cJSON_AddStringToObject(g,"c",t.code);cJSON_AddNumberToObject(g,"d",t.date);cJSON_AddNumberToObject(g,"f",t.fromAt);cJSON_AddNumberToObject(g,"t",t.toAt);cJSON_AddStringToObject(g,"g",homeGate_);}
     if(job.app==App::Home&&weatherReading_.known){
         auto* w=cJSON_AddObjectToObject(j.value,"weather");const auto& data=weatherReading_;
         cJSON_AddStringToObject(w,"city",data.city);cJSON_AddStringToObject(w,"condition",data.condition);
@@ -180,7 +196,7 @@ bool NativeServices::request(App app,uint32_t generation,uint32_t request,const 
     if(!network_&&app!=App::Macro){const char* lines[]{"请先连接 WiFi，或使用 USB PPP","","",""};publish(job,"未联网",app==App::Home?"ready":"error","--",lines);return true;}
     // Only these tasks keep running and read actions_; a one-shot fetch would drop the action, so the request
     // waits as the next job instead and its answer replaces the running fetch's (whose request is then stale).
-    const bool reads=app==App::Chat||app==App::Radio||app==App::Podcast||app==App::Words||app==App::Daily||app==App::Quiz||app==App::Hot||app==App::News||keepsListening(app)||speaksOnce(app)||(speaksToo(app)&&!strcmp(operation,"toggle"));
+    const bool reads=app==App::Chat||app==App::Radio||app==App::Podcast||app==App::Words||app==App::Daily||app==App::Quiz||app==App::Hot||app==App::News||(app==App::Train&&strcmp(operation,"speak"))||keepsListening(app)||speaksOnce(app)||(speaksToo(app)&&!strcmp(operation,"toggle"));
     if(reads&&task_&&!finished_&&owner_.load()==generation)return xQueueSend(actions_,&job,0)==pdTRUE;
     pending_=job;pendingReady_=true;pendingSince_=esp_timer_get_time();memoryWaiting_=false;return true;
 }
@@ -200,7 +216,7 @@ void NativeServices::poll(){
     }
 }
 void NativeServices::run(void* context){auto& self=*static_cast<NativeServices*>(context);self.work();self.closeSocket();if((self.current_.app==App::Chat&&strcmp(self.current_.operation,"probe"))||self.transcribing()||self.current_.app==App::Radio||self.current_.app==App::Podcast||self.current_.app==App::Words||self.current_.app==App::Daily||self.current_.app==App::Feishu)self.audio_.stop();self.ready_=self.listening_=self.speaking_=self.playing_=self.online_=false;self.finished_=true;vTaskSuspend(nullptr);}
-void NativeServices::work(){if(cancelled())return;if(!strcmp(current_.operation,"speak"))memo();else if(!strcmp(current_.operation,"locate"))locate();else if(current_.app==App::Home)home();else if(current_.app==App::Chat)chat();else if(current_.app==App::Radio)media();else if(current_.app==App::Podcast)podcast();else if(current_.app==App::Words)words();else if(current_.app==App::News)news();else if(current_.app==App::Rate)rates();else if(current_.app==App::History)history();else if(current_.app==App::Daily)daily();else if(current_.app==App::Quake)quake();else if(current_.app==App::Quiz)quiz();else if(current_.app==App::Hacker)hacker();else if(current_.app==App::Forecast)forecast();else if(current_.app==App::Stock)stock();else if(current_.app==App::Macro)macro();else if(current_.app==App::Typhoon)typhoon();else if(current_.app==App::Hot)hot();else if(current_.app==App::Feishu)sayText();else if(transcribing())memo();stackFree_=uxTaskGetStackHighWaterMark(nullptr);}
+void NativeServices::work(){if(cancelled())return;if(!strcmp(current_.operation,"speak"))memo();else if(!strcmp(current_.operation,"locate"))locate();else if(current_.app==App::Home)home();else if(current_.app==App::Chat)chat();else if(current_.app==App::Radio)media();else if(current_.app==App::Podcast)podcast();else if(current_.app==App::Words)words();else if(current_.app==App::News)news();else if(current_.app==App::Rate)rates();else if(current_.app==App::History)history();else if(current_.app==App::Daily)daily();else if(current_.app==App::Quake)quake();else if(current_.app==App::Quiz)quiz();else if(current_.app==App::Hacker)hacker();else if(current_.app==App::Forecast)forecast();else if(current_.app==App::Stock)stock();else if(current_.app==App::Macro)macro();else if(current_.app==App::Typhoon)typhoon();else if(current_.app==App::Train)train();else if(current_.app==App::Hot)hot();else if(current_.app==App::Feishu)sayText();else if(transcribing())memo();stackFree_=uxTaskGetStackHighWaterMark(nullptr);}
 bool NativeServices::syncClock(){
     // Once per boot even when the clock is set: it drifts in deep sleep (internal RC oscillator), and the alarm
     // wakes the device early to correct it before ringing.
@@ -242,6 +258,7 @@ bool NativeServices::fetch(const char* url,char* output,size_t capacity,Sink sin
 void NativeServices::home(){
     publish(current_,"网络校时","loading");
     if(!syncClock()){const char* rows[]{"","网络时间同步失败","确认键重试",""};publish(current_,"校时失败","ready","--:--",rows);return;}
+    homeTrain();
     // Weather follows the city set on the setup page or in Settings (spoken, or looked up by IP when asked to).
     MediaPrefs prefs{};const bool chosen=mediaLoad("prefs",prefs)&&*prefs.city;const uint32_t revision=mediaPrefsRevision;
     const char* source="城市天气";
@@ -1425,6 +1442,112 @@ void NativeServices::typhoon(){
     t.shown=want;
     if(cancelled())return;
     publish(current_,"已更新","ready");
+}
+// The home page on the day of a trip, from four hours before it leaves: the boarding station's 检票口 from the
+// timetable (with each weather check, every 10 minutes), for the footer. Only that stop is kept.
+void NativeServices::homeTrain(){
+    TrainTrips trips;SettingsStore::loadTrain(trips);const time_t now=time(nullptr);const int at=trips.today(now);
+    if(at<0||trips.leaves(at)>now+4*3600){homeTrip_={};homeGate_[0]=0;return;}
+    const auto& trip=trips.items[at];
+    if(strcmp(homeTrip_.code,trip.code)||homeTrip_.date!=trip.date){homeGate_[0]=0;}
+    copy(homeTrip_.code,trip.code);homeTrip_.date=trip.date;homeTrip_.fromAt=trip.fromAt;homeTrip_.toAt=trip.toAt;
+    struct Parse{NativeServices* self;unsigned index,want;char gate[64],name[16];JsonSlices slices;char buffer[2048];};
+    std::unique_ptr<Parse> parse(new(std::nothrow) Parse{this,0,trip.fromAt,{},{},{0,nullptr,0,nullptr,nullptr},{}});
+    if(!parse)return;
+    const Sink sink=[](void* context,const char* bytes,size_t size){
+        auto& p=*static_cast<Parse*>(context);
+        if(!bytes){p.index=0;p.gate[0]=p.name[0]=0;p.slices=JsonSlices(5,p.buffer,sizeof(p.buffer),[](void* context,char* text){
+            auto& p=*static_cast<Parse*>(context);
+            if(p.index++!=p.want)return;
+            Json json(cJSON_Parse(text));copy(p.gate,str(json.value,"wicket"));copy(p.name,str(json.value,"stationName"));if(!strcmp(p.gate,"--"))p.gate[0]=0;
+        },&p);return true;}
+        p.slices.feed(bytes,size);return p.index<=p.want;  // the rest is not needed
+    };
+    char url[160];snprintf(url,sizeof(url),"http://mobile.12306.cn/wxxcx/wechat/main/travelServiceQrcodeTrainInfo?trainCode=%s&startDay=%lu",trip.code,static_cast<unsigned long>(trip.date));
+    if(fetch(url,nullptr,0,sink,parse.get(),"")&&!strcmp(parse->name,trip.from))copy(homeGate_,parse->gate);
+}
+// 高铁查询: a train's stops from 12306's 小程序 timetable (plain HTTP, no key; about 1.2 KB a stop, 37 KB for 30, read a
+// stop at a time). Every stop's 检票口, 候车室 and 出站口 stay in the task's own block, so a picked stop ("p:<i>")
+// shows at once; "t:<train>:<yyyymmdd>:<from>:<to>" fetches, and for a trip on the day also asks 12306's 正晚点
+// (HTTPS, a sentence each) how late it leaves `from` and reaches `to`. The task stays for the page, until another job
+// (a spoken train) waits.
+void NativeServices::train(){
+    std::unique_ptr<TrainExtra[]> extra(new(std::nothrow) TrainExtra[kTrainStops]);
+    if(!extra){publish(current_,"内存不足","error");return;}
+    trainExtra_=extra.get();auto& t=page_.train;t={};t.pick=t.from=t.to=kTrainNone;t.late[0]=t.late[1]=kTrainNoLate;
+    for(;;){
+        bool ok=true;trainStops_=false;
+        if(!strncmp(current_.operation,"p:",2)){if(t.count)t.pick=uint8_t(std::min<int>(std::max(atoi(current_.operation+2),0),t.count-1));}
+        else ok=trainFetch();
+        if(cancelled())break;
+        if(ok)publish(current_,t.total?"已更新":"没有这趟车","ready");
+        Job action{};
+        while(!cancelled()&&!pendingReady_&&(xQueueReceive(actions_,&action,pdMS_TO_TICKS(50))!=pdTRUE||action.generation!=current_.generation)){}
+        if(cancelled()||pendingReady_)break;
+        current_.request=action.request;copy(current_.operation,action.operation);
+    }
+    trainExtra_=nullptr;
+}
+bool NativeServices::trainFetch(){
+    auto& t=page_.train;char code[8]{};unsigned long date=0;unsigned from=kTrainNone,to=kTrainNone;
+    if(sscanf(current_.operation,"t:%7[^:]:%lu:%u:%u",code,&date,&from,&to)<2||!*code){publish(current_,"请求无效","error");return false;}
+    publish(current_,"正在查询","loading");
+    copy(t.code,code);t.date=uint32_t(date);t.count=t.total=0;t.style[0]=0;t.from=uint8_t(std::min(from,255u));t.to=uint8_t(std::min(to,255u));
+    t.pick=t.from<kTrainStops?t.from:0;t.late[0]=t.late[1]=kTrainNoLate;
+    // A stop is an object 5 brackets deep: {"data":{"trainDetail":{"stopTime":[{...},...]}}}.
+    struct Parse{NativeServices* self;JsonSlices slices;char buffer[2048];};
+    std::unique_ptr<Parse> parse(new(std::nothrow) Parse{this,{0,nullptr,0,nullptr,nullptr},{}});
+    if(!parse){publish(current_,"内存不足","error");return false;}
+    const Sink sink=[](void* context,const char* bytes,size_t size){
+        auto& p=*static_cast<Parse*>(context);
+        if(!bytes){p.self->page_.train.count=p.self->page_.train.total=0;p.slices=JsonSlices(5,p.buffer,sizeof(p.buffer),[](void* context,char* text){
+            auto& self=*static_cast<NativeServices*>(context);auto& t=self.page_.train;
+            Json json(cJSON_Parse(text));const auto* o=json.value;
+            const char* name=str(o,"stationName");if(!*name)return;
+            if(t.total<255)++t.total;
+            if(t.count>=kTrainStops)return;
+            // "--" where a station has none; 12306 adds the set's number to the type ("CR400AF-BZ_1283").
+            const auto clean=[](char* text){if(!strcmp(text,"--"))*text=0;};
+            auto& s=t.stops[t.count];auto& e=self.trainExtra_[t.count];copy(s.name,name);
+            s.arrive=train::minutes(str(o,"arriveTime"),atoi(str(o,"arraiveDifference")));s.depart=train::minutes(str(o,"startTime"),atoi(str(o,"dayDifference")));
+            copy(e.gate,str(o,"wicket"));copy(e.wait,str(o,"waitingRoom"));copy(e.exit,str(o,"exit"));clean(e.gate);clean(e.wait);clean(e.exit);
+            if(!t.count){copy(t.style,str(o,"train_style"));if(char* cut=strchr(t.style,'_'))*cut=0;}
+            ++t.count;
+        },p.self);return true;}
+        p.slices.feed(bytes,size);return true;
+    };
+    char url[160];snprintf(url,sizeof(url),"http://mobile.12306.cn/wxxcx/wechat/main/travelServiceQrcodeTrainInfo?trainCode=%s&startDay=%lu",t.code,date);
+    if(!fetch(url,nullptr,0,sink,parse.get(),"")){if(!cancelled())publish(current_,"查询失败，按确认重试","error");return false;}
+    parse.reset();trainStops_=true;
+    if(cancelled())return false;
+    // Not running that day (or no such train): the page says so and stays ready for another.
+    if(!t.total){
+        char day[24];const uint32_t today=time(nullptr)>1700000000?train::dateOf(time(nullptr)):0;
+        if(t.date==today)strcpy(day,"今天");else snprintf(day,sizeof(day),"%lu月%lu日",date/100%100,date%100);
+        snprintf(notice_,sizeof(notice_),"%s没有 %s 这趟车",day,t.code);return true;
+    }
+    if(t.pick>=t.count)t.pick=0;
+    if(t.from<t.to&&t.to<t.count&&time(nullptr)>1700000000){
+        publish(current_,"正在查正晚点","loading");
+        t.late[0]=trainLate(t.stops[t.from].name,t.date,t.stops[t.from].depart,true);
+        if(!cancelled())t.late[1]=trainLate(t.stops[t.to].name,t.date,t.stops[t.to].arrive,false);
+    }
+    return true;
+}
+// 12306's 正晚点 for a station on the day: minutes late (kTrainNoLate: not known, or not today, or over 4 hours away).
+int16_t NativeServices::trainLate(const char* station,uint32_t date,unsigned minutes,bool leaving){
+    if(minutes==kTrainNoTime||cancelled())return kTrainNoLate;
+    const time_t at=train::epoch(date,minutes),now=time(nullptr);
+    if(train::dateOf(at)!=train::dateOf(now)||at>now+4*3600||at+3*3600<now)return kTrainNoLate;
+    char name[64],dashed[64],url[320];urlEncode(name,sizeof(name),station);
+    copy(dashed,name);for(char* c=dashed;*c;++c)if(*c=='%')*c='-';
+    const uint32_t day=train::dateOf(at);
+    snprintf(url,sizeof(url),"https://kyfw.12306.cn/otn/zwdch/query?cxlx=%d&cz=%s&cc=%s&czEn=%s&rq=%04lu-%02lu-%02lu",leaving?1:0,name,page_.train.code,dashed,
+        static_cast<unsigned long>(day/10000),static_cast<unsigned long>(day/100%100),static_cast<unsigned long>(day%100));
+    char reply[640];
+    if(!fetch(url,reply,sizeof(reply)))return kTrainNoLate;
+    Json json(cJSON_Parse(reply));
+    return train::late(str(item(json.value,"data"),"message"),minutes%1440);
 }
 // 百度热搜: the board's PC feed (HTTPS, no key, about 57 KB for 50 items with summaries), read as it arrives and the
 // first kHotRows kept, the pinned item ("topContent", after the rest) first. The task stays for the page: "item:<i>"

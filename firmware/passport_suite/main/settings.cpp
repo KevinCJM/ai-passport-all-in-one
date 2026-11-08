@@ -215,6 +215,17 @@ bool SettingsStore::saveLedger(const LedgerBook& book) {
     return book.valid() && nvs_open("suite_system", NVS_READWRITE, &handle.value) == ESP_OK
         && nvs_set_blob(handle.value, "ledger_v1", &book, sizeof(book)) == ESP_OK && nvs_commit(handle.value) == ESP_OK;
 }
+bool SettingsStore::loadTrain(TrainTrips& trips) {
+    Handle handle; size_t size = sizeof(trips);
+    if (nvs_open("suite_system", NVS_READONLY, &handle.value) != ESP_OK || nvs_get_blob(handle.value, "train_v1", &trips, &size) != ESP_OK
+        || size != sizeof(trips) || !trips.valid()) { trips = {}; return false; }
+    return true;
+}
+bool SettingsStore::saveTrain(const TrainTrips& trips) {
+    Handle handle;
+    return trips.valid() && nvs_open("suite_system", NVS_READWRITE, &handle.value) == ESP_OK
+        && nvs_set_blob(handle.value, "train_v1", &trips, sizeof(trips)) == ESP_OK && nvs_commit(handle.value) == ESP_OK;
+}
 bool SettingsStore::loadHealth(HealthBook& book) {
     Handle handle; size_t size = sizeof(book);
     if (nvs_open("suite_system", NVS_READONLY, &handle.value) != ESP_OK || nvs_get_blob(handle.value, "health_v1", &book, &size) != ESP_OK

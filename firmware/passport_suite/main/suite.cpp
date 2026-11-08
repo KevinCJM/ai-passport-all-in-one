@@ -69,6 +69,7 @@ constexpr Profile kProfiles[] = {
     {"feishu", "飞书提醒", 0, false, false},
     {"book", "电子书", 0, false, false},
     {"health", "健康记录", 0, false, false, "健康"},
+    {"train", "高铁查询", 0, false, false, "高铁"},
 };
 static_assert(std::size(kProfiles) == static_cast<unsigned>(App::Count));
 }
@@ -94,6 +95,7 @@ StaticSemaphore_t healthLockStorage;
 SemaphoreHandle_t healthLock;
 std::atomic<unsigned> healthWaiting;
 std::atomic<bool> healthTouched;
+uint32_t trainChecked;  // 高铁查询: the five minutes the home note was last worked out in
 std::atomic<int> waterDay{-1};
 std::atomic<unsigned> waterCups;
 template <class Edit> bool editHealth(HealthBook& book, Edit edit) {
@@ -104,6 +106,36 @@ template <class Edit> bool editHealth(HealthBook& book, Edit edit) {
     if (time(nullptr) > 1700000000) { const int today = healthDay(time(nullptr)); waterCups = book.cups(today); waterDay = today; }
     xSemaphoreGive(healthLock);
     return ok;
+}
+// 高铁查询: text cut to `size` bytes at a character boundary.
+template <size_t N> void cutCopy(char (&to)[N], const char* from) {
+    size_t n = std::min(strlen(from), N - 1); while (n && (static_cast<unsigned char>(from[n]) & 0xc0) == 0x80) --n;
+    memcpy(to, from, n); to[n] = 0;
+}
+// The home page's footer: today's next trip, its 检票口 when known.
+void trainNote(Model& m, const TrainTrips& trips, time_t now) {
+    const int i = now > 1700000000 ? trips.today(now) : -1;
+    if (i < 0) { m.trainNextAt = 0; m.trainNext[0] = 0; return; }
+    const auto& t = trips.items[i]; char text[160];
+    snprintf(text, sizeof(text), "%s %02u:%02u %s%s%s", t.code, t.depart % 1440 / 60, t.depart % 60, t.from, *t.gate ? " · " : "", t.gate);
+    m.trainNextAt = static_cast<uint32_t>(trips.leaves(static_cast<unsigned>(i))); cutCopy(m.trainNext, text);
+}
+// The stops keep trainIndex on screen.
+void trainScroll(Model& m) {
+    if (m.trainIndex < m.trainTop) m.trainTop = m.trainIndex;
+    else if (m.trainIndex >= m.trainTop + Model::kTrainRows) m.trainTop = static_cast<uint8_t>(m.trainIndex - Model::kTrainRows + 1);
+}
+// Shows a train with nothing fetched yet: a saved trip, or just a train and day.
+void showTrain(Model& m, const TrainTrip& trip, bool saved) {
+    auto& v = m.page.train; v = {};
+    strcpy(v.code, trip.code); v.date = trip.date; v.trip = trip;
+    v.pick = v.from = v.to = kTrainNone; v.late[0] = v.late[1] = kTrainNoLate;
+    if (saved) { v.from = trip.fromAt; v.to = trip.toAt; }
+}
+std::unique_ptr<TrainTrips> loadTrips() {
+    std::unique_ptr<TrainTrips> trips(new (std::nothrow) TrainTrips);
+    if (trips) SettingsStore::loadTrain(*trips);
+    return trips;
 }
 // The detail list keeps healthIndex on screen (kHealthRows rows from healthTop).
 void healthScroll(Model& m) {
@@ -238,6 +270,7 @@ bool Runtime::init(SystemSettings& settings) {
     if (!healthLock) healthLock = xSemaphoreCreateMutexStatic(&healthLockStorage);
     if (std::unique_ptr<HealthBook> book(new (std::nothrow) HealthBook); book) editHealth(*book, [](HealthBook&) { return false; });
     SettingsStore::loadHealthPrefs(model.healthPrefs);
+    reloadTrain();
     if (screen < static_cast<uint8_t>(HomeScreen::Count)) model.homeScreen = static_cast<HomeScreen>(screen);
     events_ = xQueueCreate(32, sizeof(Event));
     if (events_ && worker_.init(events_)) return true;
@@ -513,6 +546,31 @@ bool Runtime::longKey(bool up, uint64_t now) {
         if (!SettingsStore::saveStatus(m.status)) strcpy(m.lastNotice, "保存失败");
         return true;
     }
+    // 高铁查询: on the card a long Up opens the stops (at the stop you get on), a long Down asks to delete the trip and a
+    // second one does it; in the stops they move a page.
+    if (active_ == App::Train) {
+        auto& v = m.page.train;
+        if (m.voiceBusy()) return true;
+        if (m.trainView) {
+            if (v.count) { m.trainIndex = static_cast<uint8_t>(up ? (m.trainIndex >= Model::kTrainRows ? m.trainIndex - Model::kTrainRows : 0) : std::min<unsigned>(m.trainIndex + Model::kTrainRows, v.count - 1u)); trainScroll(m); }
+            return true;
+        }
+        if (up) {
+            m.trainArmed = false;
+            if (*v.code) { m.trainView = 1; m.trainFrom = kTrainNone; m.lastNotice[0] = 0; m.trainIndex = m.trainTrip != kTrainNone ? v.trip.fromAt : 0; if (v.count && m.trainIndex >= v.count) m.trainIndex = 0; m.trainTop = 0; trainScroll(m); }
+            return true;
+        }
+        if (m.trainTrip == kTrainNone) { m.trainArmed = false; return true; }
+        if (!m.trainArmed) { m.trainArmed = true; m.lastNotice[0] = 0; return true; }
+        m.trainArmed = false;
+        auto trips = loadTrips(); if (!trips) return true;
+        trips->remove(m.trainTrip); const bool ok = SettingsStore::saveTrain(*trips);
+        m.trainTrips = trips->count; trainNote(m, *trips, time(nullptr));
+        if (trips->count) { m.trainTrip = static_cast<uint8_t>(std::min<unsigned>(m.trainTrip, trips->count - 1u)); showTrain(m, trips->items[m.trainTrip], true); }
+        else { m.trainTrip = kTrainNone; v = {}; v.pick = v.from = v.to = kTrainNone; }
+        strcpy(m.lastNotice, ok ? "已删除" : "保存失败");
+        return true;
+    }
     // 健康记录: a long Up opens the picked kind's records; a long Down asks to delete (the overview: that kind's latest
     // record, or one cup), a second one does it; anything else cancels.
     if (active_ == App::Health) {
@@ -758,6 +816,36 @@ bool Runtime::healthSynced() {
     if (active_ != App::Health) return true;
     editHealth(model.page.health, [](HealthBook&) { return false; });
     return true;
+}
+void Runtime::reloadTrain() {
+    const auto trips = loadTrips(); if (!trips) return;
+    const time_t clock = time(nullptr);
+    if (clock > 1700000000 && trips->prune(clock)) SettingsStore::saveTrain(*trips);
+    model.trainTrips = trips->count; trainNote(model, *trips, clock);
+}
+bool Runtime::addTrain(const char* heard) {
+    auto& m = model; const auto r = train::parse(heard, time(nullptr));
+    if (!r.ok) { strcpy(m.lastNotice, r.error); return false; }
+    m.lastNotice[0] = 0; m.trainArmed = false; m.trainFrom = kTrainNone;
+    // A saved trip on this train and day opens as that trip.
+    if (const auto trips = loadTrips(); trips) if (const int at = trips->find(r.code, r.date); at >= 0) {
+        m.trainTrip = static_cast<uint8_t>(at); m.trainView = 0; showTrain(m, trips->items[at], true); return true;
+    }
+    TrainTrip asked{}; strcpy(asked.code, r.code); asked.date = r.date;
+    m.trainTrip = kTrainNone; m.trainView = 1; m.trainIndex = m.trainTop = 0; showTrain(m, asked, false);
+    return true;
+}
+void Runtime::trainFetched(const char* code, uint32_t date, uint8_t fromAt, uint8_t toAt, const char* gate) {
+    auto trips = loadTrips(); if (!trips) return;
+    const int at = trips->find(code, date); if (at < 0) return;
+    auto& t = trips->items[at]; char kept[sizeof(t.gate)]; cutCopy(kept, gate);
+    const bool moved = t.fromAt != fromAt || t.toAt != toAt;
+    if (!moved && (!*kept || !strcmp(t.gate, kept))) return;
+    if (moved) { t.fromAt = fromAt; t.toAt = toAt; } else strcpy(t.gate, kept);
+    if (!t.valid() || !SettingsStore::saveTrain(*trips)) return;
+    trainNote(model, *trips, time(nullptr));
+    auto& v = model.page.train;
+    if (active_ == App::Train && model.trainTrip == at && !strcmp(v.code, code) && v.date == date) { v.trip = t; v.from = t.fromAt; v.to = t.toAt; }
 }
 bool Runtime::addHealth(const char* heard) {
     auto& m = model; const HealthKind hint = m.healthKind();
@@ -1052,6 +1140,12 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
         auto& m = model; SettingsStore::loadHealthPrefs(m.healthPrefs); editHealth(m.page.health, [](HealthBook&) { return false; });
         m.healthView = m.healthRow = m.healthIndex = m.healthTop = m.healthSetRow = 0; m.healthArmed = false; m.listenAt = 0;
     }
+    if (target == App::Train) {
+        auto& m = model; m.trainView = m.trainIndex = m.trainTop = 0; m.trainFrom = m.trainTrip = kTrainNone; m.trainArmed = false; m.listenAt = 0;
+        m.page.train = {}; m.page.train.pick = m.page.train.from = m.page.train.to = kTrainNone;
+        reloadTrain();
+        if (const auto trips = loadTrips(); trips && trips->count) { m.trainTrip = 0; showTrain(m, trips->items[0], true); }
+    }
     if (target == App::Voice) model.listenAt = 0;
     if (target == App::Walkie) { auto& m = model; m.walkieTalk = m.walkieAuto = false; m.walkiePhase = 0; m.walkieFrom[0] = 0; m.walkieAt = now_; }
     if (target == App::Guard) {
@@ -1126,6 +1220,12 @@ void Runtime::key(Key key, uint64_t now) {
         if (active_ == App::Alarm && model.alarmEdit && !model.voiceBusy()) { model.alarmEdit = false; return; }
         if (active_ == App::Todo && model.todoRinging) { endTodoRing(TodoRing::Stop); return; }
         if (active_ == App::Health && model.healthView && !model.voiceBusy()) { model.healthView = 0; model.healthArmed = false; model.lastNotice[0] = 0; return; }
+        // 高铁查询's stops go back to the trip's card (a train not saved: to the first trip, if any).
+        if (active_ == App::Train && model.trainView && !model.voiceBusy() && (model.trainTrip != kTrainNone || model.trainTrips)) {
+            auto& m = model; m.trainView = 0; m.trainFrom = kTrainNone; m.lastNotice[0] = 0;
+            if (m.trainTrip == kTrainNone) if (const auto trips = loadTrips(); trips && trips->count) { m.trainTrip = 0; showTrain(m, trips->items[0], true); }
+            return;
+        }
         if (active_ == App::Home) { screenOff_ = true; return; }
         // A call that opened 对讲机 goes back to the page it interrupted.
         if (active_ == App::Walkie && model.walkieAuto) { switchTo(model.walkieBack); return; }
@@ -1504,6 +1604,42 @@ void Runtime::key(Key key, uint64_t now) {
         auto& f = model.page.forecast;
         if (key == Key::Up || key == Key::Down) { model.forecastView = (model.forecastView + (key == Key::Up ? 3 : 1)) % 4; model.forecastWarn = 0; }
         if (key == Key::Confirm && model.forecastView == 3 && f.warnings && f.warnings != 0xff) model.forecastWarn = (model.forecastWarn + 1) % (f.warnings + 1);
+    } else if (active_ == App::Train) {
+        // The card: Up/Down step through the trips, Confirm asks for a train (LiveServices). The stops: Up/Down pick a
+        // stop (LiveServices fetches its 检票口), Confirm picks where to get on, then off, which saves the trip.
+        auto& m = model; auto& v = m.page.train;
+        if (m.voiceBusy()) return;
+        m.trainArmed = false;
+        if (!m.trainView) {
+            if ((key == Key::Up || key == Key::Down) && m.trainTrip != kTrainNone && m.trainTrips > 1) {
+                if (const auto trips = loadTrips(); trips && trips->count) {
+                    m.trainTrip = static_cast<uint8_t>((std::min<unsigned>(m.trainTrip, trips->count - 1) + (key == Key::Up ? trips->count - 1 : 1)) % trips->count);
+                    showTrain(m, trips->items[m.trainTrip], true); m.lastNotice[0] = 0;
+                }
+            }
+        } else if (v.count) {
+            if (key == Key::Up || key == Key::Down) { m.trainIndex = static_cast<uint8_t>((m.trainIndex + (key == Key::Up ? v.count - 1 : 1)) % v.count); trainScroll(m); }
+            if (key == Key::Confirm) {
+                m.confirmTaken = true; const unsigned at = std::min<unsigned>(m.trainIndex, v.count - 1);
+                if (m.trainFrom == kTrainNone || at <= m.trainFrom) {
+                    if (at + 1 >= v.count) { strcpy(m.lastNotice, "终点站不能上车"); return; }
+                    m.trainFrom = static_cast<uint8_t>(at); snprintf(m.lastNotice, sizeof(m.lastNotice), "%s 上车，再选下车站", v.stops[at].name); return;
+                }
+                const auto& a = v.stops[std::min<unsigned>(m.trainFrom, kTrainStops - 1)]; const auto& b = v.stops[std::min<unsigned>(at, kTrainStops - 1)];
+                TrainTrip trip{}; cutCopy(trip.code, v.code); trip.date = v.date; trip.fromAt = m.trainFrom; trip.toAt = static_cast<uint8_t>(at);
+                cutCopy(trip.from, a.name); cutCopy(trip.to, b.name);
+                trip.depart = a.depart != kTrainNoTime ? a.depart : a.arrive; trip.arrive = b.arrive != kTrainNoTime ? b.arrive : b.depart;
+                if (!trip.valid()) { strcpy(m.lastNotice, "这两站的时间不全，换一站试试"); return; }
+                auto trips = loadTrips(); if (!trips) { strcpy(m.lastNotice, "内存不足"); return; }
+                trips->prune(time(nullptr));
+                const int slot = trips->put(trip);
+                if (slot < 0) { strcpy(m.lastNotice, "最多保存 5 个行程，先删掉一个"); return; }
+                if (!SettingsStore::saveTrain(*trips)) { strcpy(m.lastNotice, "保存失败"); return; }
+                m.trainTrips = trips->count; m.trainTrip = static_cast<uint8_t>(slot); m.trainFrom = kTrainNone; m.trainView = 0;
+                v.trip = trips->items[slot]; v.from = trip.fromAt; v.to = trip.toAt; v.late[0] = v.late[1] = kTrainNoLate; v.toExit[0] = 0;
+                trainNote(m, *trips, time(nullptr)); strcpy(m.lastNotice, "行程已保存");
+            }
+        }
     } else if (active_ == App::Rate) {
         // Up/Down pick; Confirm refreshes (LiveServices; while speaking it ends it instead).
         if (model.voiceBusy()) return;
@@ -1727,6 +1863,8 @@ void Runtime::tick(uint64_t now) {
         }
         m.waterDueAt = static_cast<uint32_t>(waterNext(m.healthPrefs, clock));
     }
+    // 高铁查询: today's next trip for the home footer, every five minutes (a trip leaves, the day changes).
+    if (static_cast<uint32_t>(clock / 300) != trainChecked) { trainChecked = static_cast<uint32_t>(clock / 300); reloadTrain(); }
     // 待办提醒: the next reminder rings once, from any page. One missed by more than six hours (the badge was off) is
     // only marked: the list shows it overdue.
     if (m.todoNextAt && !m.todoRinging && !m.alarmRinging && clock >= static_cast<time_t>(m.todoNextAt)) {

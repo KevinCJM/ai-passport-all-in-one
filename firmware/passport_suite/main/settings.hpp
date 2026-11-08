@@ -2,6 +2,7 @@
 #include "health.hpp"
 #include "ledger.hpp"
 #include "score.hpp"
+#include "train.hpp"
 #include <cstddef>
 #include <cstdint>
 
@@ -193,6 +194,9 @@ public:
     static bool saveHealth(const HealthBook& book);
     static bool loadHealthPrefs(HealthPrefs& prefs);
     static bool saveHealthPrefs(const HealthPrefs& prefs);
+    // 高铁查询: the saved trips (train_v1).
+    static bool loadTrain(TrainTrips& trips);
+    static bool saveTrain(const TrainTrips& trips);
     static bool loadGuard(GuardPrefs& prefs);
     static bool saveGuard(const GuardPrefs& prefs);
     static bool loadScore(ScoreBoard& board);
