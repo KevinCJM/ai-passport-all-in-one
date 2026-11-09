@@ -1,4 +1,5 @@
 """健康记录 on the Mac: a fake badge hands records over in batches; the CSV keeps one row per record."""
+import os
 import sys
 import tempfile
 import time
@@ -45,7 +46,7 @@ class HealthTests(TestCase):
             health.sync(badge.request);self.assertFalse(badge.entries)
             again=Health(path);self.assertEqual(len(again.rows),6);self.assertEqual(again.rows[now]['数值'],'4')
             self.assertTrue(path.read_bytes().startswith(b'\xef\xbb\xbf'),'Excel needs the BOM')
-            self.assertEqual(path.stat().st_mode&0o777,0o600)
+            if os.name!='nt':self.assertEqual(path.stat().st_mode&0o777,0o600)  # Windows has no POSIX modes
 
     def test_due_only_when_waiting(self):
         health=Health(Path(tempfile.mkdtemp())/'健康.csv')
