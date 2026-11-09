@@ -270,7 +270,8 @@ App LiveServices::command(const char* heard,uint64_t now){
     // "查一下 G7" opens 高铁查询 on that train (说功能名跳转 on).
     if(const auto ask=train::parse(heard,time(nullptr));m.voiceJump&&ask.ok&&ask.code[0]>'9'){copy(trainHeard_,heard);return App::Train;}
     if(m.macOpen)if(const auto name=spokenMac(heard);!name.empty()){openOnMac(name.c_str(),now);return App::Home;}
-    copy(m.lastNotice,*heard?(std::string("没听懂：")+heard).c_str():"没有听清");
+    // Anything else goes on to 小智's model, which answers or uses the badge's tools (MCP).
+    if(*heard){native_->askModel();snprintf(m.lastNotice,sizeof(m.lastNotice),"问小智：%s",heard);}else copy(m.lastNotice,"没有听清");
     return App::Count;
 }
 #endif

@@ -44,6 +44,10 @@ class NativeServices {
     // 小智 MCP: the volume and the brightness the chat's model asked for, until LiveServices (main task) applies them; -1 none.
     std::atomic<int> mcpVolume_{-1},mcpBrightness_{-1};
     void mcp(const cJSON* payload);
+    // 语音指令: LiveServices did not know the phrase (askModel_), so the connection stays open for 小智's model from
+    // modelAt_ (0 = not waiting); toolNote_ is what its tools did.
+    std::atomic<bool> askModel_{};int64_t modelAt_{};char toolNote_[96]{};
+    void note(const char*);void modelDone();
     static void run(void*);
     static void audioOutput(void*,uint8_t,const uint8_t*,size_t);
     bool cancelled()const{return desired_.load()!=current_.generation||(current_.app==App::Macro&&macroRequest_.load()!=current_.request);}
@@ -112,6 +116,7 @@ public:
     bool idle()const{return task_==nullptr;}
     const char* memoHeard()const{return memoHeard_.load();}  // "" when nothing was heard
     void memoTaken(){memoHeard_=nullptr;}
+    void askModel(){askModel_=true;}  // before memoTaken()
     int takeVolume(){return mcpVolume_.exchange(-1);}
     int takeBrightness(){return mcpBrightness_.exchange(-1);}
     void speakText(const char* text);  // before LiveServices asks 飞书提醒's "say"

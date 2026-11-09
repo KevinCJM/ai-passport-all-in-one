@@ -774,11 +774,11 @@ void NativeServices::chat(){
     }
     if(!connected){if(!cancelled())status(error_==ESP_ERR_ESP_TLS_CONNECTION_TIMEOUT?"云端连接超时":"云端连接失败","error");return;}
     credentials.reset();if(cancelled())return;
-    // The chat offers the badge's tools (MCP); the speech-to-text device has none.
-    char hello[192];snprintf(hello,sizeof(hello),"{\"type\":\"hello\",\"version\":1,\"transport\":\"websocket\",\"features\":{\"mcp\":%s},\"audio_params\":{\"format\":\"opus\",\"sample_rate\":16000,\"channels\":1,\"frame_duration\":60}}",memo?"false":"true");
+    // The chat and 语音指令 offer the badge's tools (MCP); the other speech-to-text pages have none.
+    char hello[192];snprintf(hello,sizeof(hello),"{\"type\":\"hello\",\"version\":1,\"transport\":\"websocket\",\"features\":{\"mcp\":%s},\"audio_params\":{\"format\":\"opus\",\"sample_rate\":16000,\"channels\":1,\"frame_duration\":60}}",memo&&current_.app!=App::Voice?"false":"true");
     if(esp_transport_ws_send_raw(ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_TEXT|WS_TRANSPORT_OPCODES_FIN),hello,strlen(hello),1000)!=static_cast<int>(strlen(hello))){status("云端握手失败","error");return;}
     auto buffer=std::unique_ptr<uint8_t[]>(new(std::nothrow)uint8_t[2048]);if(!buffer){status("内存不足","error");return;}
-    session_[0]=stt_[0]=answer_[0]=0;speechTurn_=0;listening_=speaking_=autoListening_=resumeListening_=false;ready_=false;dropTts_=memo;
+    session_[0]=stt_[0]=answer_[0]=0;speechTurn_=0;modelAt_=0;listening_=speaking_=autoListening_=resumeListening_=false;ready_=false;dropTts_=memo;
     const auto started=esp_timer_get_time();auto pingAt=started;int64_t lastRx=0;size_t used=0,frameUsed=0,frameLength=0;unsigned messageKind=0;
     pumpUs_=decodeUs_=readUs_=rxGapUs_=0;
     while(!cancelled()){
@@ -798,6 +798,7 @@ void NativeServices::chat(){
         // 中英翻译 keeps a phrase to 30 s: its text and translation then fit the page.
         // 语音指令: a command is short; 10 s also ends one that never paused (or never began).
         if(memo&&listening_&&esp_timer_get_time()-listenAt_>(current_.app==App::Voice?10000000:current_.app==App::Translate?30000000:60000000))endListen();
+        if(modelAt_&&esp_timer_get_time()-modelAt_>15000000){modelDone();break;}
         if(memo&&asr_&&esp_timer_get_time()-askedAt_>15000000){status("识别超时，请重试","error");break;}
         if(esp_timer_get_time()-pingAt>20000000){esp_transport_ws_send_raw(ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_PING|WS_TRANSPORT_OPCODES_FIN),nullptr,0,250);pingAt=esp_timer_get_time();}
         const int available=esp_transport_poll_read(ws_,10);
@@ -836,9 +837,18 @@ void NativeServices::chat(){
                 if(current_.app==App::Stock||current_.app==App::Settings){copy(spoken_,str(message.value,"text"));status(*spoken_?"已识别":"没有听清");return;}
                 char heard[1024];copy(heard,str(message.value,"text"));memoHeard_=heard;status(*heard?"已识别":"没有听清");
                 while(memoHeard_.load()&&!cancelled())vTaskDelay(pdMS_TO_TICKS(10));
-                memoHeard_=nullptr;return;
+                memoHeard_=nullptr;
+                // 语音指令: a phrase the badge does not know goes on to 小智's model, which may call the badge's tools
+                // (MCP). Its reply is shown, never played.
+                if(!askModel_.exchange(false))return;
+                modelAt_=esp_timer_get_time();answer_[0]=toolNote_[0]=0;status("小智处理中","loading");
+                used=0;continue;
+            }else if(modelAt_&&!strcmp(type,"tts")){
+                const char* state=str(message.value,"state");
+                if(!strcmp(state,"sentence_start")){const size_t n=strlen(answer_);snprintf(answer_+n,sizeof(answer_)-n,"%s",str(message.value,"text"));}
+                else if(!strcmp(state,"stop")){modelDone();return;}
             }else if(!strcmp(type,"stt")){listening_=autoListening_=false;controlAudio(0);copy(stt_,str(message.value,"text"));answer_[0]=0;dropTts_=false;if(*stt_){++speechTurn_;status("正在思考");}else beginListen();}
-            else if(!strcmp(type,"mcp")&&!memo)mcp(item(message.value,"payload"));
+            else if(!strcmp(type,"mcp")&&(!memo||current_.app==App::Voice))mcp(item(message.value,"payload"));
             else if(!strcmp(type,"llm")){status(listening_?"正在听":speaking_?"正在回答":"云端就绪");}
             else if(!strcmp(type,"tts")&&ready_&&!dropTts_){
                 const char* state=str(message.value,"state");
@@ -862,6 +872,11 @@ constexpr char kMcpTools[]=R"({"tools":[)"
     R"(]})";
 static_assert(sizeof(kMcpTools)<1300,"tools/list must fit mcp()'s reply");
 }
+// 语音指令: what came of a phrase sent on to 小智's model, as the page's notice: what it said, else what its tools did.
+void NativeServices::note(const char* text){const size_t n=strlen(toolNote_);snprintf(toolNote_+n,sizeof(toolNote_)-n,"%s%s",n?"，":"",text);}
+void NativeServices::modelDone(){
+    copy(notice_,*answer_?answer_:*toolNote_?toolNote_:"小智没有回应，请再说一次");modelAt_=0;status("已完成");
+}
 // 小智 MCP: the chat's hello declares it, then the cloud's model lists and calls the badge's tools (JSON-RPC in "mcp"
 // messages). A setting is handed to LiveServices, which applies it on the main task as the keys would.
 void NativeServices::mcp(const cJSON* payload){
@@ -878,10 +893,10 @@ void NativeServices::mcp(const cJSON* payload){
             snprintf(text,sizeof(text),"音量 %u，亮度 %u",volume>=0?unsigned(volume):board::volume(),light>=0?unsigned(light):board::brightness());
         }else if(!strcmp(name,"self.audio_speaker.set_volume")){
             const double v=num(arguments,"volume");ok=v>=0&&v<=100;
-            if(ok){mcpVolume_=int(lround(v));snprintf(text,sizeof(text),"音量已设为 %d",mcpVolume_.load());}else copy(text,"音量要在 0-100 之间");
+            if(ok){mcpVolume_=int(lround(v));snprintf(text,sizeof(text),"音量已设为 %d",mcpVolume_.load());note(text);}else copy(text,"音量要在 0-100 之间");
         }else if(!strcmp(name,"self.screen.set_brightness")){
             const double v=num(arguments,"brightness");ok=v>=0&&v<=100;
-            if(ok){mcpBrightness_=std::max(10,int(lround(v)));snprintf(text,sizeof(text),"亮度已设为 %d",mcpBrightness_.load());}else copy(text,"亮度要在 10-100 之间");
+            if(ok){mcpBrightness_=std::max(10,int(lround(v)));snprintf(text,sizeof(text),"亮度已设为 %d",mcpBrightness_.load());note(text);}else copy(text,"亮度要在 10-100 之间");
         }else{ok=false;copy(text,"没有这个工具");}
         snprintf(result,sizeof(result),R"("result":{"content":[{"type":"text","text":"%s"}],"isError":%s})",text,ok?"false":"true");
     }else copy(result,R"("error":{"code":-32601,"message":"Method not found"})");
