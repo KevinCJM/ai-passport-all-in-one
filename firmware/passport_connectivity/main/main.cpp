@@ -739,11 +739,9 @@ bool sendSlideKey(SlideKey key){
 int execute(const char* name) {
     const uint64_t now=esp_timer_get_time()/1000000;
     const auto previous=runtime.active();
-    // A double Confirm opens 语音指令, as 你好小智 does; where Confirm is the page's own voice or a rapid action, it is
-    // the second Confirm it always was.
+    // A double Confirm opens 语音指令 from any page, as 你好小智 does (on 语音指令 itself, it listens again).
     if(!strcmp(name,"voice")){
-        constexpr App own[]{App::Chat,App::Voice,App::Memo,App::Dictation,App::Translate,App::Walkie,App::Slides,App::Settings,App::Score,App::Stopwatch};
-        if(std::find(std::begin(own),std::end(own),previous)!=std::end(own))name="ok";
+        if(previous==App::Voice)name="ok";
         else{runtime.wake(now);runtime.switchTo(App::Voice);return 0;}
     }
 
