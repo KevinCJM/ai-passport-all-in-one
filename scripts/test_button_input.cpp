@@ -14,7 +14,7 @@ struct Rig {
 };
 int main() {
     { Rig r; r.hold(2, 80); r.hold(-1, 50); assert(r.got.empty()); r.hold(-1, 400); assert((r.got == std::vector{ButtonEvent::Confirm})); }  // single, held back
-    { Rig r; r.hold(2, 80); r.hold(-1, 120); r.hold(2, 80); r.hold(-1, 500); assert((r.got == std::vector{ButtonEvent::Voice})); }  // double: no Confirm at all
+    { Rig r; r.hold(2, 80); r.hold(-1, 90); r.hold(2, 80); r.hold(-1, 500); assert((r.got == std::vector{ButtonEvent::Voice})); }  // double: no Confirm at all
     { Rig r; r.hold(2, 80); r.hold(-1, 500); r.hold(2, 80); r.hold(-1, 500); assert((r.got == std::vector{ButtonEvent::Confirm, ButtonEvent::Confirm})); }  // two slow clicks
     { Rig r; r.hold(2, 80); r.hold(-1, 100); r.hold(0, 80); r.hold(-1, 100); assert((r.got == std::vector{ButtonEvent::Confirm, ButtonEvent::Up})); }  // Confirm then Up: order kept
     { Rig r; r.hold(0, 80); r.hold(-1, 100); assert((r.got == std::vector{ButtonEvent::Up})); }  // Up is not delayed

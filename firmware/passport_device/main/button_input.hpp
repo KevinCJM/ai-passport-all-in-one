@@ -58,7 +58,7 @@ class ButtonInput {
 public:
     static constexpr uint32_t Volume = 1, Awake = 2, HomeScreen = 4;
     // A Confirm click waits this long for a second press (a double click) before it counts as one click.
-    static constexpr uint64_t DoubleMs = 200;
+    static constexpr uint64_t DoubleMs = 150;
     void invalidSample() { candidate_ = -2; }
     ButtonEvent sample(int millivolts, uint64_t now, uint32_t context) {
         const int current = millivolts < 150 ? 0 : millivolts < 447 ? 1 : millivolts < 1900 ? 2 : -1;
