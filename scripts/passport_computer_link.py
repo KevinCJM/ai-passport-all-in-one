@@ -35,7 +35,12 @@ class SerialBridge:
     def __init__(self,command,port,log):
         import serial
         # The badge's USB Serial/JTAG ignores the baud rate. Windows opens COM ports exclusively; on a Mac, flock.
-        self.serial=serial.Serial(port,115200,timeout=.2,write_timeout=2,exclusive=True);self.socket=None;self.closed=threading.Event()
+        self.serial=serial.Serial(None,115200,timeout=.2,write_timeout=2,exclusive=True);self.serial.port=port
+        # Windows: pyserial raises DTR/RTS on open, and the USB Serial/JTAG reads an RTS edge as a chip reset, so the
+        # badge drops off USB mid-pairing. The firmware ignores both lines; open with them low. (Mac: macOS raises both
+        # on open anyway and pyserial clears DTR first, which would itself be the reset edge, so leave Mac as is.)
+        if sys.platform=='win32':self.serial.dtr=self.serial.rts=False
+        self.serial.open();self.socket=None;self.closed=threading.Event()
         try:
             with socket.socket() as probe:probe.bind(('127.0.0.1',0));free=probe.getsockname()[1]
             self.process=subprocess.Popen(command+['--port',str(free)],stdout=log,stderr=subprocess.STDOUT)

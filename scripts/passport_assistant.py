@@ -201,7 +201,7 @@ class Controller:
             nonce=secrets.token_hex(16);self.code=nonce[:6];self.status='正在配对，请在胸牌上确认'
             started=time.monotonic();begun=False
             while not self.stop.wait(.5) and time.monotonic()-started<65:
-                if gateway.poll() is not None:raise ConnectionError('PPP 配对连接失败')
+                if gateway.poll() is not None:raise ConnectionError('USB 连接断开：换一根数据线或 USB 口，再点「配对」')
                 connection=http.client.HTTPConnection('127.0.0.1',18763,timeout=2)
                 try:
                     connection.request('GET' if begun else 'POST','/pair',body=None if begun else json.dumps({'nonce':nonce}),headers={'X-Passport-Pair':nonce,'Content-Type':'application/json'})
@@ -244,7 +244,7 @@ class Controller:
             self.disconnect();self.status='助手已暂停';return
         if self.pair_mac:
             mac=self.pair_mac;self.pair_mac=None;self.disconnect();self.pair_device(mac,ports)
-        if not self.path.exists():self.status='还没配对：用 USB 线连上胸牌，点「配对」';return
+        if not self.path.exists():self.status='还没配对：USB 线连上胸牌，点这里的「配对」按钮';return
         config=validate_config(json.loads(self.path.read_text()))
         self.paired_mac=config['mac'].lower()
         if self.device:
