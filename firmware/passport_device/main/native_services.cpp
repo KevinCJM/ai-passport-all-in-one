@@ -774,7 +774,8 @@ void NativeServices::chat(){
     }
     if(!connected){if(!cancelled())status(error_==ESP_ERR_ESP_TLS_CONNECTION_TIMEOUT?"云端连接超时":"云端连接失败","error");return;}
     credentials.reset();if(cancelled())return;
-    char hello[]="{\"type\":\"hello\",\"version\":1,\"transport\":\"websocket\",\"features\":{\"mcp\":false},\"audio_params\":{\"format\":\"opus\",\"sample_rate\":16000,\"channels\":1,\"frame_duration\":60}}";
+    // The chat offers the badge's tools (MCP); the speech-to-text device has none.
+    char hello[192];snprintf(hello,sizeof(hello),"{\"type\":\"hello\",\"version\":1,\"transport\":\"websocket\",\"features\":{\"mcp\":%s},\"audio_params\":{\"format\":\"opus\",\"sample_rate\":16000,\"channels\":1,\"frame_duration\":60}}",memo?"false":"true");
     if(esp_transport_ws_send_raw(ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_TEXT|WS_TRANSPORT_OPCODES_FIN),hello,strlen(hello),1000)!=static_cast<int>(strlen(hello))){status("云端握手失败","error");return;}
     auto buffer=std::unique_ptr<uint8_t[]>(new(std::nothrow)uint8_t[2048]);if(!buffer){status("内存不足","error");return;}
     session_[0]=stt_[0]=answer_[0]=0;speechTurn_=0;listening_=speaking_=autoListening_=resumeListening_=false;ready_=false;dropTts_=memo;
@@ -837,6 +838,7 @@ void NativeServices::chat(){
                 while(memoHeard_.load()&&!cancelled())vTaskDelay(pdMS_TO_TICKS(10));
                 memoHeard_=nullptr;return;
             }else if(!strcmp(type,"stt")){listening_=autoListening_=false;controlAudio(0);copy(stt_,str(message.value,"text"));answer_[0]=0;dropTts_=false;if(*stt_){++speechTurn_;status("正在思考");}else beginListen();}
+            else if(!strcmp(type,"mcp")&&!memo)mcp(item(message.value,"payload"));
             else if(!strcmp(type,"llm")){status(listening_?"正在听":speaking_?"正在回答":"云端就绪");}
             else if(!strcmp(type,"tts")&&ready_&&!dropTts_){
                 const char* state=str(message.value,"state");
@@ -850,6 +852,42 @@ void NativeServices::chat(){
         used=0;stackFree_=uxTaskGetStackHighWaterMark(nullptr);
     }
     if(ready_)controlAudio(0);
+}
+namespace {
+// The badge's tools as 小智's model sees them (MCP tools/list). Names follow XiaoZhi's own firmware.
+constexpr char kMcpTools[]=R"({"tools":[)"
+    R"({"name":"self.get_device_status","description":"读取胸牌当前的扬声器音量和屏幕亮度（0-100）。回答现在的音量、亮度，或做「大一点、小一点、暗一点」这类相对调整之前，先调用它。","inputSchema":{"type":"object","properties":{}}},)"
+    R"({"name":"self.audio_speaker.set_volume","description":"设置胸牌扬声器音量，0-100。相对调整先用 self.get_device_status 读当前值，一般每次加减 10-20。","inputSchema":{"type":"object","properties":{"volume":{"type":"integer","minimum":0,"maximum":100}},"required":["volume"]}},)"
+    R"({"name":"self.screen.set_brightness","description":"设置胸牌屏幕亮度，10-100（10 最暗，不会关屏）。相对调整先用 self.get_device_status 读当前值，一般每次加减 10-20。","inputSchema":{"type":"object","properties":{"brightness":{"type":"integer","minimum":10,"maximum":100}},"required":["brightness"]}})"
+    R"(]})";
+static_assert(sizeof(kMcpTools)<1300,"tools/list must fit mcp()'s reply");
+}
+// 小智 MCP: the chat's hello declares it, then the cloud's model lists and calls the badge's tools (JSON-RPC in "mcp"
+// messages). A setting is handed to LiveServices, which applies it on the main task as the keys would.
+void NativeServices::mcp(const cJSON* payload){
+    const double id=num(payload,"id");if(std::isnan(id))return;  // a notification: no reply
+    const char* method=str(payload,"method");
+    char result[1400];
+    if(!strcmp(method,"initialize"))snprintf(result,sizeof(result),R"("result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"ai-passport","version":"%s"}})",esp_app_get_description()->version);
+    else if(!strcmp(method,"tools/list"))snprintf(result,sizeof(result),R"("result":%s)",kMcpTools);
+    else if(!strcmp(method,"tools/call")){
+        const auto* call=item(payload,"params");const char* name=str(call,"name");const auto* arguments=item(call,"arguments");
+        char text[96];bool ok=true;
+        if(!strcmp(name,"self.get_device_status")){
+            const int volume=mcpVolume_.load(),light=mcpBrightness_.load();
+            snprintf(text,sizeof(text),"音量 %u，亮度 %u",volume>=0?unsigned(volume):board::volume(),light>=0?unsigned(light):board::brightness());
+        }else if(!strcmp(name,"self.audio_speaker.set_volume")){
+            const double v=num(arguments,"volume");ok=v>=0&&v<=100;
+            if(ok){mcpVolume_=int(lround(v));snprintf(text,sizeof(text),"音量已设为 %d",mcpVolume_.load());}else copy(text,"音量要在 0-100 之间");
+        }else if(!strcmp(name,"self.screen.set_brightness")){
+            const double v=num(arguments,"brightness");ok=v>=0&&v<=100;
+            if(ok){mcpBrightness_=std::max(10,int(lround(v)));snprintf(text,sizeof(text),"亮度已设为 %d",mcpBrightness_.load());}else copy(text,"亮度要在 10-100 之间");
+        }else{ok=false;copy(text,"没有这个工具");}
+        snprintf(result,sizeof(result),R"("result":{"content":[{"type":"text","text":"%s"}],"isError":%s})",text,ok?"false":"true");
+    }else copy(result,R"("error":{"code":-32601,"message":"Method not found"})");
+    char reply[1600];
+    const int size=snprintf(reply,sizeof(reply),R"({"session_id":"%s","type":"mcp","payload":{"jsonrpc":"2.0","id":%.0f,%s}})",session_,id,result);
+    if(size>0&&size<int(sizeof(reply)))esp_transport_ws_send_raw(ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_TEXT|WS_TRANSPORT_OPCODES_FIN),reply,size,250);
 }
 // 语音笔记 (and 状态牌's spoken label): chat's connection, but each note listens from Confirm to Confirm and only the text the cloud heard is
 // kept: chat() returns on it, so the connection closes before the cloud's reply arrives. The next connection opens

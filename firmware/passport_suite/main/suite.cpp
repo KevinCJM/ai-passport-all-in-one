@@ -1919,6 +1919,12 @@ void Runtime::connection(bool configuredSession, uint64_t now) {
     connected_ = configuredSession;
     if (!connected_) unpluggedAt_ = lastInput_ = now;
 }
+bool Runtime::setBrightness(unsigned percent) {
+    if(!settings_||percent<10||percent>100)return false;
+    auto candidate=*settings_;candidate.brightness=percent;
+    SettingsStore store;if(!store.save(candidate))return false;
+    *settings_=candidate;return true;
+}
 bool Runtime::setIdleMinutes(uint32_t minutes) {
     if(!settings_||minutes>1440)return false;
     auto candidate=*settings_;candidate.idleSeconds=minutes*60;

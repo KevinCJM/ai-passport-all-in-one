@@ -471,6 +471,9 @@ bool LiveServices::tick(uint64_t now) {
     if(runtime_.bookSynced())dirty=true;
 #ifdef PASSPORT_DEVICE
     native_->poll();
+    // 小智 MCP: the chat's model set the volume or the brightness.
+    if(const int v=native_->takeVolume();v>=0&&board::setVolume(v)){model.volume=v;dirty=true;}
+    if(const int b=native_->takeBrightness();b>=0&&runtime_.setBrightness(b)){board::setBrightness(b);dirty=true;}
     // 语音笔记: the text the cloud heard, saved once; the device's task waits until it is.
     if(active==App::Memo||speaksOnce(active)||active==App::Rate||active==App::Voice||active==App::Train)if(const char* heard=native_->memoHeard()){
         App go=App::Count;

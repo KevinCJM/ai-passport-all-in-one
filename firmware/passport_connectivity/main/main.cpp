@@ -687,7 +687,7 @@ int companionRequest(const char* raw,char* output,size_t size){
     if(!strcmp(path->valuestring,"/command")){
         const auto* name=cJSON_GetObjectItemCaseSensitive(data,"command");const auto* id=cJSON_GetObjectItemCaseSensitive(data,"id");
         if(!cJSON_IsString(name)||!cJSON_IsNumber(id)||id->valuedouble<1||id->valuedouble>4294967295.0||id->valuedouble!=static_cast<unsigned>(id->valuedouble))return 400;
-        const char* allowed[]={"up","down","ok","back","settings","wake","refresh_service","status_labels","countdowns","qr_code"};bool valid=false;
+        const char* allowed[]={"up","down","ok","back","settings","wake","voice","refresh_service","status_labels","countdowns","qr_code"};bool valid=false;
         for(auto* value:allowed)valid|=!strcmp(name->valuestring,value);
         valid|=!strncmp(name->valuestring,"train:",6)&&strlen(name->valuestring)<sizeof(Command::name);  // 高铁查询: a train typed on the computer
         if(!valid||!saveContent(name->valuestring,data))return 400;
@@ -739,6 +739,13 @@ bool sendSlideKey(SlideKey key){
 int execute(const char* name) {
     const uint64_t now=esp_timer_get_time()/1000000;
     const auto previous=runtime.active();
+    // A double Confirm opens 语音指令, as 你好小智 does; where Confirm is the page's own voice or a rapid action, it is
+    // the second Confirm it always was.
+    if(!strcmp(name,"voice")){
+        constexpr App own[]{App::Chat,App::Voice,App::Memo,App::Dictation,App::Translate,App::Walkie,App::Slides,App::Settings,App::Score,App::Stopwatch};
+        if(std::find(std::begin(own),std::end(own),previous)!=std::end(own))name="ok";
+        else{runtime.wake(now);runtime.switchTo(App::Voice);return 0;}
+    }
 
 #ifdef PASSPORT_DEVICE
     const auto settingsPageBefore=runtime.model.settingsPage;
@@ -1080,7 +1087,7 @@ extern "C" void app_main() {
                                  "ok",
                                  "back",
                                  "settings",
-                                 "wake",
+                                 "wake","voice",
                                  "wifi_connect",
                                  "wifi_disconnect",
                                  "ap_on",

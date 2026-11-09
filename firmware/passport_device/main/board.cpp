@@ -337,6 +337,7 @@ const char *key() {
         case ButtonEvent::Wake: return "wake";
         case ButtonEvent::AccessPoint: return "ap_on";
         case ButtonEvent::Settings: return "settings";
+        case ButtonEvent::Voice: return "voice";
         default: break;
         }
     }
@@ -364,6 +365,7 @@ void batteryDiagnostics(char* output,size_t size){
     const auto reading=battery();
     snprintf(output,size,"{\"present\":%s,\"known\":%s,\"percent\":%d,\"millivolts\":%d,\"reads\":%u,\"errors\":%u,\"initialized\":%s,\"profile_updated\":%s,\"poll_max_us\":%u,\"last_sleep_verified\":%d}",reading.present?"true":"false",reading.known?"true":"false",reading.known?reading.percent:-1,reading.known?reading.millivolts:-1,unsigned(batteryReads.load()),unsigned(batteryErrors.load()),batteryInitialized?"true":"false",batteryProfileUpdated?"true":"false",unsigned(batteryPollMaxUs.load()),batterySleepVerified);
 }
+unsigned brightness(){return screenBrightness;}
 bool setBrightness(unsigned value){
     if(value>100)return false;
     screenBrightness=value;

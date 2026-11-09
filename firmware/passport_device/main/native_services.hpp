@@ -9,6 +9,7 @@
 #include "train.hpp"
 #include <atomic>
 
+struct cJSON;
 namespace passport {
 // 中英翻译: what was heard and its translation (toEnglish: Chinese was heard), by engine 1 腾讯翻译君 / 2 MyMemory, 0 none.
 struct TranslationText{char source[600],result[900];bool toEnglish;uint8_t engine;};
@@ -40,6 +41,9 @@ class NativeServices {
     bool wantListen_{},asr_{},idleDrop_{},failed_{};int64_t listenAt_{},askedAt_{};std::atomic<const char*> memoHeard_{};
     // 中英翻译: a translation waits in page_.translation until LiveServices has taken it; a long Up asked to read it aloud.
     std::atomic<bool> translated_{},sayWanted_{};
+    // 小智 MCP: the volume and the brightness the chat's model asked for, until LiveServices (main task) applies them; -1 none.
+    std::atomic<int> mcpVolume_{-1},mcpBrightness_{-1};
+    void mcp(const cJSON* payload);
     static void run(void*);
     static void audioOutput(void*,uint8_t,const uint8_t*,size_t);
     bool cancelled()const{return desired_.load()!=current_.generation||(current_.app==App::Macro&&macroRequest_.load()!=current_.request);}
@@ -108,6 +112,8 @@ public:
     bool idle()const{return task_==nullptr;}
     const char* memoHeard()const{return memoHeard_.load();}  // "" when nothing was heard
     void memoTaken(){memoHeard_=nullptr;}
+    int takeVolume(){return mcpVolume_.exchange(-1);}
+    int takeBrightness(){return mcpBrightness_.exchange(-1);}
     void speakText(const char* text);  // before LiveServices asks 飞书提醒's "say"
     const TranslationText* translated()const{return translated_.load()?&page_.translation:nullptr;}
     void translationTaken(){translated_=false;}

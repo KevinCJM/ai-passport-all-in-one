@@ -2,11 +2,11 @@
 #include <cstdint>
 
 namespace passport::board {
-enum class ButtonEvent : uint8_t { None, Up, Down, Confirm, Back, Wake, AccessPoint, Settings };
+enum class ButtonEvent : uint8_t { None, Up, Down, Confirm, Back, Wake, AccessPoint, Settings, Voice };
 
 class ButtonInput {
     int candidate_{-1}, stable_{-1};
-    uint64_t candidateAt_{}, pressedAt_{};
+    uint64_t candidateAt_{}, pressedAt_{}, confirmAt_{};  // confirmAt_: the last Confirm click (0 none)
     uint32_t context_{UINT32_MAX};
     bool sent_{}, suppressed_{};
 public:
@@ -40,7 +40,12 @@ public:
                 const bool click = previous >= 0 && !suppressed_ && !sent_;
                 suppressed_ = false;
                 if (click) {
-                    return previous == 0 ? ButtonEvent::Up : previous == 1 ? ButtonEvent::Down : ButtonEvent::Confirm;
+                    if (previous != 2) return previous == 0 ? ButtonEvent::Up : ButtonEvent::Down;
+                    // A second Confirm within 400 ms is a double click: 语音指令. The first one still went out as
+                    // Confirm, so a single click never waits.
+                    const bool twice = confirmAt_ && now - confirmAt_ < 400;
+                    confirmAt_ = twice ? 0 : now;
+                    return twice ? ButtonEvent::Voice : ButtonEvent::Confirm;
                 }
             }
         }

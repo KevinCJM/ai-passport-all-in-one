@@ -20,6 +20,7 @@ BatteryReading battery();
 void batteryDiagnostics(char*,size_t);
 void power(unsigned state);
 bool setBrightness(unsigned value);
+unsigned brightness();  // the backlight level now (a page may hold its own: 手电筒, 警示灯)
 const char* bluetoothName();
 void diagnostics(char *output, size_t size);
 bool authorized(httpd_req_t *request);

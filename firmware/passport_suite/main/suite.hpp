@@ -418,6 +418,7 @@ public:
     unsigned menuWindowStart()const{return menuLayout_.mode==MenuLayout::List?menuTopRow_:menuView_.starts[menuView_.page(menuPosition())];}
     App selectedApp()const{return kFunctions[selection_];}
     bool setIdleMinutes(uint32_t minutes);
+    bool setBrightness(unsigned percent);  // 10-100, saved (小智 MCP)
     bool settingsKey(Key key);
     // 已保存的 WiFi: rereads the names; rememberWifi puts a joined network first and makes it the one tried at boot;
     // forgetWifi (a long Down on its row, twice) deletes the selected one.
