@@ -81,9 +81,12 @@ inline const char* keyHint(App app,SettingsPage page,bool focusRunning,bool pair
     if(app==App::Macro)return alt?"上下：切换 | 确认：12/60期 | 长按上：刷新 | 长按确认：列表":"上下：选择 | 确认：详情 | 长按上下：换页 | 长按确认：返回";
     // alt: the sleep timer row is selected (白噪音), the alarm is ringing (闹钟).
     if(app==App::Noise)return alt?"上下：选择  |  确认：切换定时  |  长按上下：音量":"上下：选择  |  确认：播放/停止  |  长按上下：音量";
-    // 闹钟 tab: 0 the 录音 row, 1 an alarm, 2 its delete asked, 3 listening, 4 recognising, 5 an alarm's clock open.
+    // 闹钟 tab: 0 the 录音 row, 1 an alarm, 2 its delete asked, 3 listening, 4 recognising, 5 an alarm's clock open;
+    // 倒计时 6 open and set, 7 running, 8 paused, 9 its row picked, 10 its ring (alt).
     if(app==App::Alarm){static const char* const hints[]{"上下：选择  |  确认：说闹钟时间  |  长按确认：返回","上下：选择  |  确认：调整  |  长按下：删除","长按下：确认删除  |  其他键：取消",
-        "确认：结束并设置  |  长按确认：放弃","正在识别，请稍候","上下：±5 分钟 | 长按上下：±1 小时 | 确认：重复 | 长按确认：列表"};return alt?"上下：贪睡 5 分钟  |  确认：关闭":hints[tab%6];}
+        "确认：结束并设置  |  长按确认：放弃","正在识别，请稍候","上下：±5 分钟 | 长按上下：±1 小时 | 确认：重复 | 长按确认：列表",
+        "上下：±1 分钟 | 长按上下：±10 分钟 | 确认：开始","确认：暂停  |  长按确认：列表","确认：继续  |  上下：重置  |  长按确认：列表","上下：选择  |  确认：打开倒计时  |  长按确认：返回"};
+        return alt?(tab==10?"上下：再计时  |  确认：关闭":"上下：贪睡 5 分钟  |  确认：关闭"):hints[tab%10];}
     if(app==App::Quiz&&!error)return alt?"确认：下一题":"上下：选答案  |  确认：作答";
     // alt picks the tab / view: WiFi 0 信道 1 延迟 2 设备 3 唤醒, sound 0 频谱 1 调音 2 节拍.
     if(app==App::Motion)return "上下：灵敏度 | 确认：校准 | 长按上下：提示音";

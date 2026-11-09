@@ -205,6 +205,13 @@ struct Model {
     // Down asked to delete it.
     AlarmList alarms;uint32_t alarmFired{},alarmSnooze{};bool alarmRinging{};uint64_t alarmRingAt{};
     uint8_t alarmIndex{};bool alarmEdit{},alarmArmed{};
+    // 倒计时: the last row of 闹钟 (alarmIndex alarms.count + 1). timerLength is the length set (seconds); timerEnd when
+    // a running one rings (monotonic seconds, 0 = not running); timerLeft the seconds left while paused (0 = none).
+    // timerRang: the ring on show is the countdown's, not an alarm's.
+    uint32_t timerLength{300},timerLeft{};uint64_t timerEnd{};bool timerRang{};
+    bool timerPicked() const { return alarmIndex == alarms.count + 1u; }
+    // Seconds left now: running, paused, or the length set.
+    uint32_t timerShown(uint64_t now) const { return timerEnd ? static_cast<uint32_t>(timerEnd > now ? timerEnd - now : 0) : timerLeft ? timerLeft : timerLength; }
     // 自选股: page.stocks; Confirm opens stockIndex in detail, where Confirm switches minutes / 30 days. The chart
     // in page.stocks is for row chartFor (255 = none) and chartDays: chartCount points spread over chartTotal
     // (minutes of the session, or days); the axis reads chartFrom, chartMid (a lunch break or time zone) and chartTo.
@@ -434,6 +441,8 @@ public:
     // lastNotice says why. 自选股 and the city are looked up on the device (NativeServices).
     bool addRate(const char* heard);
     bool addAlarm(const char* heard);
+    // 倒计时: runs for `seconds` from now (also its new length) and opens on its row.
+    void startTimer(uint32_t seconds);
     bool addCountdown(const char* heard);
     // 待办提醒: what the cloud heard becomes a todo, its time (if said) its reminder (false: nothing added, lastNotice says
     // why); reloadTodo rereads the next reminder; ringing ends with the todo done, snoozed 10 minutes, or just stopped.
@@ -490,6 +499,7 @@ public:
     Power power(uint64_t now) const;
     Power automaticPower(uint64_t now) const;  // power() without the manual screen-off
     App active() const { return active_; }
+    uint64_t now() const { return now_; }
     uint32_t generation() const { return generation_; }
     uint8_t selection() const { return selection_; }
     size_t workspaceBytes() const { return workspaceBytes_; }

@@ -1194,7 +1194,36 @@ void toolPagesTests(Runtime& runtime){
     m.alarmRinging=true;m.alarmRingAt=1610;runtime.tick(1789);CHECK(m.alarmRinging);runtime.tick(1790);CHECK(!m.alarmRinging);
     m.alarms.items[0].mode=3;{timeval at{1793057400,0};settimeofday(&at,nullptr);}
     runtime.tick(1800);CHECK(m.alarmRinging&&m.alarms.items[0].mode==0&&m.alarms.items[1].mode==2);runtime.key(Key::Back,1801);CHECK(!m.alarmRinging&&runtime.active()==App::Alarm);
-    m.alarms={};SettingsStore::saveAlarms(m.alarms);m.alarmSnooze=m.alarmFired=0;runtime.connection(wasConnected,1802);
+    m.alarms={};SettingsStore::saveAlarms(m.alarms);m.alarmSnooze=m.alarmFired=0;
+    // 倒计时: the row after the alarms; Up/Down set whole minutes (long ±10), Confirm runs, pauses and goes on; it keeps
+    // the badge awake, shows in the status bar elsewhere, rings from any page (the clock not needed) and Up/Down run it again.
+    CHECK(parseTimer("倒计时5分钟")==300&&parseTimer("计时一个半小时")==5400&&parseTimer("1小时20分")==4800&&parseTimer("三分半钟")==210
+          &&parseTimer("90秒")==90&&parseTimer("一刻钟")==900&&parseTimer("定时半小时")==1800&&!parseTimer("起床")&&!parseTimer("25小时"));
+    CHECK(timerStep(300,1)==360&&timerStep(60,-1)==60&&timerStep(86400,10)==86400&&timerStep(90,-10)==60);
+    CHECK(spokenApp("倒计时")==App::Alarm&&spokenApp("打开定时器")==App::Alarm&&spokenApp("倒数日")==App::Countdown);
+    CHECK(runtime.switchTo(App::Home)==Result::Ok&&runtime.switchTo(App::Alarm)==Result::Ok&&!m.alarmIndex&&!m.alarmEdit&&!m.timerEnd);
+    runtime.key(Key::Up,1810);CHECK(m.timerPicked()&&!m.alarmEdit);uiRender(runtime);uiCapture("timer_row");
+    runtime.key(Key::Confirm,1810);CHECK(m.alarmEdit&&!m.timerEnd);uiRender(runtime);uiCapture("timer_set");
+    runtime.key(Key::Up,1810);CHECK(m.timerLength==360);CHECK(runtime.longKey(false,1810)&&m.timerLength==60);runtime.key(Key::Up,1810);CHECK(m.timerLength==120);
+    runtime.key(Key::Confirm,1810);CHECK(m.timerEnd==1930&&m.timerShown(1810)==120);
+    runtime.connection(false,1811);CHECK(runtime.power(9000)==Power::ScreenOff);runtime.connection(true,1811);
+    runtime.tick(1838);uiRender(runtime);uiCapture("timer_running");
+    runtime.key(Key::Down,1840);CHECK(m.timerEnd==1930);  // Up/Down do nothing while it runs
+    runtime.key(Key::Confirm,1840);CHECK(!m.timerEnd&&m.timerLeft==90);uiRender(runtime);uiCapture("timer_paused");
+    runtime.tick(1990);CHECK(!m.alarmRinging);runtime.key(Key::Confirm,2000);CHECK(m.timerEnd==2090&&!m.timerLeft);
+    // Leaving keeps it running; coming back opens it.
+    CHECK(runtime.switchTo(App::Stopwatch)==Result::Ok);runtime.tick(2030);uiRender(runtime);uiCapture("timer_statusbar");
+    CHECK(runtime.switchTo(App::Alarm)==Result::Ok&&m.alarmEdit&&m.timerPicked());CHECK(runtime.switchTo(App::Home)==Result::Ok);
+    {const bool valid=m.clockValid;m.clockValid=false;runtime.tick(2089);CHECK(runtime.active()==App::Home);
+     runtime.tick(2090);CHECK(runtime.active()==App::Alarm&&m.alarmRinging&&m.timerRang&&!m.timerEnd&&m.alarmEdit&&m.timerPicked());m.clockValid=valid;}
+    uiRender(runtime);uiCapture("timer_ringing");
+    runtime.key(Key::Down,2095);CHECK(!m.alarmRinging&&m.timerEnd==2215&&m.timerLength==120);
+    runtime.key(Key::Confirm,2096);runtime.key(Key::Up,2097);CHECK(!m.timerEnd&&!m.timerLeft&&m.timerLength==120);  // paused, then reset
+    // Spoken: "倒计时 …" on the 录音 row, or a bare length that is not an alarm time.
+    runtime.key(Key::Back,2098);CHECK(!m.alarmEdit);
+    CHECK(runtime.addAlarm("倒计时三分钟")&&m.timerEnd==2098+180&&m.alarmEdit&&m.timerPicked()&&!m.alarms.count);
+    CHECK(runtime.addAlarm("10分钟")&&m.timerLength==600&&!m.alarms.count);
+    m.timerEnd=m.timerLeft=0;m.timerLength=300;m.alarmEdit=false;m.alarmIndex=0;runtime.connection(wasConnected,2100);
     // 自选股: Up/Down pick a row and Confirm opens it; in the detail Up/Down step through the list and Confirm switches
     // minutes / 30 days; long Confirm goes back to the list before leaving.
     CHECK(runtime.switchTo(App::Stock)==Result::Ok&&!m.stockCount&&!m.stockDetail);

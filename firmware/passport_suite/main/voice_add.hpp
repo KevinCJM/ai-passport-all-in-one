@@ -126,6 +126,28 @@ inline AlarmParse parseAlarm(const char* heard, time_t now) {
     return out;
 }
 
+// 倒计时: the length said, in seconds (0: none, or over 24 hours). "倒计时 5 分钟", "计时一个半小时", "1小时20分",
+// "三分半钟", "90秒", "一刻钟", "半小时".
+inline unsigned parseTimer(const char* heard) {
+    using todo_time::at; using todo_time::number;
+    const std::string s = voice::bare(heard); long total = 0;
+    for (size_t i = 0; i < s.size();) {
+        int value; bool arabic; size_t n;
+        if (at(s, i, "一刻钟")) { total += 900; i += 9; continue; }
+        if (at(s, i, "半个小时") || at(s, i, "半小时")) { total += 1800; i += at(s, i, "半个") ? 12 : 9; continue; }
+        if ((n = number(s, i, value, arabic))) {
+            size_t k = i + n; if (at(s, k, "个")) k += 3;
+            const bool half = at(s, k, "半"); if (half) k += 3;
+            if (at(s, k, "小时") || at(s, k, "钟头")) { total += value * 3600L + (half ? 1800 : 0); i = k + 6; continue; }
+            if (at(s, k, "分")) { k += at(s, k, "分钟") ? 6 : 3; if (at(s, k, "半")) { k += 3; total += 30; } total += value * 60L + (half ? 30 : 0); i = k; continue; }
+            if (at(s, k, "秒")) { total += value; i = k + 3; continue; }
+            i += n; continue;
+        }
+        ++i;  // a byte at a time: a UTF-8 word never matches from inside another character
+    }
+    return total > 0 && total <= 86400 ? static_cast<unsigned>(total) : 0;
+}
+
 // 倒数日: a name and its date. "考研 12月20日", "春节回家 2027年2月5日", "100天后 出发", "结婚纪念日 5月20号" (every year:
 // said 每年, or a 生日/纪念日/周年), "妈妈生日 农历八月十五" (lunar dates repeat unless a year is said).
 // A one-off date without a year is the next one to come.
@@ -252,7 +274,7 @@ inline constexpr AppWord kAppWords[]{
     {App::Codex,"ai控制器"},{App::Codex,"控制器"},{App::Codex,"ai额度"},{App::Codex,"额度"},{App::Monitor,"电脑状态"},
     {App::Slides,"ppt翻页"},{App::Slides,"ppt"},{App::Slides,"翻页笔"},{App::Slides,"幻灯片"},
     {App::Focus,"番茄钟"},{App::Focus,"番茄"},{App::Focus,"专注"},{App::Stopwatch,"秒表"},{App::Stopwatch,"计时"},
-    {App::Alarm,"闹钟"},{App::Alarm,"闹铃"},{App::Calendar,"万年历"},{App::Calendar,"日历"},{App::Calendar,"黄历"},
+    {App::Alarm,"闹钟"},{App::Alarm,"闹铃"},{App::Alarm,"倒计时"},{App::Alarm,"定时器"},{App::Calendar,"万年历"},{App::Calendar,"日历"},{App::Calendar,"黄历"},
     {App::Countdown,"倒数日"},{App::Countdown,"倒数"},{App::History,"历史今日"},{App::History,"历史上的今天"},
     {App::Forecast,"天气预报"},{App::Forecast,"天气"},{App::Typhoon,"台风路径"},{App::Typhoon,"台风"},
     {App::Quake,"地震速报"},{App::Quake,"地震"},{App::News,"财经新闻"},{App::News,"新闻"},

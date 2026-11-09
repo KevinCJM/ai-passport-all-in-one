@@ -20,6 +20,11 @@ inline time_t nextAlarm(const AlarmPrefs& a, time_t from) {
     }
     return 0;
 }
+// 倒计时's length moved by whole minutes (from the minute it is in), kept to 1 minute .. 24 hours.
+inline uint32_t timerStep(uint32_t seconds, int minutes) {
+    const long next = static_cast<long>(seconds / 60) + minutes;
+    return static_cast<uint32_t>(next < 1 ? 60 : next > 1440 ? 86400 : next * 60);
+}
 // The first ring of any of them.
 inline time_t nextAlarm(const AlarmList& list, time_t from) {
     time_t first = 0;

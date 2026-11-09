@@ -129,7 +129,9 @@ bool LiveServices::snapshotJson(char* output,size_t size){
      if(a==App::Hot)snprintf(values,sizeof(values),",\"hot\":[%u,%u,%u,%u,%u]",m.hotCount,m.hotIndex,unsigned(m.hotDetail),m.page.hot.detailFor,unsigned(strlen(m.page.hot.desc)));
      // alarms, the row picked, its clock open, delete asked, ringing, snooze epoch, then the picked one's hour, minute, repeat.
      if(a==App::Alarm){const auto& l=m.alarms;const AlarmPrefs picked=m.alarmIndex&&m.alarmIndex<=l.count?l.items[m.alarmIndex-1]:AlarmPrefs{};
-         snprintf(values,sizeof(values),",\"alarm\":[%u,%u,%u,%u,%u,%lu,%u,%u,%u]",l.count,m.alarmIndex,unsigned(m.alarmEdit),unsigned(m.alarmArmed),unsigned(m.alarmRinging),static_cast<unsigned long>(m.alarmSnooze),picked.hour,picked.minute,picked.mode);}
+         snprintf(values,sizeof(values),",\"alarm\":[%u,%u,%u,%u,%u,%lu,%u,%u,%u]",l.count,m.alarmIndex,unsigned(m.alarmEdit),unsigned(m.alarmArmed),unsigned(m.alarmRinging),static_cast<unsigned long>(m.alarmSnooze),picked.hour,picked.minute,picked.mode);
+         // 倒计时: length, seconds left (shown), running, paused, its ring.
+         const size_t used=strlen(values);snprintf(values+used,sizeof(values)-used,",\"timer\":[%lu,%lu,%u,%u,%u]",static_cast<unsigned long>(m.timerLength),static_cast<unsigned long>(m.timerShown(runtime_.now())),unsigned(m.timerEnd!=0),unsigned(m.timerLeft!=0),unsigned(m.alarmRinging&&m.timerRang));}
      // notes, the row picked, a note open, its scroll, delete asked, listening (1) or recognising (2), stored mounted.
      if(a==App::Memo)snprintf(values,sizeof(values),",\"memo\":[%u,%u,%u,%u,%u,%u,%u]",m.memoCount,m.memoIndex,unsigned(m.memoDetail),m.memoScroll,unsigned(m.memoArmed),m.listening()?1u:m.voiceBusy()?2u:0u,unsigned(m.memoMounted));
      if(a==App::Noise)snprintf(values,sizeof(values),",\"noise\":[%u,%u,%u]",m.noiseKind,unsigned(m.noisePlaying),m.noiseTimer);
@@ -261,6 +263,8 @@ void LiveServices::request(const char* operation) {
 // opens, the answer showing at home; else what was heard stays on the page.
 App LiveServices::command(const char* heard,uint64_t now){
     auto& m=runtime_.model;
+    // "倒计时 5 分钟" starts 倒计时 (闹钟 opens on it).
+    if(strstr(heard,"计时")||strstr(heard,"定时"))if(const unsigned seconds=parseTimer(heard)){runtime_.startTimer(seconds);return App::Alarm;}
     const App page=spokenApp(heard);
     if(page==App::Chat||(page!=App::Count&&m.voiceJump))return page;
     // "查一下 G7" opens 高铁查询 on that train (说功能名跳转 on).
@@ -825,7 +829,8 @@ bool LiveServices::tick(uint64_t now) {
     if(active==App::Voice){if(entered||model.voiceBusy()||model.livePhase==LivePhase::Loading||!nativeIdle())voiceAt_=now;else if(now>=voiceAt_+10){runtime_.switchTo(App::Home);return true;}}
     if(now!=renderedAt_) {
         renderedAt_=now; renderLocal(now);
-        if(active==App::Home||active==App::Focus||active==App::Slides||active==App::Countdown||active==App::Sonar||active==App::Noise||active==App::Alarm||(active==App::Memo&&(model.listening()||model.memoSavedAt+5>now))||((speaksOnce(active)||speaksToo(active)||active==App::Translate||active==App::Voice)&&model.listening())||(active==App::Dictation&&(model.listening()||model.dictationAt+5>now))) dirty=true;
+        // A running 倒计时 shows in the status bar on every page.
+        if(model.timerEnd||active==App::Home||active==App::Focus||active==App::Slides||active==App::Countdown||active==App::Sonar||active==App::Noise||active==App::Alarm||(active==App::Memo&&(model.listening()||model.memoSavedAt+5>now))||((speaksOnce(active)||speaksToo(active)||active==App::Translate||active==App::Voice)&&model.listening())||(active==App::Dictation&&(model.listening()||model.dictationAt+5>now))) dirty=true;
     }
     focusRemaining_=model.focusRemaining; focusRunning_=model.focusRunning; focusFinished_=model.focusFinished;
     focusPhase_=model.focusPhase;focusRounds_=model.focusRounds;focusDuration_=model.focusDuration;

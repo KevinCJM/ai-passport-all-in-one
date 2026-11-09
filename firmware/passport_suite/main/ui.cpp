@@ -298,7 +298,7 @@ void renderChrome(const Runtime& runtime){
     const bool alt=app==App::Codex?m.aiLevel>0:app==App::Dictation?m.aiDictation:app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Stock?m.stockDetail:app==App::Macro?m.macroDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Walkie?m.walkieAuto:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
     const auto* hint=keyHint(app,m.settingsPage,m.focusRunning,*m.pairingCode,m.live&&m.livePhase==LivePhase::Loading,m.live&&m.livePhase==LivePhase::Error,alt,app==App::Wifi?m.wifiTab:app==App::Settings?(m.settingsPage==SettingsPage::City?dictationTab(m):m.settingsPage==SettingsPage::Idle?m.idleRow:m.wifiSetup?0u:m.wifiArmed?3u:m.wifiRow?2u:1u):
         app==App::Rate?voiceTab(m,m.rateArmed):app==App::Stock?voiceTab(m,m.stockArmed):app==App::Macro?0u:app==App::Countdown?voiceTab(m,m.countdownArmed):
-        app==App::Alarm?(m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit?5u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:(m.page.score.players()>2?3u:0u)+(m.page.score.fresh()?0u:1u)):app==App::Feishu?(m.feishuDetail?1u:m.page.feishu.count?0u:2u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Health?healthTab(m):app==App::Train?trainTab(m):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:app==App::Podcast?unsigned(m.podcastEpisodes):m.soundView);
+        app==App::Alarm?(m.alarmRinging&&m.timerRang?10u:m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit&&m.timerPicked()?(m.timerEnd?7u:m.timerLeft?8u:6u):m.alarmEdit?5u:m.timerPicked()?9u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:(m.page.score.players()>2?3u:0u)+(m.page.score.fresh()?0u:1u)):app==App::Feishu?(m.feishuDetail?1u:m.page.feishu.count?0u:2u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Health?healthTab(m):app==App::Train?trainTab(m):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:app==App::Podcast?unsigned(m.podcastEpisodes):m.soundView);
     if(app==App::Menu&&runtime.menuLayout().mode==MenuLayout::List)hint="上下：选择 | 长按上下：快移 | 确认：进入";
     char text[256];
     // 打开 Mac 程序: what the computer is doing takes the key hints' place for a few seconds, on any page.
@@ -1555,9 +1555,10 @@ void initNoise(lv_obj_t* screen){
     noiseView=lv_obj_create(noiseRoot);box(noiseView,8,4,224,253,kBg);lv_obj_add_event_cb(noiseView,drawNoise,LV_EVENT_DRAW_MAIN,nullptr);
 }
 void renderNoise(const Model& m){drawModel=&m;lv_obj_invalidate(noiseView);}
-// 闹钟: a 录音 row over the alarms (time, repeat, when it rings next); an alarm's clock large with its four repeat
-// modes; the listening screen. Ringing: the clock on a flashing card.
+// 闹钟: a 录音 row over the alarms (time, repeat, when it rings next) and 倒计时; an alarm's clock large with its four
+// repeat modes; 倒计时 open; the listening screen. Ringing: the clock on a flashing card.
 lv_obj_t *alarmRoot,*alarmView;
+uint64_t alarmNow;  // the runtime's clock, which 倒计时 counts in
 constexpr const char* kAlarmModes[]{"关闭","每天","工作日","一次"};
 // "今天" / "明天" / "后天" / "11月3日周二" for a ring.
 void alarmDay(char* out,size_t size,time_t at,time_t clock){
@@ -1587,6 +1588,28 @@ void drawAlarmClock(Painter& p,const Model& m,const AlarmPrefs& a,time_t clock){
     p.text("·  工作日按法定假日和调休",10,196,220,kMuted);
     p.text("·  息屏和睡眠时也会响",10,222,220,kMuted);
 }
+// 倒计时: "4:32", "1:05:00".
+void timerText(char* out,size_t size,uint32_t seconds){
+    if(seconds>=3600)snprintf(out,size,"%lu:%02lu:%02lu",static_cast<unsigned long>(seconds/3600),static_cast<unsigned long>(seconds/60%60),static_cast<unsigned long>(seconds%60));
+    else snprintf(out,size,"%lu:%02lu",static_cast<unsigned long>(seconds/60),static_cast<unsigned long>(seconds%60));
+}
+// 倒计时 open: the time left large, its state, a progress bar while it runs or waits, and how to use it.
+void drawTimer(Painter& p,const Model& m,uint64_t now){
+    char text[64];const uint32_t left=m.timerShown(now);
+    timerText(text,sizeof(text),left);p.text(text,0,2,223,m.timerEnd?kText:m.timerLeft?kWarn:kMuted,LV_TEXT_ALIGN_CENTER,&lv_font_montserrat_48);
+    if(m.timerEnd){
+        const time_t at=time(nullptr)+left;tm t{};localtime_r(&at,&t);
+        if(m.clockValid)snprintf(text,sizeof(text),"计时中 · %02d:%02d 响",t.tm_hour,t.tm_min);else snprintf(text,sizeof(text),"计时中");
+    }else snprintf(text,sizeof(text),"%s",m.timerLeft?"已暂停":"上下调时长，确认开始");
+    p.text(text,0,66,223,m.timerEnd?kAccent:kMuted,LV_TEXT_ALIGN_CENTER);
+    p.rect(0,98,223,108,kPanel,5);
+    if(m.timerEnd||m.timerLeft){const int w=int(223L*(m.timerLength-std::min(left,m.timerLength))/std::max<uint32_t>(1,m.timerLength));if(w>0)p.rect(0,98,w,108,m.timerEnd?kAccent:kWarn,5);}
+    p.rect(0,136,223,248,kPanel,10);
+    timerText(text,sizeof(text),m.timerLength);char line[80];snprintf(line,sizeof(line),"·  时长 %s",text);p.text(line,10,144,220,kMuted);
+    p.text("·  长按上下 ±10 分钟",10,170,220,kMuted);
+    p.text("·  离开本页、息屏也会响",10,196,220,kMuted);
+    p.text("·  可说「倒计时 5 分钟」",10,222,220,kMuted);
+}
 void drawAlarm(lv_event_t* e){
     const auto& m=*drawModel;auto p=painter(e);char text[96];const auto& list=m.alarms;
     const time_t clock=time(nullptr);tm t{};localtime_r(&clock,&t);
@@ -1594,12 +1617,15 @@ void drawAlarm(lv_event_t* e){
         const bool flash=clock%2;
         p.rect(0,0,223,250,flash?0x5a1d24:kPanel,14);
         snprintf(text,sizeof(text),"%02d:%02d",t.tm_hour,t.tm_min);p.text(text,0,34,223,kText,LV_TEXT_ALIGN_CENTER,&lv_font_montserrat_48);
-        p.text("闹钟响了",0,100,223,flash?kWarn:kText,LV_TEXT_ALIGN_CENTER);
+        p.text(m.timerRang?"倒计时结束":"闹钟响了",0,100,223,flash?kWarn:kText,LV_TEXT_ALIGN_CENTER);
         p.rect(24,146,199,182,kAccent,18);p.text("确认  关闭",24,154,199,kBg,LV_TEXT_ALIGN_CENTER);
-        p.rect(24,194,199,230,kBorder,18);p.text("上下  贪睡 5 分钟",24,202,199,kText,LV_TEXT_ALIGN_CENTER);
+        char again[40];if(m.timerRang){char length[16];timerText(length,sizeof(length),m.timerLength);snprintf(again,sizeof(again),"上下  再计时 %s",length);}
+        p.rect(24,194,199,230,kBorder,18);p.text(m.timerRang?again:"上下  贪睡 5 分钟",24,202,199,kText,LV_TEXT_ALIGN_CENTER);
         return;
     }
     if(m.voiceBusy()){drawListening(p,m,esp_timer_get_time()/1000000,"例：工作日早上 7 点半","说「每天」「工作日」会重复，否则响一次");return;}
+    const uint64_t now=alarmNow;
+    if(m.alarmEdit&&m.timerPicked()){drawTimer(p,m,now);return;}
     if(m.alarmEdit&&m.alarmIndex&&m.alarmIndex<=list.count){drawAlarmClock(p,m,list.items[m.alarmIndex-1],clock);return;}
     // The top line: the delete question, a notice, the snooze, or the next ring.
     const time_t next=m.clockValid?nextAlarm(list,clock):0;
@@ -1615,21 +1641,26 @@ void drawAlarm(lv_event_t* e){
     const bool rec=!m.alarmIndex;
     p.rect(0,24,223,62,rec?kBorder:kPanel,8);p.rect(8,29,36,57,rec?kWarn:kBorder,14);
     p.text(ICON_MIC,8,32,36,0xffffff,LV_TEXT_ALIGN_CENTER,&passport_icon_font_20);
-    p.text("按确认说闹钟时间",46,24,220,kText);p.text("例：工作日早上 7 点半",46,42,220,kMuted);
-    if(!list.count){p.text("说「明早 7 点」或「每天 6 点 50」",0,120,223,kMuted,LV_TEXT_ALIGN_CENTER);p.text("最多 5 个闹钟",0,146,223,0x5f7f94,LV_TEXT_ALIGN_CENTER);return;}
+    p.text("按确认说闹钟时间",46,24,220,kText);p.text("例：7 点半、计时 5 分钟",46,42,220,kMuted);
+    // The alarms, then the 倒计时 row (rows of 30 so five alarms and it fit).
     for(unsigned i=0;i<list.count;++i){
-        const auto& a=list.items[i];const int y=68+int(i)*37;const bool picked=m.alarmIndex==i+1;
-        p.rect(0,y,223,y+34,picked?(m.alarmArmed?0x5a1d24:kBorder):kPanel,8);
-        snprintf(text,sizeof(text),"%02u:%02u",a.hour,a.minute);p.text(text,10,y+5,90,a.mode?kText:kMuted,LV_TEXT_ALIGN_LEFT,&lv_font_montserrat_24);
-        if(const time_t at=m.clockValid?nextAlarm(a,clock):0){char day[24];alarmDay(day,sizeof(day),at,clock);p.text(day,92,y+7,160,kMuted);}
-        p.rect(160,y+6,216,y+28,a.mode?kAccent:kPanel,11);p.text(kAlarmModes[a.mode%4],160,y+7,216,a.mode?kBg:kMuted,LV_TEXT_ALIGN_CENTER);
+        const auto& a=list.items[i];const int y=68+int(i)*30;const bool picked=m.alarmIndex==i+1;
+        p.rect(0,y,223,y+27,picked?(m.alarmArmed?0x5a1d24:kBorder):kPanel,8);
+        snprintf(text,sizeof(text),"%02u:%02u",a.hour,a.minute);p.text(text,10,y+1,90,a.mode?kText:kMuted,LV_TEXT_ALIGN_LEFT,&lv_font_montserrat_24);
+        if(const time_t at=m.clockValid?nextAlarm(a,clock):0){char day[24];alarmDay(day,sizeof(day),at,clock);p.text(day,92,y+3,160,kMuted);}
+        p.rect(160,y+4,216,y+24,a.mode?kAccent:kPanel,10);p.text(kAlarmModes[a.mode%4],160,y+3,216,a.mode?kBg:kMuted,LV_TEXT_ALIGN_CENTER);
     }
+    {const int y=68+int(list.count)*30;const bool picked=m.timerPicked(),on=m.timerEnd||m.timerLeft;
+     p.rect(0,y,223,y+27,picked?kBorder:kPanel,8);p.text("倒计时",10,y+3,90,kText);
+     timerText(text,sizeof(text),m.timerShown(now));p.text(text,80,y+1,152,m.timerEnd?kAccent:m.timerLeft?kWarn:kMuted,LV_TEXT_ALIGN_LEFT,&lv_font_montserrat_24);
+     p.rect(160,y+4,216,y+24,m.timerEnd?kAccent:kPanel,10);p.text(m.timerEnd?"计时中":on?"暂停":"未开始",160,y+3,216,m.timerEnd?kBg:kMuted,LV_TEXT_ALIGN_CENTER);}
+    if(!list.count){p.text("说「明早 7 点」或「每天 8 点」",0,124,223,kMuted,LV_TEXT_ALIGN_CENTER);p.text("最多 5 个闹钟",0,178,223,0x5f7f94,LV_TEXT_ALIGN_CENTER);}
 }
 void initAlarm(lv_obj_t* screen){
     alarmRoot=lv_obj_create(screen);box(alarmRoot,0,35,240,257,kBg);
     alarmView=lv_obj_create(alarmRoot);box(alarmView,8,4,224,253,kBg);lv_obj_add_event_cb(alarmView,drawAlarm,LV_EVENT_DRAW_MAIN,nullptr);
 }
-void renderAlarm(const Model& m){drawModel=&m;lv_obj_invalidate(alarmView);}
+void renderAlarm(const Model& m,uint64_t now){drawModel=&m;alarmNow=now;lv_obj_invalidate(alarmView);}
 // 自选股. The list: a row per security (name, market and code, price, change) with its change in a red or green
 // pill (Chinese colours: red up). The detail: the price large, the change and turnover, today's minute line
 // against the previous close (or 30 daily candles), then open, high, previous close and low.
@@ -3338,7 +3369,7 @@ void uiRender(const Runtime& runtime) {
     } else if(app==App::Motion){renderMotion(model);
     } else if(app==App::Forecast){renderForecast(model);
     } else if(app==App::Noise){renderNoise(model);
-    } else if(app==App::Alarm){renderAlarm(model);
+    } else if(app==App::Alarm){renderAlarm(model,runtime.now());
     } else if(app==App::Stock){renderStock(model);
     } else if(app==App::Macro){renderMacro(model);
     } else if(app==App::Typhoon){renderTyphoon(model);

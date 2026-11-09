@@ -481,6 +481,8 @@ bool Runtime::longKey(bool up, uint64_t now) {
     if (active_ == App::Noise) { m.volume = static_cast<uint8_t>(std::clamp(int(m.volume) + (up ? 10 : -10), 0, 100)); return true; }
     if (active_ == App::Alarm && !m.alarmRinging && !m.voiceBusy()) {
         auto& list = m.alarms;
+        // 倒计时, not running: ±10 minutes.
+        if (m.alarmEdit && m.timerPicked()) { if (!m.timerEnd && !m.timerLeft) m.timerLength = timerStep(m.timerLength, up ? 10 : -10); return true; }
         if (m.alarmEdit && m.alarmIndex && m.alarmIndex <= list.count) {
             auto& a = list.items[m.alarmIndex - 1];
             a.hour = (a.hour + (up ? 1 : 23)) % 24; m.alarmSnooze = 0;
@@ -1005,8 +1007,12 @@ bool Runtime::addRate(const char* heard) {
 bool Runtime::addAlarm(const char* heard) {
     auto& m = model; auto& list = m.alarms;
     if (!*heard) { strcpy(m.lastNotice, "没有听清，请再说一次"); return false; }
+    // "倒计时 5 分钟" starts the countdown; so does a bare length ("10分钟") that is not an alarm time.
+    const unsigned timer = parseTimer(heard);
+    if (timer && (strstr(heard, "计时") || strstr(heard, "定时"))) { startTimer(timer); return true; }
+    const auto parsed = m.clockValid ? parseAlarm(heard, time(nullptr)) : AlarmParse{};
+    if (!parsed.ok && timer) { startTimer(timer); return true; }
     if (!m.clockValid) { strcpy(m.lastNotice, "时间未同步，暂不能设闹钟"); return false; }
-    const auto parsed = parseAlarm(heard, time(nullptr));
     if (!parsed.ok) { strcpy(m.lastNotice, parsed.error); return false; }
     // The same time again just takes the new repeat.
     int at = -1;
@@ -1020,6 +1026,11 @@ bool Runtime::addAlarm(const char* heard) {
     if (parsed.mode == 3) { char when[32]; todoWhen(nextAlarm(a, time(nullptr)), time(nullptr), when, sizeof(when)); snprintf(m.lastNotice, sizeof(m.lastNotice), "已设好 · %s 响一次", when); }
     else snprintf(m.lastNotice, sizeof(m.lastNotice), "已设好 · %s %02u:%02u", modes[parsed.mode], a.hour, a.minute);
     return true;
+}
+void Runtime::startTimer(uint32_t seconds) {
+    auto& m = model;
+    m.timerLength = seconds; m.timerEnd = now_ + seconds; m.timerLeft = 0; m.timerRang = false;
+    m.alarmIndex = m.alarms.count + 1; m.alarmEdit = true; m.alarmArmed = false; m.lastNotice[0] = 0;
 }
 bool Runtime::addCountdown(const char* heard) {
     auto& m = model; auto& board = m.countdown;
@@ -1160,7 +1171,7 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
     if (target == App::Score) { SettingsStore::loadScore(model.page.score); model.scoreArmed = false; model.lastNotice[0] = 0; }
     if (target == App::Book) { auto& b = model.page.book; b.gap = 0; b.font = std::min<uint8_t>(SettingsStore::loadByte("book_font"), kBookSizes - 1); showBook(0); }
     if (target == App::Countdown) { reloadCountdown(); model.countdownArmed = false; model.listenAt = 0; }
-    if (target == App::Alarm) { auto& m = model; m.alarmIndex = 0; m.alarmEdit = m.alarmArmed = false; m.listenAt = 0; }
+    if (target == App::Alarm) { auto& m = model; const bool timer = m.timerEnd || m.timerLeft; m.alarmIndex = timer ? m.alarms.count + 1 : 0; m.alarmEdit = timer; m.alarmArmed = false; m.listenAt = 0; }
     if (target == App::Qr) { model.qrBright = false; reloadQr(); }
     if (target == App::Torch) model.torchChanged = now_;
     if (target == App::News) { model.newsCount = model.newsIndex = model.newsScroll = 0; model.newsPage = model.newsWant = 1; model.page.news.text[0] = 0; model.page.news.textFor = 255; }
@@ -1530,8 +1541,18 @@ void Runtime::key(Key key, uint64_t now) {
         auto& m = model; auto& list = m.alarms;
         if (m.alarmRinging) {
             m.alarmRinging = false; m.confirmTaken = true;
-            if (key == Key::Up || key == Key::Down) m.alarmSnooze = static_cast<uint32_t>(time(nullptr) + 300);
+            // A countdown's ring: Up/Down run it again.
+            if ((key == Key::Up || key == Key::Down) && m.timerRang) startTimer(m.timerLength);
+            else if (key == Key::Up || key == Key::Down) m.alarmSnooze = static_cast<uint32_t>(time(nullptr) + 300);
         } else if (m.voiceBusy()) return;
+        else if (m.alarmEdit && m.timerPicked()) {
+            // 倒计时: set, Up/Down ±1 minute and Confirm starts; running, Confirm pauses; paused, Confirm goes on and
+            // Up/Down reset it.
+            if (m.timerEnd) { if (key == Key::Confirm) { m.timerLeft = std::max<uint32_t>(1, m.timerShown(now_)); m.timerEnd = 0; } }
+            else if (m.timerLeft) { if (key == Key::Confirm) { m.timerEnd = now_ + m.timerLeft; m.timerLeft = 0; } else m.timerLeft = 0; }
+            else if (key == Key::Confirm) startTimer(m.timerLength);
+            else m.timerLength = timerStep(m.timerLength, key == Key::Up ? 1 : -1);
+        }
         else if (key == Key::Confirm && m.alarmSnooze) { m.alarmSnooze = 0; m.confirmTaken = true; strcpy(m.lastNotice, "已取消贪睡"); }
         else if (m.alarmEdit && m.alarmIndex && m.alarmIndex <= list.count) {
             auto& a = list.items[m.alarmIndex - 1];
@@ -1540,7 +1561,7 @@ void Runtime::key(Key key, uint64_t now) {
             if (!SettingsStore::saveAlarms(list)) strcpy(m.lastNotice, "保存失败");
         } else {
             m.alarmEdit = m.alarmArmed = false;
-            const unsigned rows = list.count + 1u;
+            const unsigned rows = list.count + 2u;  // the 录音 row, the alarms, 倒计时
             if (key == Key::Up || key == Key::Down) { m.lastNotice[0] = 0; m.alarmIndex = static_cast<uint8_t>((m.alarmIndex + (key == Key::Up ? rows - 1 : 1)) % rows); }
             if (key == Key::Confirm && m.alarmIndex) { m.alarmEdit = true; m.lastNotice[0] = 0; }
         }
@@ -1847,6 +1868,11 @@ void Runtime::tick(uint64_t now) {
     // 对讲机: a talk ends by itself after kWalkieTalk seconds; a page a call opened goes back once the call is over.
     if (active_ == App::Walkie && m.walkieTalk && now >= m.walkieAt + Model::kWalkieTalk) { m.walkieTalk = false; m.walkieAt = now; }
     if (active_ == App::Walkie && m.walkieAuto && !m.walkieTalk && m.walkiePhase != 2 && now >= m.walkieAt + Model::kWalkieQuiet) switchTo(m.walkieBack);
+    // 倒计时: rings from any page, also before the clock is set (monotonic time); a ringing alarm or todo goes first.
+    if (m.timerEnd && now >= m.timerEnd && !m.alarmRinging && !m.todoRinging && switchTo(App::Alarm) == Result::Ok) {
+        m.timerEnd = 0; m.alarmIndex = m.alarms.count + 1; m.alarmEdit = true;
+        m.alarmRinging = m.timerRang = true; m.alarmRingAt = now; lastInput_ = now; screenOff_ = false;
+    }
     // 闹钟: checked once a second. A ring is due for a minute from its time (a snoozed one from its new time), so
     // a page switch or a boot from deep sleep a few seconds late still rings; alarmFired keeps it to once.
     if (!m.clockValid || now == alarmChecked_) return;
@@ -1881,7 +1907,7 @@ void Runtime::tick(uint64_t now) {
     }
     m.alarmFired = static_cast<uint32_t>(due); m.alarmSnooze = 0;
     if (switchTo(App::Alarm) != Result::Ok) return;
-    m.alarmRinging = true; m.alarmRingAt = now; lastInput_ = now; screenOff_ = false;
+    m.alarmRinging = true; m.timerRang = false; m.alarmRingAt = now; lastInput_ = now; screenOff_ = false;
 }
 bool Runtime::codexNotice(const char* text) {
     if (active_ != App::Codex) return false;
@@ -1922,9 +1948,9 @@ Power Runtime::automaticPower(uint64_t now) const {
     // 离座锁屏 its Bluetooth link (the computer reads its signal; a lost link locks the screen).
     // Voice wake listens on the home page and the menu, which deep sleep would end, and a playing radio or podcast plays on.
     // 对讲机 listens on its page, and on every page with 后台接收对讲 on.
-    // White noise plays on too, and a snoozed alarm must still be awake to ring again.
+    // White noise plays on too, and a snoozed alarm or a running countdown must still be awake to ring.
     // On USB with 连电脑时常亮 off only the screen goes dark: deep sleep would drop the computer link.
-    if (connected_ || ((active_ == App::Radio || active_ == App::Podcast) && model.mediaPlaying) || (active_ == App::Noise && model.noisePlaying) || model.alarmSnooze || model.focusRunning || model.swRunning || active_ == App::Motion || active_ == App::Guard || ((active_ == App::Slides || active_ == App::Dictation) && model.bleConnected)
+    if (connected_ || ((active_ == App::Radio || active_ == App::Podcast) && model.mediaPlaying) || (active_ == App::Noise && model.noisePlaying) || model.alarmSnooze || model.timerEnd || model.focusRunning || model.swRunning || active_ == App::Motion || active_ == App::Guard || ((active_ == App::Slides || active_ == App::Dictation) && model.bleConnected)
         || ((active_ == App::Home || active_ == App::Menu) && model.wakeWord) || model.walkieListen || active_ == App::Walkie) return Power::ScreenOff;
     return Power::DeepSleepIntent;
 }

@@ -41,7 +41,13 @@ lv_obj_t* statusBarInit(lv_obj_t* screen){
 void statusBarRender(const Runtime& runtime){
     current=&runtime;const auto& m=runtime.model;
     const char* connection=m.wifiConnected?(m.bleConnected?"WiFi + BT":"WiFi"):m.pppConnected?"USB / PPP":m.bleConnected?"BLE":m.wifiSetup?"SETUP":"OFFLINE";
-    if(strcmp(lv_label_get_text(network),connection))lv_label_set_text(network,connection);
+    // A running 倒计时 takes the connection's name on other pages (the bars still show the link).
+    char timer[24]{};
+    if(m.timerEnd&&runtime.active()!=App::Alarm){const uint32_t left=m.timerShown(runtime.now());
+        if(left>=3600)snprintf(timer,sizeof(timer),LV_SYMBOL_BELL " %lu:%02lu:%02lu",static_cast<unsigned long>(left/3600),static_cast<unsigned long>(left/60%60),static_cast<unsigned long>(left%60));
+        else snprintf(timer,sizeof(timer),LV_SYMBOL_BELL " %lu:%02lu",static_cast<unsigned long>(left/60),static_cast<unsigned long>(left%60));
+        connection=timer;}
+    if(strcmp(lv_label_get_text(network),connection)){lv_label_set_text(network,connection);lv_obj_set_style_text_color(network,lv_color_hex(*timer?0xffb454:green),0);}
     char text[12];if(m.batteryKnown)snprintf(text,sizeof(text),"%u%%",m.batteryPercent);else snprintf(text,sizeof(text),"--%%");
     if(strcmp(lv_label_get_text(battery),text))lv_label_set_text(battery,text);
     const int rssi=m.wifiSignalKnown?(m.wifiRssi>=-55?4:m.wifiRssi>=-67?3:m.wifiRssi>=-75?2:1):0;
