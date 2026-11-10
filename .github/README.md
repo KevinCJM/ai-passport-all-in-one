@@ -1,7 +1,7 @@
 # ai-passport-all-in-one
 
 AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个按键）的自制固件，C++20 + ESP-IDF 6.1 + LVGL 9.5。
-这里是 **0.5.42** 的源码；[最近发布的固件为 0.5.28](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/v0.5.28)。
+这里是 **0.5.42** 的源码；[最近发布的固件为 0.5.42](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/v0.5.42)。
 
 主页是时钟和天气，默认菜单六页、共 48 项功能（每页 8 个，均少于 9 个，九宫格不溢出）：
 
@@ -162,9 +162,9 @@ tests/                          电脑助手与固件数据解析的宿主测试
 
 ## 下载固件
 
-- [0.5.37 完整固件包](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.37/ai-passport-0.5.37-esp32c3.zip)：应用、引导程序、分区表、唤醒词模型及刷机说明。
-- [仅应用 passport_device.bin](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.37/passport_device.bin)：已安装本项目固件时使用。
-- [SHA256SUMS](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.37/SHA256SUMS)：下载校验。
+- [0.5.42 完整固件包](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.42/ai-passport-0.5.42-esp32c3.zip)：应用、引导程序、分区表、唤醒词模型及刷机说明。
+- [仅应用 passport_device.bin](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.42/passport_device.bin)：已安装本项目固件时使用。
+- [SHA256SUMS](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.42/SHA256SUMS)：下载校验。
 
 适用于上述 ESP32-C3、8 MB Flash、无PSRAM的 AI Passport。升级保留原分区表和设置，只写应用；首次安装按下文「刷机」操作。下载包解压后的文件布局与编译产物一致。
 
