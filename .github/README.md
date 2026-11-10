@@ -1,7 +1,7 @@
 # ai-passport-all-in-one
 
 AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个按键）的自制固件，C++20 + ESP-IDF 6.1 + LVGL 9.5。
-这里是 **0.5.43** 的源码；[最近发布的固件为 0.5.43](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/v0.5.43)。
+这里是 **0.5.44** 的源码；[最近发布的固件为 0.5.44](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/v0.5.44)。
 
 主页是时钟和天气，默认菜单六页、共 48 项功能（每页 8 个，均少于 9 个，九宫格不溢出）：
 
@@ -15,6 +15,12 @@ AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个�
 | 工具 · 设置 | 手电筒、警示灯、随机转盘、移动监控、WiFi探测、二维码、健康记录、系统设置 |
 
 **基本上所有功能都能用语音操作。**喊「你好小智」或在任何页面双击确认键，打开语音指令后直接说：打开哪个功能、调音量和亮度、定闹钟和倒计时、加待办、记账、记健康数据、添加倒数日、换状态牌、算数，或者让 Mac 打开程序。说法不用很标准，胸牌自己听不懂的话会交给小智的大模型理解，再由它调用胸牌的功能（小智 MCP 设备工具）。唤醒开关在「系统设置 › 唤醒与对讲」；小智语音服务需要联网并完成激活。
+
+## 0.5.44 更新：语音指令不再卡住
+
+- **按确认键结束**：说完直接按一下确认就停，连接还没完成时按也算数。
+- **自动判断说完**：胸牌自己听麦克风，说完停顿约 0.7 秒就结束；一直没说话 6 秒后结束。0.5.43 里补发的声音让小智判断不出说完，每次都要等满 10 秒，看起来像卡死。
+- 识别结果最多等 8 秒（原来 15 秒）；连接期间的录音降到 16 kb/s，缓存能装 3 秒，不会丢后半句。
 
 ## 0.5.43 更新：双击就能说，小智能删、能改、能查
 
@@ -172,9 +178,9 @@ tests/                          电脑助手与固件数据解析的宿主测试
 
 ## 下载固件
 
-- [0.5.43 完整固件包](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.43/ai-passport-0.5.43-esp32c3.zip)：应用、引导程序、分区表、唤醒词模型及刷机说明。
-- [仅应用 passport_device.bin](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.43/passport_device.bin)：已安装本项目固件时使用。
-- [SHA256SUMS](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.43/SHA256SUMS)：下载校验。
+- [0.5.44 完整固件包](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.44/ai-passport-0.5.44-esp32c3.zip)：应用、引导程序、分区表、唤醒词模型及刷机说明。
+- [仅应用 passport_device.bin](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.44/passport_device.bin)：已安装本项目固件时使用。
+- [SHA256SUMS](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.44/SHA256SUMS)：下载校验。
 
 适用于上述 ESP32-C3、8 MB Flash、无PSRAM的 AI Passport。升级保留原分区表和设置，只写应用；首次安装按下文「刷机」操作。下载包解压后的文件布局与编译产物一致。
 

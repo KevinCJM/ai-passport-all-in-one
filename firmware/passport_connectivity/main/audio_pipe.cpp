@@ -46,7 +46,7 @@ bool AudioPipe::start(App app,uint32_t generation,bool native,uint32_t nativeRat
     if(app!=App::Chat && app!=App::Dictation && app!=App::Radio) return true;
     if(!stopped_) stopped_=xSemaphoreCreateBinary();
     if(!stopped_) return false;
-    mode_=app; generation_=generation; pending_=0; stopping_=false;encoderResult=0;encoderFree=0;
+    mode_=app; generation_=generation; pending_=0; stopping_=false;encoderResult=0;encoderFree=0;encoderBitrate=24000;
     gateFrames=gatePeakMic=gatePeakRef=gatePeakResidual=gateWarmFrames=gateFloor=prepareError=prepareFree=prepareLargest=0;for(auto& count:gateVeto)count=0;
     // Allocate pre-roll only during playback; manual recording needs encoder RAM.
 #ifdef PASSPORT_DEVICE
@@ -140,7 +140,7 @@ bool AudioPipe::send(uint8_t type,const uint8_t* data,size_t length) {
 bool AudioPipe::encode(const uint8_t* data,size_t length) {
         if(!encoder_) {
             esp_opus_enc_config_t opus=ESP_OPUS_ENC_CONFIG_DEFAULT(); opus.sample_rate=16000; opus.channel=1;
-            opus.bitrate=24000; opus.frame_duration=ESP_OPUS_ENC_FRAME_DURATION_60_MS; opus.complexity=0; opus.enable_vbr=true;opus.enable_dtx=true;
+            opus.bitrate=encoderBitrate; opus.frame_duration=ESP_OPUS_ENC_FRAME_DURATION_60_MS; opus.complexity=0; opus.enable_vbr=true;opus.enable_dtx=true;
             encoderResult=esp_opus_enc_open(&opus,sizeof(opus),&encoder_);encoderFree=heap_caps_get_free_size(MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT);
             if(encoderResult!=ESP_AUDIO_ERR_OK) { ++errors; return false; }
             if(heap_caps_get_free_size(MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)<memoryReserve()) {
@@ -404,6 +404,7 @@ void AudioPipe::nativePump(){
     // here can starve TTS decode for more than the playback buffer duration.
     for(unsigned n=0;n<1&&board::microphone(frame.mic,frame.reference);++n){
         encode(reinterpret_cast<const uint8_t*>(frame.mic),sizeof(frame.mic));
+        if(phrase.frame(frame.mic,960))phraseEnded=true;
     }
     stackFree=uxTaskGetStackHighWaterMark(nullptr);
 }

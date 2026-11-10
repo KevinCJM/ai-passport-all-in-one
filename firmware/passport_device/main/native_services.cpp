@@ -196,21 +196,24 @@ bool NativeServices::request(App app,uint32_t generation,uint32_t request,const 
     if(!network_&&app!=App::Macro){const char* lines[]{"请先连接 WiFi，或使用 USB PPP","","",""};publish(job,"未联网",app==App::Home?"ready":"error","--",lines);return true;}
     // Only these tasks keep running and read actions_; a one-shot fetch would drop the action, so the request
     // waits as the next job instead and its answer replaces the running fetch's (whose request is then stale).
-    const bool reads=app==App::Chat||app==App::Radio||app==App::Podcast||app==App::Words||app==App::Daily||app==App::Quiz||app==App::Hot||app==App::News||(app==App::Train&&strcmp(operation,"speak"))||keepsListening(app)||speaksOnce(app)||(speaksToo(app)&&!strcmp(operation,"toggle"));
+    const bool reads=app==App::Chat||app==App::Radio||app==App::Podcast||app==App::Words||app==App::Daily||app==App::Quiz||app==App::Hot||app==App::News||(app==App::Train&&strcmp(operation,"speak"))||keepsListening(app)||app==App::Voice||speaksOnce(app)||(speaksToo(app)&&!strcmp(operation,"toggle"));
     if(reads&&task_&&!finished_&&owner_.load()==generation)return xQueueSend(actions_,&job,0)==pdTRUE;
     pending_=job;pendingReady_=true;pendingSince_=esp_timer_get_time();memoryWaiting_=false;return true;
 }
 // How long a cloud session took to come up, in ms from its request: [task, clock, identity, socket, hello, listening].
 // voice_log: what the last cloud session heard, which tools 小智 called and with what, and what came back.
 namespace {std::atomic<int> voiceMs[6];int64_t voiceFrom;void stamp(unsigned i){voiceMs[i]=int((esp_timer_get_time()-voiceFrom)/1000);}
-char voiceLog[640];size_t voiceLogUsed;
+char voiceLog[1200];size_t voiceLogUsed;
 void logVoice(const char* tag,const char* text){
     // ms since the request, then the text cut at a whole UTF-8 character, made safe inside a JSON string.
     char line[200];int n=snprintf(line,sizeof(line),"%s%d %s:",voiceLogUsed?" | ":"",int((esp_timer_get_time()-voiceFrom)/1000),tag);
     for(const char* c=text;*c&&n<int(sizeof(line))-5;){const auto b=static_cast<unsigned char>(*c);const int len=b<0x80?1:b>=0xF0?4:b>=0xE0?3:2;
         if(n+len>=int(sizeof(line))-5)break;
         if(b<0x80){line[n++]=(*c=='"'||*c=='\\'||b<' ')?'\'':*c;++c;}else for(int k=0;k<len&&*c;++k)line[n++]=*c++;}
-    line[n]=0;if(voiceLogUsed+n<sizeof(voiceLog)){memcpy(voiceLog+voiceLogUsed,line,n+1);voiceLogUsed+=n;}
+    line[n]=0;
+    // Full: the oldest entries go (whole entries, from a " | ").
+    while(voiceLogUsed+n>=sizeof(voiceLog)){const char* cut=strstr(voiceLog+sizeof(voiceLog)/2," | ");if(!cut){voiceLog[0]=0;voiceLogUsed=0;break;}voiceLogUsed-=cut-voiceLog;memmove(voiceLog,cut,voiceLogUsed+1);}
+    memcpy(voiceLog+voiceLogUsed,line,n+1);voiceLogUsed+=n;
 }}
 void voiceTimes(char* out,size_t size,bool log){snprintf(out,size,log?"{\"voice_ms\":[%d,%d,%d,%d,%d,%d],\"voice_log\":\"%s\"}":"[%d,%d,%d,%d,%d,%d]",voiceMs[0].load(),voiceMs[1].load(),voiceMs[2].load(),voiceMs[3].load(),voiceMs[4].load(),voiceMs[5].load(),voiceLog);}
 void NativeServices::poll(){
@@ -225,7 +228,7 @@ void NativeServices::poll(){
             // NimBLE's deleted task stack is reclaimed by the idle task.
             if(esp_timer_get_time()-pendingSince_<500000){if(!memoryWaiting_){publish(current_,"正在释放连接资源","loading");memoryWaiting_=true;}}
             else{pendingReady_=false;error_=ESP_ERR_NO_MEM;publish(current_,"内存不足","error");}
-        }else{pendingReady_=false;busy_=true;memoryWaiting_=false;error_=0;if(current_.app==App::Chat||transcribing()){voiceFrom=pendingSince_;for(auto& v:voiceMs)v=-1;stamp(0);voiceLog[0]=0;voiceLogUsed=0;}}
+        }else{pendingReady_=false;busy_=true;memoryWaiting_=false;error_=0;if(current_.app==App::Chat||transcribing()){voiceFrom=pendingSince_;for(auto& v:voiceMs)v=-1;stamp(0);logVoice("开始",transcribing()?"语音":"聊天");}}
     }
 }
 void NativeServices::run(void* context){auto& self=*static_cast<NativeServices*>(context);self.work();self.closeSocket();self.prerolling_=false;self.preroll_.reset();if((self.current_.app==App::Chat&&strcmp(self.current_.operation,"probe"))||self.transcribing()||self.current_.app==App::Radio||self.current_.app==App::Podcast||self.current_.app==App::Words||self.current_.app==App::Daily||self.current_.app==App::Feishu)self.audio_.stop();self.ready_=self.listening_=self.speaking_=self.playing_=self.online_=false;self.finished_=true;vTaskSuspend(nullptr);}
@@ -695,7 +698,9 @@ void NativeServices::beginListen(bool interrupted){
         for(size_t at=0;at+2<=prerollUsed_;){const size_t n=preroll_[at]|preroll_[at+1]<<8;at+=2;
             if(esp_transport_ws_send_raw(ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_BINARY|WS_TRANSPORT_OPCODES_FIN),reinterpret_cast<const char*>(preroll_.get()+at),n,250)==int(n))++chatTx_;
             at+=n;}
+        char sent[48];snprintf(sent,sizeof(sent),"%u 字节%s",unsigned(prerollUsed_),prerollUsed_+200>kPreroll?"（满）":"");logVoice("补发",sent);
         prerolling_=false;preroll_.reset();prerollUsed_=0;
+        if(stopSoon_){stopSoon_=false;endListen();}
     }
     ++listenStarts_;status("正在听");
 }
@@ -706,7 +711,7 @@ void NativeServices::toggleChat(){
     if(interrupted&&!text("abort")){error_=ESP_FAIL;status("打断发送失败","error");return;}
     beginListen(interrupted);
 }
-void NativeServices::endListen(){controlAudio(0);listening_=autoListening_=false;if(!text("listen","stop")){status("语音连接断开","error");return;}asr_=transcribing();askedAt_=esp_timer_get_time();status(asr_?"正在识别":"正在思考");}
+void NativeServices::endListen(){logVoice("停","");controlAudio(0);listening_=autoListening_=false;if(!text("listen","stop")){status("语音连接断开","error");return;}asr_=transcribing();askedAt_=esp_timer_get_time();status(asr_?"正在识别":"正在思考");}
 void NativeServices::audioOutput(void* context,uint8_t type,const uint8_t* data,size_t length){
     auto& self=*static_cast<NativeServices*>(context);if(self.cancelled())return;
     // 语音指令 while connecting: kept (a frame that no longer fits is dropped), sent by beginListen.
@@ -781,10 +786,11 @@ void NativeServices::chat(){
     const bool early=memo&&current_.app==App::Voice&&wantListen_&&clockTried&&time(nullptr)>1700000000&&*cachedUrl&&!memcmp(cachedFor,own,6);
     if(!early)status("云端连接中","loading");
     // 语音指令: listening starts now rather than once connected (a second or two later); the phrase waits in preroll_.
-    prerolling_=false;prerollUsed_=0;preroll_.reset();
+    prerolling_=stopSoon_=false;prerollUsed_=0;preroll_.reset();
     if(early){
         preroll_.reset(new(std::nothrow)uint8_t[kPreroll]);audio_.nativeOutput(audioOutput,this);
-        if(preroll_&&audio_.start(App::Chat,current_.generation,true,rate_)&&controlAudio(1)){board::discardMicrophone();prerolling_=listening_=true;listenAt_=esp_timer_get_time();stamp(5);status("正在听");}
+        // 16 kb/s: 6 KiB holds 3 s of it (connecting measured 1.8-3.7 s), and speech recognition needs no more.
+        if(preroll_&&audio_.start(App::Chat,current_.generation,true,rate_)&&(audio_.encoderBitrate=16000)&&controlAudio(1)){audio_.phrase.reset();audio_.phraseEnded=false;board::discardMicrophone();prerolling_=listening_=true;listenAt_=esp_timer_get_time();stamp(5);status("正在听");}
         else{preroll_.reset();audio_.stop();status("云端连接中","loading");}
     }
     if(!syncClock()){status("网络校时失败","error");return;}stamp(1);
@@ -837,7 +843,9 @@ void NativeServices::chat(){
         Job action{};if(xQueueReceive(actions_,&action,0)==pdTRUE&&action.generation==current_.generation){current_.request=action.request;
             // 中英翻译: reading aloud needs the speaker, so the connection closes first (memo() reads, then reconnects).
             if(current_.app==App::Translate&&!strcmp(action.operation,"say")){if(!listening_&&!asr_){sayWanted_=true;break;}continue;}
-            if(ready_&&!strcmp(action.operation,"toggle"))toggleChat();else if(memo&&!strcmp(action.operation,"toggle"))wantListen_=true;else if(ready_)status(listening_?"正在听":speaking_?"正在回答":"云端就绪");}
+            // 语音指令: Confirm ends the phrase (the microphone's own end stays on), also before the cloud listens.
+            if(current_.app==App::Voice){if(!strcmp(action.operation,"toggle")&&listening_){if(ready_&&!prerolling_)endListen();else stopSoon_=true;}}
+            else if(ready_&&!strcmp(action.operation,"toggle"))toggleChat();else if(memo&&!strcmp(action.operation,"toggle"))wantListen_=true;else if(ready_)status(listening_?"正在听":speaking_?"正在回答":"云端就绪");}
         if(resumeListening_&&board::bufferedSpeakerDrained()){
             resumeListening_=false;
             if(!controlAudio(4)){status("播放资源释放失败","error");break;}
@@ -848,12 +856,17 @@ void NativeServices::chat(){
         // 语音笔记: one note is at most 60 s (its text must fit the 2 KiB message), and its text comes within 15 s.
         // 中英翻译 keeps a phrase to 30 s: its text and translation then fit the page.
         // 语音指令: a command is short; 10 s also ends one that never paused (or never began).
+        // 语音指令 (listening from its double Confirm): the microphone tells when the phrase is over; nothing said in 6 s
+        // ends it too.
+        if(current_.app==App::Voice&&listening_&&!prerolling_&&audio_.encoderBitrate==16000&&(audio_.phraseEnded.load()||(!audio_.phrase.heard&&esp_timer_get_time()-listenAt_>6000000))){
+            char level[48];snprintf(level,sizeof(level),"底噪 %u 峰值 %u 语音 %u",audio_.phrase.floor,audio_.phrase.peak,audio_.phrase.heard);logVoice("说完",level);endListen();}
         if(memo&&listening_&&!prerolling_&&esp_timer_get_time()-listenAt_>(current_.app==App::Voice?10000000:current_.app==App::Translate?30000000:60000000))endListen();
         if(modelAt_&&esp_timer_get_time()-modelAt_>15000000){modelDone();break;}
         // 语音指令: the reply is shown, never played, so its first sentence ends the phrase rather than its audio's end
         // (seconds later). Before any tool ran, a sentence may still lead into a tool call: wait a little for one.
         if(modelAt_&&saidAt_&&esp_timer_get_time()-saidAt_>(toolUsed_?300000:1500000)){modelDone();return;}
-        if(memo&&asr_&&esp_timer_get_time()-askedAt_>15000000){status("识别超时，请重试","error");break;}
+        // 语音指令's text comes within a few seconds, if at all.
+        if(memo&&asr_&&esp_timer_get_time()-askedAt_>(current_.app==App::Voice?8000000:15000000)){logVoice("识别超时","");status("识别超时，请重试","error");break;}
         if(esp_timer_get_time()-pingAt>20000000){esp_transport_ws_send_raw(ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_PING|WS_TRANSPORT_OPCODES_FIN),nullptr,0,250);pingAt=esp_timer_get_time();}
         const int available=esp_transport_poll_read(ws_,10);
         // The cloud closes a connection left idle: 语音笔记 opens another at the next Confirm.
@@ -877,6 +890,7 @@ void NativeServices::chat(){
             }
         }else if(messageKind==WS_TRANSPORT_OPCODES_TEXT){
             buffer[used]=0;Json message(cJSON_Parse(reinterpret_cast<char*>(buffer.get())));const char* type=str(message.value,"type");
+            if(strcmp(type,"mcp")&&strcmp(type,"stt")&&!(!strcmp(type,"tts")&&!strcmp(str(message.value,"state"),"sentence_start"))){char what[48];snprintf(what,sizeof(what),"%.20s %.20s",type,str(message.value,"state"));logVoice("收",what);}
             if(!strcmp(type,"hello")){
                 if(probe){cloudCheckOk_=true;return;} // Check TLS, authorization, WebSocket and hello; never open the codec.
                 copy(session_,str(message.value,"session_id"));const double rate=num(item(message.value,"audio_params"),"sample_rate");rate_=(rate==16000||rate==24000||rate==48000)?rate:24000;

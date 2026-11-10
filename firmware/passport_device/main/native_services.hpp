@@ -57,6 +57,7 @@ class NativeServices {
     // 语音指令 listens from the double Confirm: what is said while the connection opens waits here (Opus frames, each
     // after its 2-byte length), sent once the cloud is listening.
     static constexpr size_t kPreroll=6144;std::unique_ptr<uint8_t[]> preroll_;size_t prerollUsed_{};std::atomic<bool> prerolling_{};
+    bool stopSoon_{};  // 语音指令: Confirm came before the cloud was listening: end the phrase once it is
     int connectSocket(const char* host,int port);
     int64_t saidAt_{};bool toolUsed_{};  // when its reply's first sentence came (0 none); whether a tool ran
     void note(const char*);void modelDone();
