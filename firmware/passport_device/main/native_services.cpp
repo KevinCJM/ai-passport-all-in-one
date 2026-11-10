@@ -868,9 +868,11 @@ namespace {
 constexpr char kMcpTools[]=R"({"tools":[)"
     R"({"name":"self.get_device_status","description":"读取胸牌当前的扬声器音量和屏幕亮度（0-100）。回答现在的音量、亮度，或做「大一点、小一点、暗一点」这类相对调整之前，先调用它。","inputSchema":{"type":"object","properties":{}}},)"
     R"({"name":"self.audio_speaker.set_volume","description":"设置胸牌扬声器音量，0-100。相对调整先用 self.get_device_status 读当前值，一般每次加减 10-20。","inputSchema":{"type":"object","properties":{"volume":{"type":"integer","minimum":0,"maximum":100}},"required":["volume"]}},)"
-    R"({"name":"self.screen.set_brightness","description":"设置胸牌屏幕亮度，10-100（10 最暗，不会关屏）。相对调整先用 self.get_device_status 读当前值，一般每次加减 10-20。","inputSchema":{"type":"object","properties":{"brightness":{"type":"integer","minimum":10,"maximum":100}},"required":["brightness"]}})"
+    R"({"name":"self.screen.set_brightness","description":"设置胸牌屏幕亮度，10-100（10 最暗，不会关屏）。相对调整先用 self.get_device_status 读当前值，一般每次加减 10-20。","inputSchema":{"type":"object","properties":{"brightness":{"type":"integer","minimum":10,"maximum":100}},"required":["brightness"]}},)"
+    R"({"name":"self.badge.open_page","description":"在胸牌上打开一个功能页面。用户说「打开/看看/切到某功能」，或想看天气、股票、新闻等胸牌上有的内容时用它。","inputSchema":{"type":"object","properties":{"page":{"type":"string","enum":["首页","功能列表","小智语音","语音笔记","语音输入","中英翻译","语音记账","语音计算器","待办提醒","对讲机","AI控制器","飞书提醒","电脑状态","离座锁屏","PPT翻页","状态牌","番茄钟","闹钟","万年历","倒数日","秒表","天气预报","台风路径","地震速报","高铁查询","历史今日","汇率","自选股","宏观雷达","财经新闻","百度热榜","HackerNews","知识问答","每日一句","电子书","背单词","收音机","播客","白噪音","声音","蓝牙声纳","记分牌","手电筒","警示灯","随机转盘","移动监控","WiFi探测","二维码","健康记录","系统设置"]}},"required":["page"]}},)"
+    R"({"name":"self.badge.add_item","description":"在胸牌上记一条内容并打开那一页。text 写成用户对那一页直接说的一句话，例如 闹钟「明天早上7点」「工作日7点半」，倒计时「5分钟」，待办「明天下午3点开会」，记账「午饭35元」，健康「喝水300毫升」「体重65公斤」，倒数日「春节2027年2月6日」，状态牌「开会中」，计算器「3加5乘2」。失败时按返回的提示改写再试一次。","inputSchema":{"type":"object","properties":{"kind":{"type":"string","enum":["闹钟","倒计时","待办","记账","健康","倒数日","状态牌","计算器"]},"text":{"type":"string"}},"required":["kind","text"]}})"
     R"(]})";
-static_assert(sizeof(kMcpTools)<1300,"tools/list must fit mcp()'s reply");
+static_assert(sizeof(kMcpTools)<3000,"tools/list must fit mcp()'s reply");
 }
 // 语音指令: what came of a phrase sent on to 小智's model, as the page's notice: what it said, else what its tools did.
 void NativeServices::note(const char* text){const size_t n=strlen(toolNote_);snprintf(toolNote_+n,sizeof(toolNote_)-n,"%s%s",n?"，":"",text);}
@@ -882,9 +884,9 @@ void NativeServices::modelDone(){
 void NativeServices::mcp(const cJSON* payload){
     const double id=num(payload,"id");if(std::isnan(id))return;  // a notification: no reply
     const char* method=str(payload,"method");
-    char result[1400];
+    char result[400];
     if(!strcmp(method,"initialize"))snprintf(result,sizeof(result),R"("result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"ai-passport","version":"%s"}})",esp_app_get_description()->version);
-    else if(!strcmp(method,"tools/list"))snprintf(result,sizeof(result),R"("result":%s)",kMcpTools);
+    else if(!strcmp(method,"tools/list"))result[0]=0;  // the reply quotes kMcpTools itself
     else if(!strcmp(method,"tools/call")){
         const auto* call=item(payload,"params");const char* name=str(call,"name");const auto* arguments=item(call,"arguments");
         char text[96];bool ok=true;
@@ -897,11 +899,24 @@ void NativeServices::mcp(const cJSON* payload){
         }else if(!strcmp(name,"self.screen.set_brightness")){
             const double v=num(arguments,"brightness");ok=v>=0&&v<=100;
             if(ok){mcpBrightness_=std::max(10,int(lround(v)));snprintf(text,sizeof(text),"亮度已设为 %d",mcpBrightness_.load());note(text);}else copy(text,"亮度要在 10-100 之间");
+        }else if(!strcmp(name,"self.badge.open_page")||!strcmp(name,"self.badge.add_item")){
+            // LiveServices opens the page (and says the text to it) on the main task; its notice is the answer.
+            const bool add=name[11]=='a';copy(mcpJob_.page,str(arguments,add?"kind":"page"));copy(mcpJob_.text,add?str(arguments,"text"):"");
+            ok=*mcpJob_.page&&(!add||*mcpJob_.text);
+            if(ok){
+                mcpWaiting_=true;
+                for(unsigned i=0;i<100&&mcpWaiting_.load();++i)vTaskDelay(pdMS_TO_TICKS(20));
+                const bool answered=!mcpWaiting_.exchange(false);ok=answered&&mcpOk_;
+                copy(text,answered?mcpResult_:"胸牌忙，请稍后再试");if(ok)note(text);
+                // The answer may quote what was heard: keep the JSON string whole.
+                for(char* c=text;*c;++c)if(*c=='"'||*c=='\\')*c='\'';
+            }else copy(text,add?"缺少 kind 或 text":"缺少 page");
         }else{ok=false;copy(text,"没有这个工具");}
         snprintf(result,sizeof(result),R"("result":{"content":[{"type":"text","text":"%s"}],"isError":%s})",text,ok?"false":"true");
     }else copy(result,R"("error":{"code":-32601,"message":"Method not found"})");
-    char reply[1600];
-    const int size=snprintf(reply,sizeof(reply),R"({"session_id":"%s","type":"mcp","payload":{"jsonrpc":"2.0","id":%.0f,%s}})",session_,id,result);
+    const bool list=!strcmp(method,"tools/list");
+    char reply[3200];
+    const int size=snprintf(reply,sizeof(reply),R"({"session_id":"%s","type":"mcp","payload":{"jsonrpc":"2.0","id":%.0f,%s%s}})",session_,id,list?R"("result":)":result,list?kMcpTools:"");
     if(size>0&&size<int(sizeof(reply)))esp_transport_ws_send_raw(ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_TEXT|WS_TRANSPORT_OPCODES_FIN),reply,size,250);
 }
 // 语音笔记 (and 状态牌's spoken label): chat's connection, but each note listens from Confirm to Confirm and only the text the cloud heard is

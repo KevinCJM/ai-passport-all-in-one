@@ -13,6 +13,8 @@ struct cJSON;
 namespace passport {
 // 中英翻译: what was heard and its translation (toEnglish: Chinese was heard), by engine 1 腾讯翻译君 / 2 MyMemory, 0 none.
 struct TranslationText{char source[600],result[900];bool toEnglish;uint8_t engine;};
+// 小智 MCP: open the page named, then (text not empty) say text to it as if heard there.
+struct McpJob{char page[32],text[128];};
 class NativeServices {
     struct Job{App app{};uint32_t generation{},request{};char operation[32]{};};  // 32: 高铁查询's "t:<train>:<day>:<from>:<to>"
     using Reply=bool(*)(void*,const char*);
@@ -43,6 +45,8 @@ class NativeServices {
     std::atomic<bool> translated_{},sayWanted_{};
     // 小智 MCP: the volume and the brightness the chat's model asked for, until LiveServices (main task) applies them; -1 none.
     std::atomic<int> mcpVolume_{-1},mcpBrightness_{-1};
+    // 小智 MCP: a page to open, or (text) one to say something to, done by LiveServices; the task waits for its answer.
+    McpJob mcpJob_{};std::atomic<bool> mcpWaiting_{};bool mcpOk_{};char mcpResult_[96]{};
     void mcp(const cJSON* payload);
     // 语音指令: LiveServices did not know the phrase (askModel_), so the connection stays open for 小智's model from
     // modelAt_ (0 = not waiting); toolNote_ is what its tools did.
@@ -119,6 +123,8 @@ public:
     void askModel(){askModel_=true;}  // before memoTaken()
     int takeVolume(){return mcpVolume_.exchange(-1);}
     int takeBrightness(){return mcpBrightness_.exchange(-1);}
+    const McpJob* mcpJob()const{return mcpWaiting_.load()?&mcpJob_:nullptr;}
+    void mcpDone(bool ok,const char* result){mcpOk_=ok;snprintf(mcpResult_,sizeof(mcpResult_),"%s",result);mcpWaiting_=false;}
     void speakText(const char* text);  // before LiveServices asks 飞书提醒's "say"
     const TranslationText* translated()const{return translated_.load()?&page_.translation:nullptr;}
     void translationTaken(){translated_=false;}

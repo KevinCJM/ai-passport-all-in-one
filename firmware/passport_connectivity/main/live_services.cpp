@@ -258,6 +258,14 @@ void LiveServices::request(const char* operation) {
         static_cast<unsigned long>(pending_),static_cast<unsigned>(runtime_.active()),
         static_cast<unsigned long>(pendingGeneration_),operation);
 }
+// A page that adds what was heard (语音指令's 小智 too): 1 added, 0 not, -1 not such a page.
+static int addHeard(Runtime& r,App page,const char* heard){
+    switch(page){
+    case App::Status:return r.addStatus(heard);case App::Wheel:return r.addWheel(heard);case App::Todo:return r.addTodo(heard);
+    case App::Ledger:return r.addLedger(heard);case App::Health:return r.addHealth(heard);case App::Calc:return r.addCalc(heard);
+    case App::Alarm:return r.addAlarm(heard);case App::Countdown:return r.addCountdown(heard);default:return -1;
+    }
+}
 #ifdef PASSPORT_DEVICE
 // 语音指令: 小智语音 or, with 说功能名跳转 on, another badge page by name; else (打开 Mac 程序 on) a program the Mac
 // opens, the answer showing at home; else what was heard stays on the page.
@@ -475,12 +483,22 @@ bool LiveServices::tick(uint64_t now) {
     // 小智 MCP: the chat's model set the volume or the brightness.
     if(const int v=native_->takeVolume();v>=0&&board::setVolume(v)){model.volume=v;dirty=true;}
     if(const int b=native_->takeBrightness();b>=0&&runtime_.setBrightness(b)){board::setBrightness(b);dirty=true;}
+    // 小智 MCP: open a page and, for add_item, say the text to it as if heard there; the notice is the tool's answer.
+    if(const auto* job=native_->mcpJob()){
+        const App page=spokenApp(job->page);char said[160],answer[96];bool ok=false;
+        snprintf(said,sizeof(said),"%s%s",strcmp(job->page,"倒计时")?"":"倒计时",job->text);
+        if(page==App::Count)snprintf(answer,sizeof(answer),"胸牌上没有「%s」",job->page);
+        else if(runtime_.switchTo(page)!=Result::Ok)copy(answer,"打开失败，请再说一次");
+        else if(!*job->text){ok=true;snprintf(answer,sizeof(answer),"已打开%s",job->page);}
+        else if(const int added=addHeard(runtime_,page,said);added<0)copy(answer,"这一页不能语音添加");
+        else{ok=added>0;copy(answer,*model.lastNotice?model.lastNotice:ok?"已完成":"没听懂，请换个说法");}
+        native_->mcpDone(ok,answer);return true;
+    }
     // 语音笔记: the text the cloud heard, saved once; the device's task waits until it is.
     if(active==App::Memo||speaksOnce(active)||active==App::Rate||active==App::Voice||active==App::Train)if(const char* heard=native_->memoHeard()){
         App go=App::Count;
         if(active==App::Voice)go=command(heard,now);
-        else if(active==App::Status)runtime_.addStatus(heard);else if(active==App::Wheel)runtime_.addWheel(heard);else if(active==App::Todo)runtime_.addTodo(heard);else if(active==App::Ledger)runtime_.addLedger(heard);else if(active==App::Health)runtime_.addHealth(heard);else if(active==App::Calc)runtime_.addCalc(heard);
-        else if(active==App::Alarm)runtime_.addAlarm(heard);else if(active==App::Countdown)runtime_.addCountdown(heard);
+        else if(addHeard(runtime_,active,heard)>=0){}
         else if(active==App::Rate){if(runtime_.addRate(heard)){voiceJob_=0;request("refresh");}}
         // 高铁查询: the train heard is fetched once the phrase's task has ended (tick, trainOperation).
         else if(active==App::Train)runtime_.addTrain(heard);
