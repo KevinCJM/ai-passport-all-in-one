@@ -456,6 +456,7 @@ class Services:
         """AI 控制器: the rows (quotas and conversation hints); "list:<row>" that tool's conversations, without the
         quotas (an "aigo:" event opens one: open_on_mac)."""
         verb,_,row=op.partition(':')
+        if verb=='readall':self.ai.read_all();verb='list' if row else ''   # a long Down: every reply read
         if verb=='list' and row.isdigit() and int(row)<len(AI_TOOLS):
             return {'state':'对话已更新','value':'','lines':[],'ai':self.ai.badge(AI_TOOLS[int(row)])}
         result=self.codex_snapshot()

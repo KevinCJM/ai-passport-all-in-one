@@ -301,6 +301,14 @@ class AISessions:
             except OSError:pass
         return result
 
+    def read_all(self):
+        """AI 控制器's long Down: every reply so far counts as read (the user saw them on the computer)."""
+        found=self.scan();now=time.time()
+        with self.lock:
+            for s in (s for t in found.values() for s in t):
+                if s['code']==UNREAD:self.read[s['id']]=now
+            self.keep_read()
+
     def keep_read(self):
         live={s['id'] for s in self.found.values()}
         self.read={k:v for k,v in self.read.items() if k in live}

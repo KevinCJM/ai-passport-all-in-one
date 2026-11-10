@@ -230,7 +230,7 @@ void LiveServices::request(const char* operation) {
         const char digits[]{char('0'+g.distance%10),char('0'+g.delay%10),char('0'+g.keep%10),char('0'+g.wake%10),0};
         snprintf(stock,sizeof(stock),"%.4s:%s",verb,digits);operation=stock;}
     // AI 控制器 in a tool's conversations asks for them ("list:<row>"), without the quotas.
-    if(runtime_.active()==App::Codex&&runtime_.model.aiLevel&&(!strcmp(operation,"refresh")||!strcmp(operation,"enter"))){snprintf(stock,sizeof(stock),"list:%u",runtime_.model.quotaPage);operation=stock;}
+    if(runtime_.active()==App::Codex&&runtime_.model.aiLevel&&(!strcmp(operation,"refresh")||!strcmp(operation,"enter")||!strcmp(operation,"readall"))){snprintf(stock,sizeof(stock),"%s:%u",strcmp(operation,"readall")?"list":"readall",runtime_.model.quotaPage);operation=stock;}
     // 语音输入 opened on one of them types into it.
     if(runtime_.active()==App::Dictation&&runtime_.model.aiDictation&&!strcmp(operation,"enter"))operation="enter:ai";
     // 台风 too: its list with the picked typhoon's track.

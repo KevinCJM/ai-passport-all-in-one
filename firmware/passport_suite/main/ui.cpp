@@ -3067,7 +3067,7 @@ void renderQuotas(const Model& model){
         setTextColor(quotaValues[n],lv_color_hex(color),0);setBgColor(quotaFills[n],lv_color_hex(color),0);
         setWidth(quotaFills[n],std::max(1,left*192/100));
     }
-    setLabel(dashboardFoot,"确认：看对话 · 上下选择");
+    setLabel(dashboardFoot,"确认看对话 · 长按下全部已读");
 }
 void renderDashboard(App app,const Model& model) {
     if(app==App::Codex){renderQuotas(model);return;}

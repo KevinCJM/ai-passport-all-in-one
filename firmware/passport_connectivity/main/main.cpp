@@ -810,6 +810,8 @@ int execute(const char* name) {
     // 离座锁屏: a long Up calibrates the at-desk signal, a long Down locks the computer now.
     if (previous==App::Guard&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {runtime.wake(now);live.guardCommand(!strcmp(name,"ap_on"));return 0;}
     if (previous==App::Feishu&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {runtime.wake(now);live.feishuCommand(!strcmp(name,"ap_on"));return 0;}
+    // AI 控制器: a long Down marks every reply read.
+    if (previous==App::Codex&&!strcmp(name,"settings")) {runtime.wake(now);live.aiReadAll();return 0;}
     // 中英翻译: a long Up reads the translation aloud.
     if (previous==App::Translate&&!strcmp(name,"ap_on")) {runtime.wake(now);live.say();return 0;}
     // Long presses: the menu turns a page, the calendar steps a month, the sonar switches its filter,

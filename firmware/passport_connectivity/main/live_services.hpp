@@ -79,6 +79,12 @@ public:
     void guardCommand(bool calibrate) { if(runtime_.active()==App::Guard) request(calibrate?"cal":"lock"); }
     // 飞书提醒: a long Up brings Feishu forward on the computer, a long Down steps the alert mode there.
     void feishuCommand(bool open) { if(runtime_.active()==App::Feishu) request(open?"open":"mode"); }
+    // AI 控制器: a long Down marks every reply read (seen on the computer already); the computer keeps it.
+    void aiReadAll() {
+        if(runtime_.active()!=App::Codex)return;
+        auto& m=runtime_.model;for(auto& row:m.aiRows)row[0]=0;for(unsigned i=0;i<m.page.ai.count;++i)if(m.page.ai.items[i].state==3)m.page.ai.items[i].state=2;
+        request("readall");
+    }
     // Long press on Up/Down tunes the radio; short presses change the volume.
     void station(bool next) { if(runtime_.active()==App::Radio) request(next?"next":"prev"); }
     void hostSeen() { hostContact_=esp_timer_get_time()/1000000; }
