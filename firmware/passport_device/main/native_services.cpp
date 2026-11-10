@@ -200,6 +200,19 @@ bool NativeServices::request(App app,uint32_t generation,uint32_t request,const 
     if(reads&&task_&&!finished_&&owner_.load()==generation)return xQueueSend(actions_,&job,0)==pdTRUE;
     pending_=job;pendingReady_=true;pendingSince_=esp_timer_get_time();memoryWaiting_=false;return true;
 }
+// How long a cloud session took to come up, in ms from its request: [task, clock, identity, socket, hello, listening].
+// voice_log: what the last cloud session heard, which tools 小智 called and with what, and what came back.
+namespace {std::atomic<int> voiceMs[6];int64_t voiceFrom;void stamp(unsigned i){voiceMs[i]=int((esp_timer_get_time()-voiceFrom)/1000);}
+char voiceLog[640];size_t voiceLogUsed;
+void logVoice(const char* tag,const char* text){
+    // ms since the request, then the text cut at a whole UTF-8 character, made safe inside a JSON string.
+    char line[200];int n=snprintf(line,sizeof(line),"%s%d %s:",voiceLogUsed?" | ":"",int((esp_timer_get_time()-voiceFrom)/1000),tag);
+    for(const char* c=text;*c&&n<int(sizeof(line))-5;){const auto b=static_cast<unsigned char>(*c);const int len=b<0x80?1:b>=0xF0?4:b>=0xE0?3:2;
+        if(n+len>=int(sizeof(line))-5)break;
+        if(b<0x80){line[n++]=(*c=='"'||*c=='\\'||b<' ')?'\'':*c;++c;}else for(int k=0;k<len&&*c;++k)line[n++]=*c++;}
+    line[n]=0;if(voiceLogUsed+n<sizeof(voiceLog)){memcpy(voiceLog+voiceLogUsed,line,n+1);voiceLogUsed+=n;}
+}}
+void voiceTimes(char* out,size_t size,bool log){snprintf(out,size,log?"{\"voice_ms\":[%d,%d,%d,%d,%d,%d],\"voice_log\":\"%s\"}":"[%d,%d,%d,%d,%d,%d]",voiceMs[0].load(),voiceMs[1].load(),voiceMs[2].load(),voiceMs[3].load(),voiceMs[4].load(),voiceMs[5].load(),voiceLog);}
 void NativeServices::poll(){
     if(task_&&finished_.load()){vTaskDelete(task_);task_=nullptr;finished_=false;busy_=false;}
     // 语音唤醒 holds about 57 KB while it listens; main stops it first (LiveServices::nativeBusy), then this starts.
@@ -212,15 +225,17 @@ void NativeServices::poll(){
             // NimBLE's deleted task stack is reclaimed by the idle task.
             if(esp_timer_get_time()-pendingSince_<500000){if(!memoryWaiting_){publish(current_,"正在释放连接资源","loading");memoryWaiting_=true;}}
             else{pendingReady_=false;error_=ESP_ERR_NO_MEM;publish(current_,"内存不足","error");}
-        }else{pendingReady_=false;busy_=true;memoryWaiting_=false;error_=0;}
+        }else{pendingReady_=false;busy_=true;memoryWaiting_=false;error_=0;if(current_.app==App::Chat||transcribing()){voiceFrom=pendingSince_;for(auto& v:voiceMs)v=-1;stamp(0);voiceLog[0]=0;voiceLogUsed=0;}}
     }
 }
-void NativeServices::run(void* context){auto& self=*static_cast<NativeServices*>(context);self.work();self.closeSocket();if((self.current_.app==App::Chat&&strcmp(self.current_.operation,"probe"))||self.transcribing()||self.current_.app==App::Radio||self.current_.app==App::Podcast||self.current_.app==App::Words||self.current_.app==App::Daily||self.current_.app==App::Feishu)self.audio_.stop();self.ready_=self.listening_=self.speaking_=self.playing_=self.online_=false;self.finished_=true;vTaskSuspend(nullptr);}
+void NativeServices::run(void* context){auto& self=*static_cast<NativeServices*>(context);self.work();self.closeSocket();self.prerolling_=false;self.preroll_.reset();if((self.current_.app==App::Chat&&strcmp(self.current_.operation,"probe"))||self.transcribing()||self.current_.app==App::Radio||self.current_.app==App::Podcast||self.current_.app==App::Words||self.current_.app==App::Daily||self.current_.app==App::Feishu)self.audio_.stop();self.ready_=self.listening_=self.speaking_=self.playing_=self.online_=false;self.finished_=true;vTaskSuspend(nullptr);}
 void NativeServices::work(){if(cancelled())return;if(!strcmp(current_.operation,"speak"))memo();else if(!strcmp(current_.operation,"locate"))locate();else if(current_.app==App::Home)home();else if(current_.app==App::Chat)chat();else if(current_.app==App::Radio)media();else if(current_.app==App::Podcast)podcast();else if(current_.app==App::Words)words();else if(current_.app==App::News)news();else if(current_.app==App::Rate)rates();else if(current_.app==App::History)history();else if(current_.app==App::Daily)daily();else if(current_.app==App::Quake)quake();else if(current_.app==App::Quiz)quiz();else if(current_.app==App::Hacker)hacker();else if(current_.app==App::Forecast)forecast();else if(current_.app==App::Stock)stock();else if(current_.app==App::Macro)macro();else if(current_.app==App::Typhoon)typhoon();else if(current_.app==App::Train)train();else if(current_.app==App::Hot)hot();else if(current_.app==App::Feishu)sayText();else if(transcribing())memo();stackFree_=uxTaskGetStackHighWaterMark(nullptr);}
+// Once per boot: the clock synced (syncClock) and 小智's answer for each identity (cloudIdentity).
+namespace {bool clockTried;char cachedUrl[160],cachedToken[160];uint8_t cachedFor[6];}
 bool NativeServices::syncClock(){
     // Once per boot even when the clock is set: it drifts in deep sleep (internal RC oscillator), and the alarm
     // wakes the device early to correct it before ringing.
-    static bool tried=false;
+    bool& tried=clockTried;
     if(tried&&time(nullptr)>1700000000)return true;
     esp_sntp_config_t config=ESP_NETIF_SNTP_DEFAULT_CONFIG("ntp.aliyun.com");
     if(esp_netif_sntp_init(&config)!=ESP_OK)return time(nullptr)>1700000000;
@@ -651,15 +666,37 @@ bool NativeServices::text(const char* type,const char* state,const char* mode){
     char* raw=cJSON_PrintUnformatted(j.value);if(!raw)return false;const int size=strlen(raw);
     const int sent=esp_transport_ws_send_raw(ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_TEXT|WS_TRANSPORT_OPCODES_FIN),raw,size,250);free(raw);return sent==size;
 }
+// The WebSocket connection (TLS and upgrade, about a second). 语音指令 records meanwhile: a small task connects while
+// this one keeps encoding the microphone (Opus needs this task's large stack).
+int NativeServices::connectSocket(const char* host,int port){
+    if(!prerolling_)return esp_transport_connect(ws_,host,port,12000);
+    struct Connect{esp_transport_handle_t ws;const char* host;int port;std::atomic<int> result{1};} c{ws_,host,port};
+    const auto connect=[](void* p){auto& c=*static_cast<Connect*>(p);c.result=esp_transport_connect(c.ws,c.host,c.port,12000)>=0?0:-1;vTaskDelete(nullptr);};
+    // Above the main task (1), whose drawing would otherwise halve the handshake's speed; but first the main task
+    // gets 300 ms to switch the screen to listening, which then stands still for the handshake's second.
+    for(const auto from=esp_timer_get_time();esp_timer_get_time()-from<300000;vTaskDelay(pdMS_TO_TICKS(5)))audio_.nativePump();
+    if(xTaskCreate(connect,"cloud_connect",8192,&c,2,nullptr)!=pdPASS)return esp_transport_connect(ws_,host,port,12000);
+    // Waits even when cancelled: the task still uses ws_.
+    while(c.result.load()==1){audio_.nativePump();vTaskDelay(pdMS_TO_TICKS(5));}
+    return c.result.load();
+}
 bool NativeServices::controlAudio(uint8_t command){return audio_.nativeInput(5,&command,1);}
 void NativeServices::beginListen(bool interrupted){
     // 语音笔记 listens until Confirm (manual: pauses do not end it) and never plays what comes back. 语音指令 never
     // plays it either, but ends at the pause after the phrase, as 小智语音 does.
     const bool memo=transcribing(),pause=!memo||current_.app==App::Voice;
     resumeListening_=false;dropTts_=interrupted||memo;speaking_=false;
-    board::discardMicrophone();
-    listening_=true;autoListening_=pause;listenAt_=esp_timer_get_time();
-    if(!text("listen","start",pause?"auto":"manual")||!controlAudio(1)){listening_=false;error_=ESP_FAIL;status(memo?"录音启动失败":"自动收音启动失败","error");return;}
+    // 语音指令 has been recording since its double Confirm: the cloud gets that first, then the rest as it comes.
+    const bool early=prerolling_;
+    if(!early){board::discardMicrophone();listenAt_=esp_timer_get_time();}
+    listening_=true;autoListening_=pause;
+    if(!text("listen","start",pause?"auto":"manual")||(!early&&!controlAudio(1))){prerolling_=listening_=false;error_=ESP_FAIL;status(memo?"录音启动失败":"自动收音启动失败","error");return;}
+    if(early){
+        for(size_t at=0;at+2<=prerollUsed_;){const size_t n=preroll_[at]|preroll_[at+1]<<8;at+=2;
+            if(esp_transport_ws_send_raw(ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_BINARY|WS_TRANSPORT_OPCODES_FIN),reinterpret_cast<const char*>(preroll_.get()+at),n,250)==int(n))++chatTx_;
+            at+=n;}
+        prerolling_=false;preroll_.reset();prerollUsed_=0;
+    }
     ++listenStarts_;status("正在听");
 }
 void NativeServices::toggleChat(){
@@ -672,6 +709,8 @@ void NativeServices::toggleChat(){
 void NativeServices::endListen(){controlAudio(0);listening_=autoListening_=false;if(!text("listen","stop")){status("语音连接断开","error");return;}asr_=transcribing();askedAt_=esp_timer_get_time();status(asr_?"正在识别":"正在思考");}
 void NativeServices::audioOutput(void* context,uint8_t type,const uint8_t* data,size_t length){
     auto& self=*static_cast<NativeServices*>(context);if(self.cancelled())return;
+    // 语音指令 while connecting: kept (a frame that no longer fits is dropped), sent by beginListen.
+    if(type==1&&self.prerolling_){if(self.preroll_&&self.prerollUsed_+2+length<=kPreroll){auto* p=self.preroll_.get()+self.prerollUsed_;p[0]=length&255;p[1]=length>>8;memcpy(p+2,data,length);self.prerollUsed_+=2+length;}return;}
     if(type==1&&self.listening_&&self.ws_){
         if(esp_transport_ws_send_raw(self.ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_BINARY|WS_TRANSPORT_OPCODES_FIN),reinterpret_cast<const char*>(data),length,250)==static_cast<int>(length))++self.chatTx_;
         else {self.error_=ESP_FAIL;self.status("音频发送失败","error");}
@@ -694,7 +733,6 @@ int NativeServices::xiaozhiPost(const char* url,const uint8_t* mac,const char* c
 }
 bool NativeServices::cloudIdentity(const uint8_t* mac,const char* client,char* url,size_t urlSize,char* token,size_t tokenSize,bool probe){
     // One answer per identity and boot: 语音笔记 reconnects after every idle drop.
-    static char cachedUrl[160],cachedToken[160];static uint8_t cachedFor[6];
     if(*cachedUrl&&!memcmp(cachedFor,mac,6)){snprintf(url,urlSize,"%s",cachedUrl);snprintf(token,tokenSize,"%s",cachedToken);return true;}
     auto reply=std::unique_ptr<char[]>(new(std::nothrow)char[2048]);if(!reply){status("内存不足","error");return false;}
     char body[256];snprintf(body,sizeof(body),"{\"version\":2,\"language\":\"zh-CN\",\"mac_address\":\"%02x:%02x:%02x:%02x:%02x:%02x\",\"uuid\":\"%s\",\"chip_model_name\":\"esp32c3\",\"application\":{\"name\":\"ai-passport\",\"version\":\"%s\"},\"board\":{\"type\":\"ai-passport\",\"name\":\"ai-passport\"}}",
@@ -737,7 +775,19 @@ void NativeServices::chat(){
     struct Credentials{char url[512]{},token[1024]{},client[129]{},host[128]{},path[512]{},headers[1536]{};int port{443};};
     auto credentials=std::unique_ptr<Credentials>(new(std::nothrow)Credentials);if(!credentials){status("内存不足","error");return;}
     stt_[0]=answer_[0]=0;  // never show the last session's exchange
-    status("云端连接中","loading");if(!syncClock()){status("网络校时失败","error");return;}
+    // 语音指令 listens at once (below), so its page never shows the connecting; but not the first time after boot,
+    // whose clock and identity fetches would stall the microphone.
+    uint8_t own[6];esp_read_mac(own,ESP_MAC_WIFI_STA);own[0]|=2;
+    const bool early=memo&&current_.app==App::Voice&&wantListen_&&clockTried&&time(nullptr)>1700000000&&*cachedUrl&&!memcmp(cachedFor,own,6);
+    if(!early)status("云端连接中","loading");
+    // 语音指令: listening starts now rather than once connected (a second or two later); the phrase waits in preroll_.
+    prerolling_=false;prerollUsed_=0;preroll_.reset();
+    if(early){
+        preroll_.reset(new(std::nothrow)uint8_t[kPreroll]);audio_.nativeOutput(audioOutput,this);
+        if(preroll_&&audio_.start(App::Chat,current_.generation,true,rate_)&&controlAudio(1)){board::discardMicrophone();prerolling_=listening_=true;listenAt_=esp_timer_get_time();stamp(5);status("正在听");}
+        else{preroll_.reset();audio_.stop();status("云端连接中","loading");}
+    }
+    if(!syncClock()){status("网络校时失败","error");return;}stamp(1);
     bool found=false;
     if(nvs_flash_init_partition("legacy_nvs")==ESP_OK){
         nvs_handle_t h;if(nvs_open_from_partition("legacy_nvs","websocket",NVS_READONLY,&h)==ESP_OK){found=nvsString(h,"url",credentials->url,sizeof(credentials->url));nvsString(h,"token",credentials->token,sizeof(credentials->token));nvs_close(h);}
@@ -753,6 +803,7 @@ void NativeServices::chat(){
     uint8_t mac[6];esp_read_mac(mac,ESP_MAC_WIFI_STA);if(memo)mac[0]|=2;
     if(memo||!found||!*credentials->client)snprintf(credentials->client,sizeof(credentials->client),"61692d70-6173-4000-8000-%02x%02x%02x%02x%02x%02x",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
     if((memo||!found)&&!cloudIdentity(mac,credentials->client,credentials->url,sizeof(credentials->url),credentials->token,sizeof(credentials->token),probe))return;
+    stamp(2);
     if(strncmp(credentials->url,"wss://",6)||strpbrk(credentials->token,"\r\n")||strpbrk(credentials->client,"\r\n")){status("云端连接凭据无效","error");return;}
     const char* authority=credentials->url+6;const char* slash=strchr(authority,'/');const char* end=slash?slash:authority+strlen(authority);const char* colon=static_cast<const char*>(memchr(authority,':',end-authority));
     const size_t hostLength=(colon?colon:end)-authority;if(!hostLength||hostLength>=sizeof(credentials->host)){status("云端地址无效","error");return;}
@@ -766,14 +817,14 @@ void NativeServices::chat(){
     esp_transport_ssl_crt_bundle_attach(ssl_,esp_crt_bundle_attach);esp_transport_ssl_set_addr_family(ssl_,ESP_TLS_AF_INET);
     ws_=esp_transport_ws_init(ssl_);if(!ws_){status("连接内存不足","error");return;}
     esp_transport_ws_set_path(ws_,credentials->path);esp_transport_ws_set_headers(ws_,credentials->headers);
-    if(esp_transport_connect(ws_,credentials->host,credentials->port,12000)>=0){connected=true;error_=tlsResult_=tlsError_=tlsFlags_=socketError_=0;break;}
+    if(connectSocket(credentials->host,credentials->port)>=0){connected=true;error_=tlsResult_=tlsError_=tlsFlags_=socketError_=0;break;}
     int tlsCode=0,tlsFlags=0;const int result=esp_tls_get_and_clear_last_error(esp_transport_get_error_handle(ssl_),&tlsCode,&tlsFlags);error_=result?result:ESP_FAIL;tlsResult_=result;tlsError_=tlsCode;tlsFlags_=tlsFlags;socketError_=esp_transport_get_errno(ssl_);
     const bool retry=retryNetwork(attempt,-1,result,tlsFlags,socketError_.load(),0);closeSocket();
     if(!retry)break;
     char state[64];snprintf(state,sizeof(state),"云端重试中 %u/%u",attempt+1,networkAttempts);status(state,"loading");if(!retryPause(attempt))return;
     }
     if(!connected){if(!cancelled())status(error_==ESP_ERR_ESP_TLS_CONNECTION_TIMEOUT?"云端连接超时":"云端连接失败","error");return;}
-    credentials.reset();if(cancelled())return;
+    credentials.reset();if(cancelled())return;stamp(3);
     // The chat and 语音指令 offer the badge's tools (MCP); the other speech-to-text pages have none.
     char hello[192];snprintf(hello,sizeof(hello),"{\"type\":\"hello\",\"version\":1,\"transport\":\"websocket\",\"features\":{\"mcp\":%s},\"audio_params\":{\"format\":\"opus\",\"sample_rate\":16000,\"channels\":1,\"frame_duration\":60}}",memo&&current_.app!=App::Voice?"false":"true");
     if(esp_transport_ws_send_raw(ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_TEXT|WS_TRANSPORT_OPCODES_FIN),hello,strlen(hello),1000)!=static_cast<int>(strlen(hello))){status("云端握手失败","error");return;}
@@ -792,13 +843,16 @@ void NativeServices::chat(){
             if(!controlAudio(4)){status("播放资源释放失败","error");break;}
             beginListen();
         }
-        if(ready_){const auto at=esp_timer_get_time();audio_.nativePump();pumpUs_=std::max(pumpUs_.load(),unsigned(esp_timer_get_time()-at));if(listening_&&audio_.encoderResult.load()!=0){status("录音编码失败","error");break;}}
+        if(ready_||prerolling_){const auto at=esp_timer_get_time();audio_.nativePump();pumpUs_=std::max(pumpUs_.load(),unsigned(esp_timer_get_time()-at));if(listening_&&audio_.encoderResult.load()!=0){status("录音编码失败","error");break;}}
         if(!ready_&&esp_timer_get_time()-started>12000000){status("云端握手超时","error");break;}
         // 语音笔记: one note is at most 60 s (its text must fit the 2 KiB message), and its text comes within 15 s.
         // 中英翻译 keeps a phrase to 30 s: its text and translation then fit the page.
         // 语音指令: a command is short; 10 s also ends one that never paused (or never began).
-        if(memo&&listening_&&esp_timer_get_time()-listenAt_>(current_.app==App::Voice?10000000:current_.app==App::Translate?30000000:60000000))endListen();
+        if(memo&&listening_&&!prerolling_&&esp_timer_get_time()-listenAt_>(current_.app==App::Voice?10000000:current_.app==App::Translate?30000000:60000000))endListen();
         if(modelAt_&&esp_timer_get_time()-modelAt_>15000000){modelDone();break;}
+        // 语音指令: the reply is shown, never played, so its first sentence ends the phrase rather than its audio's end
+        // (seconds later). Before any tool ran, a sentence may still lead into a tool call: wait a little for one.
+        if(modelAt_&&saidAt_&&esp_timer_get_time()-saidAt_>(toolUsed_?300000:1500000)){modelDone();return;}
         if(memo&&asr_&&esp_timer_get_time()-askedAt_>15000000){status("识别超时，请重试","error");break;}
         if(esp_timer_get_time()-pingAt>20000000){esp_transport_ws_send_raw(ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_PING|WS_TRANSPORT_OPCODES_FIN),nullptr,0,250);pingAt=esp_timer_get_time();}
         const int available=esp_transport_poll_read(ws_,10);
@@ -826,8 +880,8 @@ void NativeServices::chat(){
             if(!strcmp(type,"hello")){
                 if(probe){cloudCheckOk_=true;return;} // Check TLS, authorization, WebSocket and hello; never open the codec.
                 copy(session_,str(message.value,"session_id"));const double rate=num(item(message.value,"audio_params"),"sample_rate");rate_=(rate==16000||rate==24000||rate==48000)?rate:24000;
-                audio_.nativeOutput(audioOutput,this);if(!audio_.start(App::Chat,current_.generation,true,rate_)){status("音频内存不足","error");break;}
-                ready_=true;if(!memo||wantListen_){wantListen_=false;beginListen();}else status("云端就绪");
+                if(!prerolling_){audio_.nativeOutput(audioOutput,this);if(!audio_.start(App::Chat,current_.generation,true,rate_)){status("音频内存不足","error");break;}}
+                stamp(4);ready_=true;if(!memo||wantListen_){wantListen_=false;const bool early=prerolling_;beginListen();if(!early)stamp(5);}else status("云端就绪");
             }else if(memo&&!strcmp(type,"stt")){
                 // Keep the text and close the connection: the reply the cloud now starts is never read.
                 listening_=asr_=false;controlAudio(0);
@@ -835,17 +889,20 @@ void NativeServices::chat(){
                 if(current_.app==App::Translate){copy(page_.translation.source,str(message.value,"text"));return;}
                 // 自选股 and 所在城市: memo() looks it up once the connection is closed.
                 if(current_.app==App::Stock||current_.app==App::Settings){copy(spoken_,str(message.value,"text"));status(*spoken_?"已识别":"没有听清");return;}
-                char heard[1024];copy(heard,str(message.value,"text"));memoHeard_=heard;status(*heard?"已识别":"没有听清");
+                char heard[1024];copy(heard,str(message.value,"text"));logVoice("听",heard);memoHeard_=heard;status(*heard?"已识别":"没有听清");
                 while(memoHeard_.load()&&!cancelled())vTaskDelay(pdMS_TO_TICKS(10));
                 memoHeard_=nullptr;
                 // 语音指令: a phrase the badge does not know goes on to 小智's model, which may call the badge's tools
                 // (MCP). Its reply is shown, never played.
                 if(!askModel_.exchange(false))return;
-                modelAt_=esp_timer_get_time();answer_[0]=toolNote_[0]=0;status("小智处理中","loading");
+                modelAt_=esp_timer_get_time();saidAt_=0;toolUsed_=false;answer_[0]=toolNote_[0]=0;status("小智处理中","loading");
                 used=0;continue;
             }else if(modelAt_&&!strcmp(type,"tts")){
                 const char* state=str(message.value,"state");
-                if(!strcmp(state,"sentence_start")){const size_t n=strlen(answer_);snprintf(answer_+n,sizeof(answer_)-n,"%s",str(message.value,"text"));}
+                if(!strcmp(state,"sentence_start")){
+                    // "% self.badge.list_items..." is the model's tool call read out, not its answer.
+                    const char* said=str(message.value,"text");logVoice("说",said);while(*said==' ')++said;
+                    if(*said&&*said!='%'){const size_t n=strlen(answer_);snprintf(answer_+n,sizeof(answer_)-n,"%s",said);saidAt_=esp_timer_get_time();}}
                 else if(!strcmp(state,"stop")){modelDone();return;}
             }else if(!strcmp(type,"stt")){listening_=autoListening_=false;controlAudio(0);copy(stt_,str(message.value,"text"));answer_[0]=0;dropTts_=false;if(*stt_){++speechTurn_;status("正在思考");}else beginListen();}
             else if(!strcmp(type,"mcp")&&(!memo||current_.app==App::Voice))mcp(item(message.value,"payload"));
@@ -865,59 +922,75 @@ void NativeServices::chat(){
 }
 namespace {
 // The badge's tools as 小智's model sees them (MCP tools/list). Names follow XiaoZhi's own firmware.
-constexpr char kMcpTools[]=R"({"tools":[)"
-    R"({"name":"self.get_device_status","description":"读取胸牌当前的扬声器音量和屏幕亮度（0-100）。回答现在的音量、亮度，或做「大一点、小一点、暗一点」这类相对调整之前，先调用它。","inputSchema":{"type":"object","properties":{}}},)"
-    R"({"name":"self.audio_speaker.set_volume","description":"设置胸牌扬声器音量，0-100。相对调整先用 self.get_device_status 读当前值，一般每次加减 10-20。","inputSchema":{"type":"object","properties":{"volume":{"type":"integer","minimum":0,"maximum":100}},"required":["volume"]}},)"
-    R"({"name":"self.screen.set_brightness","description":"设置胸牌屏幕亮度，10-100（10 最暗，不会关屏）。相对调整先用 self.get_device_status 读当前值，一般每次加减 10-20。","inputSchema":{"type":"object","properties":{"brightness":{"type":"integer","minimum":10,"maximum":100}},"required":["brightness"]}},)"
-    R"({"name":"self.badge.open_page","description":"在胸牌上打开一个功能页面。用户说「打开/看看/切到某功能」，或想看天气、股票、新闻等胸牌上有的内容时用它。","inputSchema":{"type":"object","properties":{"page":{"type":"string","enum":["首页","功能列表","小智语音","语音笔记","语音输入","中英翻译","语音记账","语音计算器","待办提醒","对讲机","AI控制器","飞书提醒","电脑状态","离座锁屏","PPT翻页","状态牌","番茄钟","闹钟","万年历","倒数日","秒表","天气预报","台风路径","地震速报","高铁查询","历史今日","汇率","自选股","宏观雷达","财经新闻","百度热榜","HackerNews","知识问答","每日一句","电子书","背单词","收音机","播客","白噪音","声音","蓝牙声纳","记分牌","手电筒","警示灯","随机转盘","移动监控","WiFi探测","二维码","健康记录","系统设置"]}},"required":["page"]}},)"
-    R"({"name":"self.badge.add_item","description":"在胸牌上记一条内容并打开那一页。text 写成用户对那一页直接说的一句话，例如 闹钟「明天早上7点」「工作日7点半」，倒计时「5分钟」，待办「明天下午3点开会」，记账「午饭35元」，健康「喝水300毫升」「体重65公斤」，倒数日「春节2027年2月6日」，状态牌「开会中」，计算器「3加5乘2」。失败时按返回的提示改写再试一次。","inputSchema":{"type":"object","properties":{"kind":{"type":"string","enum":["闹钟","倒计时","待办","记账","健康","倒数日","状态牌","计算器"]},"text":{"type":"string"}},"required":["kind","text"]}})"
-    R"(]})";
-static_assert(sizeof(kMcpTools)<3000,"tools/list must fit mcp()'s reply");
+constexpr char kMcpTools[]=R"({"tools":[{"name":"self.audio_speaker.set_volume","description":"设置胸牌扬声器音量 0-100。「大一点/小一点」先用 self.badge.query 查「设备」读当前值，一般每次加减 10-20。","inputSchema":{"type":"object","properties":{"volume":{"type":"integer","minimum":0,"maximum":100}},"required":["volume"]}},{"name":"self.screen.set_brightness","description":"设置胸牌屏幕亮度 10-100（10 最暗，不关屏）。相对调整先查「设备」。","inputSchema":{"type":"object","properties":{"brightness":{"type":"integer","minimum":10,"maximum":100}},"required":["brightness"]}},{"name":"self.badge.open_page","description":"在胸牌上打开一个功能页面，用户想看某功能或其内容（天气、股票、新闻等）时用。","inputSchema":{"type":"object","properties":{"page":{"type":"string","enum":["首页","功能列表","小智语音","语音笔记","语音输入","中英翻译","语音记账","语音计算器","待办提醒","对讲机","AI控制器","飞书提醒","电脑状态","离座锁屏","PPT翻页","状态牌","番茄钟","闹钟","万年历","倒数日","秒表","天气预报","台风路径","地震速报","高铁查询","历史今日","汇率","自选股","宏观雷达","财经新闻","百度热榜","HackerNews","知识问答","每日一句","电子书","背单词","收音机","播客","白噪音","声音","蓝牙声纳","记分牌","手电筒","警示灯","随机转盘","移动监控","WiFi探测","二维码","健康记录","系统设置"]}},"required":["page"]}},{"name":"self.badge.add_item","description":"记一条内容并打开那一页，一次一条。text 写成对那一页直接说的话：闹钟「工作日7点半」，倒计时「5分钟」，待办「明天下午3点开会」，记账「午饭35元」，健康「喝水300毫升」「体重65公斤」，倒数日「春节2027年2月6日」，状态牌「开会中」，计算器「3加5乘2」，笔记「要记的话」，转盘「吃饭有烧烤、汉堡」，汇率「日元」，高铁「明天G7」。失败按返回提示改写再试。","inputSchema":{"type":"object","properties":{"kind":{"type":"string","enum":["闹钟","倒计时","待办","记账","健康","倒数日","状态牌","计算器","笔记","转盘","汇率","高铁"]},"text":{"type":"string"}},"required":["kind","text"]}},{"name":"self.badge.list_items","description":"列出某类内容，每条带序号（记账、健康只有今天的，笔记是最近 12 条）。删除或修改前先用它找到用户说的那条。","inputSchema":{"type":"object","properties":{"kind":{"type":"string","enum":["闹钟","待办","倒数日","记账","健康","笔记","自选股","汇率","高铁","状态牌","转盘"]}},"required":["kind"]}},{"name":"self.badge.delete_item","description":"删除 list_items 列出的第 index 条，一次一条。胸牌显示这条，用户长按下键确认后才删除，之后告诉用户「请长按下键确认删除」。只删对得上的；对不上或有多条相似时先问用户。","inputSchema":{"type":"object","properties":{"kind":{"type":"string","enum":["闹钟","待办","倒数日","记账","健康","笔记","自选股","汇率","高铁","状态牌","转盘"]},"index":{"type":"integer","minimum":1}},"required":["kind","index"]}},{"name":"self.badge.update_item","description":"修改 list_items 列出的第 index 条。闹钟：开启/关闭/每天/工作日/仅一次/改时间；待办：完成/未完成/改时间。改时间时 text 写新时间，如「7点半」「明天下午4点」。","inputSchema":{"type":"object","properties":{"kind":{"type":"string","enum":["闹钟","待办"]},"index":{"type":"integer","minimum":1},"action":{"type":"string","enum":["开启","关闭","每天","工作日","仅一次","改时间","完成","未完成"]},"text":{"type":"string"}},"required":["kind","index","action"]}},{"name":"self.badge.control","description":"胸牌上的操作。白噪音播放的 text 可写雨声/海浪/粉红噪音/棕噪音/白噪音；息屏时间的 value 是分钟。","inputSchema":{"type":"object","properties":{"action":{"type":"string","enum":["倒计时暂停","倒计时继续","倒计时停止","番茄钟开始","番茄钟暂停","番茄钟重置","秒表开始","秒表暂停","秒表清零","白噪音播放","红方加分","蓝方加分","撤销上一分","记分重开","立即锁屏","AI全部已读","息屏","状态牌常亮","状态牌不常亮","清除已完成待办","语音唤醒开","语音唤醒关","说功能名跳转开","说功能名跳转关","打开Mac程序开","打开Mac程序关","连电脑常亮开","连电脑常亮关","息屏时间"]},"text":{"type":"string"},"value":{"type":"integer"}},"required":["action"]}},{"name":"self.badge.query","description":"读胸牌上的数据来回答：设备（音量、亮度、电量、网络），记账（今天合计），闹钟（下一个和全部、倒计时），待办，健康（今天喝水和最近测量），倒数日（剩几天），天气，AI额度。","inputSchema":{"type":"object","properties":{"kind":{"type":"string","enum":["设备","记账","闹钟","待办","健康","倒数日","天气","AI额度"]}},"required":["kind"]}}]})";
+static_assert(sizeof(kMcpTools)<5600,"tools/list must fit mcp()'s reply");
 }
 // 语音指令: what came of a phrase sent on to 小智's model, as the page's notice: what it said, else what its tools did.
 void NativeServices::note(const char* text){const size_t n=strlen(toolNote_);snprintf(toolNote_+n,sizeof(toolNote_)-n,"%s%s",n?"，":"",text);}
 void NativeServices::modelDone(){
+    logVoice("完",modelAt_&&esp_timer_get_time()-modelAt_>15000000?"超时":"");
     copy(notice_,*answer_?answer_:*toolNote_?toolNote_:"小智没有回应，请再说一次");modelAt_=0;status("已完成");
 }
 // 小智 MCP: the chat's hello declares it, then the cloud's model lists and calls the badge's tools (JSON-RPC in "mcp"
 // messages). A setting is handed to LiveServices, which applies it on the main task as the keys would.
+// 小智 MCP: the 自选股 list (index 0) or delete its index-th (from 1), kept to at least one, as 自选股's long Down.
+bool NativeServices::stockItems(unsigned index,char* out,size_t size){
+    StockList list;if(!mediaLoad("stocks",list)||!list.count||list.count>StockList::kMax)list=defaultStocks();
+    if(!index){size_t used=0;for(unsigned i=0;i<list.count&&used<size;++i)used+=snprintf(out+used,size-used,"%s%u. %s",i?"；":"",i+1,list.items[i].name);return true;}
+    if(index>list.count){snprintf(out,size,"没有第 %u 只",index);return false;}
+    if(list.count==1){snprintf(out,size,"至少保留 1 只");return false;}
+    char name[24];copy(name,list.items[index-1].name);
+    std::copy(list.items+index,list.items+list.count,list.items+index-1);list.items[--list.count]={};
+    if(!mediaSave("stocks",list)){snprintf(out,size,"保存失败");return false;}
+    snprintf(out,size,"已删除%s",name);return true;
+}
 void NativeServices::mcp(const cJSON* payload){
     const double id=num(payload,"id");if(std::isnan(id))return;  // a notification: no reply
     const char* method=str(payload,"method");
-    char result[400];
+    char result[NativeServices::kMcpAnswer+160];
+    if(strcmp(method,"tools/call"))logVoice("mcp",method);
     if(!strcmp(method,"initialize"))snprintf(result,sizeof(result),R"("result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"ai-passport","version":"%s"}})",esp_app_get_description()->version);
     else if(!strcmp(method,"tools/list"))result[0]=0;  // the reply quotes kMcpTools itself
     else if(!strcmp(method,"tools/call")){
         const auto* call=item(payload,"params");const char* name=str(call,"name");const auto* arguments=item(call,"arguments");
-        char text[96];bool ok=true;
-        if(!strcmp(name,"self.get_device_status")){
-            const int volume=mcpVolume_.load(),light=mcpBrightness_.load();
-            snprintf(text,sizeof(text),"音量 %u，亮度 %u",volume>=0?unsigned(volume):board::volume(),light>=0?unsigned(light):board::brightness());
-        }else if(!strcmp(name,"self.audio_speaker.set_volume")){
+        char text[NativeServices::kMcpAnswer];bool ok=true;
+        if(!strcmp(name,"self.audio_speaker.set_volume")){
             const double v=num(arguments,"volume");ok=v>=0&&v<=100;
             if(ok){mcpVolume_=int(lround(v));snprintf(text,sizeof(text),"音量已设为 %d",mcpVolume_.load());note(text);}else copy(text,"音量要在 0-100 之间");
         }else if(!strcmp(name,"self.screen.set_brightness")){
             const double v=num(arguments,"brightness");ok=v>=0&&v<=100;
             if(ok){mcpBrightness_=std::max(10,int(lround(v)));snprintf(text,sizeof(text),"亮度已设为 %d",mcpBrightness_.load());note(text);}else copy(text,"亮度要在 10-100 之间");
-        }else if(!strcmp(name,"self.badge.open_page")||!strcmp(name,"self.badge.add_item")){
-            // LiveServices opens the page (and says the text to it) on the main task; its notice is the answer.
-            const bool add=name[11]=='a';copy(mcpJob_.page,str(arguments,add?"kind":"page"));copy(mcpJob_.text,add?str(arguments,"text"):"");
-            ok=*mcpJob_.page&&(!add||*mcpJob_.text);
-            if(ok){
+        }else if(!strncmp(name,"self.badge.",11)){
+            // LiveServices does it on the main task: open_page / add_item open the page (and say the text to it), the
+            // others leave it closed, so the phrase's session goes on. Its answer is the tool's.
+            static constexpr const char* verbs[]{"open_page","add_item","list_items","delete_item","update_item","control","query"};
+            int op=-1;for(unsigned i=0;i<std::size(verbs);++i)if(!strcmp(name+11,verbs[i]))op=int(i);
+            auto& job=mcpJob_;job={};
+            copy(job.page,str(arguments,op==0?"page":op==5?"action":"kind"));copy(job.text,str(arguments,"text"));copy(job.action,str(arguments,"action"));
+            const double index=num(arguments,"index"),value=num(arguments,"value");
+            job.index=index>=1&&index<=99?unsigned(index):0;job.value=std::isfinite(value)?int(std::clamp(value,-100000.0,100000.0)):0;
+            job.op=op==1?McpJob::Open:op>=2?McpJob::Op(op-1):McpJob::Open;
+            ok=op>=0&&*job.page&&(op!=1||*job.text)&&((op!=3&&op!=4)||job.index)&&(op!=4||*job.action);
+            if(ok&&op==2&&!strcmp(job.page,"自选股"))ok=stockItems(0,text,sizeof(text));  // kept on this side
+            else if(ok){
                 mcpWaiting_=true;
                 for(unsigned i=0;i<100&&mcpWaiting_.load();++i)vTaskDelay(pdMS_TO_TICKS(20));
                 const bool answered=!mcpWaiting_.exchange(false);ok=answered&&mcpOk_;
-                copy(text,answered?mcpResult_:"胸牌忙，请稍后再试");if(ok)note(text);
-                // The answer may quote what was heard: keep the JSON string whole.
-                for(char* c=text;*c;++c)if(*c=='"'||*c=='\\')*c='\'';
-            }else copy(text,add?"缺少 kind 或 text":"缺少 page");
+                copy(text,answered?mcpResult_:"胸牌忙，请稍后再试");
+            }else copy(text,"参数不对");
+            if(ok&&op!=2&&op!=6)note(text);
+            // 语音指令 shows each step as it happens.
+            toolUsed_=true;saidAt_=0;snprintf(notice_,sizeof(notice_),"小智：%.140s",op==2||op==6?"正在查看":text);status("小智处理中","loading");
+            // The answer may quote what was heard: keep the JSON string whole.
+            for(char* c=text;*c;++c)if(*c=='"'||*c=='\\')*c='\'';else if(static_cast<unsigned char>(*c)<' ')*c=' ';
         }else{ok=false;copy(text,"没有这个工具");}
+        {char* args=cJSON_PrintUnformatted(arguments);char line[200];snprintf(line,sizeof(line),"%s %.60s %s %.100s",name+(strncmp(name,"self.",5)?0:5),args?args:"",ok?"成功":"失败",text);cJSON_free(args);logVoice("调",line);}
         snprintf(result,sizeof(result),R"("result":{"content":[{"type":"text","text":"%s"}],"isError":%s})",text,ok?"false":"true");
     }else copy(result,R"("error":{"code":-32601,"message":"Method not found"})");
     const bool list=!strcmp(method,"tools/list");
-    char reply[3200];
-    const int size=snprintf(reply,sizeof(reply),R"({"session_id":"%s","type":"mcp","payload":{"jsonrpc":"2.0","id":%.0f,%s%s}})",session_,id,list?R"("result":)":result,list?kMcpTools:"");
-    if(size>0&&size<int(sizeof(reply)))esp_transport_ws_send_raw(ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_TEXT|WS_TRANSPORT_OPCODES_FIN),reply,size,250);
+    constexpr size_t kReply=sizeof(kMcpTools)+400;auto reply=std::unique_ptr<char[]>(new(std::nothrow)char[kReply]);if(!reply)return;
+    const int size=snprintf(reply.get(),kReply,R"({"session_id":"%s","type":"mcp","payload":{"jsonrpc":"2.0","id":%.0f,%s%s}})",session_,id,list?R"("result":)":result,list?kMcpTools:"");
+    if(size>0&&size<int(kReply))esp_transport_ws_send_raw(ws_,static_cast<ws_transport_opcodes_t>(WS_TRANSPORT_OPCODES_TEXT|WS_TRANSPORT_OPCODES_FIN),reply.get(),size,250);
 }
 // 语音笔记 (and 状态牌's spoken label): chat's connection, but each note listens from Confirm to Confirm and only the text the cloud heard is
 // kept: chat() returns on it, so the connection closes before the cloud's reply arrives. The next connection opens

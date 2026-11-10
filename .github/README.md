@@ -1,7 +1,7 @@
 # ai-passport-all-in-one
 
 AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个按键）的自制固件，C++20 + ESP-IDF 6.1 + LVGL 9.5。
-这里是 **0.5.42** 的源码；[最近发布的固件为 0.5.42](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/v0.5.42)。
+这里是 **0.5.43** 的源码；[最近发布的固件为 0.5.43](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/v0.5.43)。
 
 主页是时钟和天气，默认菜单六页、共 48 项功能（每页 8 个，均少于 9 个，九宫格不溢出）：
 
@@ -15,6 +15,16 @@ AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个�
 | 工具 · 设置 | 手电筒、警示灯、随机转盘、移动监控、WiFi探测、二维码、健康记录、系统设置 |
 
 **基本上所有功能都能用语音操作。**喊「你好小智」或在任何页面双击确认键，打开语音指令后直接说：打开哪个功能、调音量和亮度、定闹钟和倒计时、加待办、记账、记健康数据、添加倒数日、换状态牌、算数，或者让 Mac 打开程序。说法不用很标准，胸牌自己听不懂的话会交给小智的大模型理解，再由它调用胸牌的功能（小智 MCP 设备工具）。唤醒开关在「系统设置 › 唤醒与对讲」；小智语音服务需要联网并完成激活。
+
+## 0.5.43 更新：双击就能说，小智能删、能改、能查
+
+- **双击马上就能说**：双击确认键后约 0.1 秒就开始录音，连接小智的那一两秒里说的话会先存着，连上后一起发出去，不用再等「云端连接中」。开机后第一次使用仍要先连一下。
+- **小智回得更快**：小智的回复一到就显示，不再等它的语音放完（语音指令本来就不播），一句话通常能快 3～4 秒；处理过程中屏幕会显示小智正在做哪一步。
+- **删除**：「帮我删掉明天两点半的会议提醒」「把 7 点的闹钟删了」。可删闹钟、待办、倒数日、今天的记账和健康记录、笔记、自选股、汇率、高铁行程、状态牌、转盘。删除前屏幕会显示要删的那一条，**长按下键才真正删除**，按其他键、离开页面或 20 秒不确认都不删，一次一条。
+- **修改**：闹钟开关、改成每天 / 工作日 / 仅一次、改时间（「把 7 点的闹钟改成 7 点半」）；待办标记完成或改时间（「开会那条待办我做完了」）。
+- **页面操作**：倒计时暂停 / 继续 / 停止，番茄钟开始 / 暂停 / 重置，秒表，白噪音（「放点雨声」），记分（「红方加一分」），立即锁电脑，AI 回复全部已读，息屏，状态牌常亮，清除已完成待办，语音唤醒等开关，息屏时间（「息屏时间改成 2 分钟」）。
+- **查询**：「电量还剩多少」「我今天花了多少钱」「下一个闹钟几点」「今天喝了多少水」「离春节还有几天」「今天天气怎么样」「AI 额度还剩多少」。
+- 添加内容新增笔记、转盘、汇率、高铁行程（「记一下明天带伞」「加一个日元汇率」「明天坐 G7」）。自选股和所在城市要联网查找，仍请在对应页面说。
 
 ## 0.5.42 更新：语音控制大幅加强
 
@@ -162,9 +172,9 @@ tests/                          电脑助手与固件数据解析的宿主测试
 
 ## 下载固件
 
-- [0.5.42 完整固件包](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.42/ai-passport-0.5.42-esp32c3.zip)：应用、引导程序、分区表、唤醒词模型及刷机说明。
-- [仅应用 passport_device.bin](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.42/passport_device.bin)：已安装本项目固件时使用。
-- [SHA256SUMS](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.42/SHA256SUMS)：下载校验。
+- [0.5.43 完整固件包](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.43/ai-passport-0.5.43-esp32c3.zip)：应用、引导程序、分区表、唤醒词模型及刷机说明。
+- [仅应用 passport_device.bin](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.43/passport_device.bin)：已安装本项目固件时使用。
+- [SHA256SUMS](https://github.com/KevinCJM/ai-passport-all-in-one/releases/download/v0.5.43/SHA256SUMS)：下载校验。
 
 适用于上述 ESP32-C3、8 MB Flash、无PSRAM的 AI Passport。升级保留原分区表和设置，只写应用；首次安装按下文「刷机」操作。下载包解压后的文件布局与编译产物一致。
 

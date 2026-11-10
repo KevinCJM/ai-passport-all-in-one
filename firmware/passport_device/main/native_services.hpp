@@ -8,13 +8,16 @@
 #include "hot_board.hpp"
 #include "train.hpp"
 #include <atomic>
+#include <memory>
 
 struct cJSON;
 namespace passport {
 // 中英翻译: what was heard and its translation (toEnglish: Chinese was heard), by engine 1 腾讯翻译君 / 2 MyMemory, 0 none.
 struct TranslationText{char source[600],result[900];bool toEnglish;uint8_t engine;};
-// 小智 MCP: open the page named, then (text not empty) say text to it as if heard there.
-struct McpJob{char page[32],text[128];};
+// 小智 MCP: open the page named, then (text not empty) say text to it as if heard there; or (op) list what a kind
+// holds, delete / update its index-th (from 1), a control action (page = its name), a query: the page staying closed.
+struct McpJob{enum Op:uint8_t{Open,List,Delete,Update,Control,Query};char page[32],text[128],action[32];Op op;unsigned index;int value;};
+void voiceTimes(char* out,size_t size,bool log);  // the last cloud session's start-up times (ms), for /status
 class NativeServices {
     struct Job{App app{};uint32_t generation{},request{};char operation[32]{};};  // 32: 高铁查询's "t:<train>:<day>:<from>:<to>"
     using Reply=bool(*)(void*,const char*);
@@ -46,11 +49,16 @@ class NativeServices {
     // 小智 MCP: the volume and the brightness the chat's model asked for, until LiveServices (main task) applies them; -1 none.
     std::atomic<int> mcpVolume_{-1},mcpBrightness_{-1};
     // 小智 MCP: a page to open, or (text) one to say something to, done by LiveServices; the task waits for its answer.
-    McpJob mcpJob_{};std::atomic<bool> mcpWaiting_{};bool mcpOk_{};char mcpResult_[96]{};
+    McpJob mcpJob_{};std::atomic<bool> mcpWaiting_{};bool mcpOk_{};char mcpResult_[640]{};  // kMcpAnswer
     void mcp(const cJSON* payload);
     // 语音指令: LiveServices did not know the phrase (askModel_), so the connection stays open for 小智's model from
     // modelAt_ (0 = not waiting); toolNote_ is what its tools did.
     std::atomic<bool> askModel_{};int64_t modelAt_{};char toolNote_[96]{};
+    // 语音指令 listens from the double Confirm: what is said while the connection opens waits here (Opus frames, each
+    // after its 2-byte length), sent once the cloud is listening.
+    static constexpr size_t kPreroll=6144;std::unique_ptr<uint8_t[]> preroll_;size_t prerollUsed_{};std::atomic<bool> prerolling_{};
+    int connectSocket(const char* host,int port);
+    int64_t saidAt_{};bool toolUsed_{};  // when its reply's first sentence came (0 none); whether a tool ran
     void note(const char*);void modelDone();
     static void run(void*);
     static void audioOutput(void*,uint8_t,const uint8_t*,size_t);
@@ -124,7 +132,11 @@ public:
     int takeVolume(){return mcpVolume_.exchange(-1);}
     int takeBrightness(){return mcpBrightness_.exchange(-1);}
     const McpJob* mcpJob()const{return mcpWaiting_.load()?&mcpJob_:nullptr;}
-    void mcpDone(bool ok,const char* result){mcpOk_=ok;snprintf(mcpResult_,sizeof(mcpResult_),"%s",result);mcpWaiting_=false;}
+    char* mcpAnswer(){return mcpResult_;}  // LiveServices writes the answer here, then calls mcpDone
+    static constexpr size_t kMcpAnswer=640;
+    void mcpDone(bool ok){mcpOk_=ok;mcpWaiting_=false;}
+    // 自选股 for 小智 MCP: its list (index 0), or delete its index-th (from 1). Only media NVS: any task.
+    bool stockItems(unsigned index,char* out,size_t size);
     void speakText(const char* text);  // before LiveServices asks 飞书提醒's "say"
     const TranslationText* translated()const{return translated_.load()?&page_.translation:nullptr;}
     void translationTaken(){translated_=false;}

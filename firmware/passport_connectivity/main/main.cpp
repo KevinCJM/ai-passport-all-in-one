@@ -18,6 +18,7 @@
 #include "live_services.hpp"
 #include "ble_dictation.hpp"
 #include "ppp_link.hpp"
+namespace passport{void voiceTimes(char* out,size_t size,bool log);}  // native_services.cpp (device only)
 #include "mbedtls/base64.h"
 #ifdef PASSPORT_DEVICE
 #define PASSPORT_SIMULATOR_JSON "false"
@@ -124,6 +125,7 @@ void state(char* data, size_t size) {
 #ifdef PASSPORT_DEVICE
     {const size_t tail=strlen(data);if(tail+48<size)snprintf(data+tail-1,size-tail+1,",\"slides\":[%d,%u,%u]}",slidesBle.ready(),slidesBle.sent.load(),slidesBle.failed.load());}
     {char wake[96];tools::wakeStatus(wake,sizeof(wake));const size_t tail=strlen(data);if(tail+strlen(wake)+12<size)snprintf(data+tail-1,size-tail+1,",\"wake\":%s}",wake);}
+    {char times[64];passport::voiceTimes(times,sizeof(times),false);const size_t tail=strlen(data);if(tail+strlen(times)+16<size)snprintf(data+tail-1,size-tail+1,",\"voice_ms\":%s}",times);}
     {char walkie[96];tools::walkieStatus(walkie,sizeof(walkie));const size_t tail=strlen(data);if(tail+strlen(walkie)+14<size)snprintf(data+tail-1,size-tail+1,",\"walkie\":%s}",walkie);}
 #endif
     {const size_t tail=strlen(data);if(tail+80<size)snprintf(data+tail-1,size-tail+1,",\"wifi_saved\":%u,\"wifi_scans\":%u,\"wifi_joins\":%u,\"wifi_connecting\":%s}",runtime.model.wifiSavedCount,wifiScans.load(),wifiJoins.load(),wifiConnecting?"true":"false");}
@@ -497,6 +499,7 @@ esp_err_t statusGet(httpd_req_t* request) {
     // ponytail: temporary memory survey; remove with passport_memory_report.
     if(strstr(request->uri,"?mem"))passport_memory_report(data,sizeof(data));else
     if(strstr(request->uri,"?cpu"))passport_cpu_report(data,sizeof(data));else
+    if(strstr(request->uri,"?voice"))passport::voiceTimes(data,sizeof(data),true);else
 #endif
     state(data,sizeof(data));
     httpd_resp_set_type(request,"application/json");
@@ -810,6 +813,10 @@ int execute(const char* name) {
     // 离座锁屏: a long Up calibrates the at-desk signal, a long Down locks the computer now.
     if (previous==App::Guard&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {runtime.wake(now);live.guardCommand(!strcmp(name,"ap_on"));return 0;}
     if (previous==App::Feishu&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {runtime.wake(now);live.feishuCommand(!strcmp(name,"ap_on"));return 0;}
+    // 语音指令: a long Down confirms the delete 小智 asked for.
+#ifdef PASSPORT_DEVICE
+    if (previous==App::Voice&&!strcmp(name,"settings")) {runtime.wake(now);live.confirmDrop();return 0;}
+#endif
     // AI 控制器: a long Down marks every reply read.
     if (previous==App::Codex&&!strcmp(name,"settings")) {runtime.wake(now);live.aiReadAll();return 0;}
     // 中英翻译: a long Up reads the translation aloud.

@@ -53,6 +53,9 @@ class LiveServices {
     int trainPickAsked_{-1}; // and the stop whose 检票口 was last asked for
     uint64_t trainAskedAt_{};  // when (monotonic seconds)
     char trainHeard_[160]{};  // 语音指令: a train said, for 高铁查询 once it opens
+    uint8_t afterEnter_{};    // 小智 MCP: 2 lock the computer, 3 mark every AI reply read, once that page is entered
+    struct{App page{App::Count};unsigned index{};char label[100]{};} dropAsk_;  // 小智 MCP: a delete awaiting a long Down
+    bool itemLine(App page,unsigned n,char* out,size_t size);
     uint32_t voiceJob_{};   // a phrase being spoken on 汇率, 自选股 or 所在城市 (its request): timed refreshes wait
 #ifdef PASSPORT_DEVICE
     NativeServices* native_{};bool deferredAudio_{};
@@ -74,6 +77,7 @@ public:
     void speak();
     // 自选股: a long Down asks to delete the picked security, a second one has the device delete it.
     void dropStock();
+    void confirmDrop();  // 语音指令: a long Down deletes what 小智 asked to
     void say();
     // 离座锁屏: a long Up takes the current signal as the at-desk level, a long Down locks the computer now.
     void guardCommand(bool calibrate) { if(runtime_.active()==App::Guard) request(calibrate?"cal":"lock"); }

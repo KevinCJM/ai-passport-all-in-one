@@ -357,6 +357,7 @@ struct Model {
     unsigned sonarVisible(uint8_t* order) const;
     char weather[80]{"晴 26°C   湿度 65%"};
     char lastNotice[160]{};
+    bool voiceDropAsk{};  // 语音指令: 小智 asked to delete something; a long Down confirms
     void notify(const char* text);
     void tick(App active, uint64_t now);
     void action(App app, uint64_t now);
@@ -419,6 +420,17 @@ public:
     App selectedApp()const{return kFunctions[selection_];}
     bool setIdleMinutes(uint32_t minutes);
     bool setBrightness(unsigned percent);  // 10-100, saved (小智 MCP)
+    // 小智 MCP: what 闹钟, 待办提醒, 倒数日 or 语音记账 (today) holds, numbered from 1 ("；" between), or delete the
+    // n-th of those. Neither opens the page; out says what came of it. False: not such a page, or it failed.
+    bool voiceList(App page, char* out, size_t size);
+    bool voiceDelete(App page, unsigned n, char* out, size_t size);
+    // 闹钟: 开启/关闭/每天/工作日/仅一次/改时间, 待办: 完成/未完成/改时间 (text the new time), on the n-th voiceList shows.
+    bool voiceUpdate(App page, unsigned n, const char* action, const char* text, char* out, size_t size);
+    // A page action by name (倒计时暂停, 番茄钟开始, 红方加分, 语音唤醒开 ...): 1 done, 0 failed; 2 立即锁屏 and 3 AI全部已读
+    // opened their page, and LiveServices asks the computer once the page is entered.
+    int voiceControl(const char* action, const char* text, int value, char* out, size_t size);
+    // What a kind (记账, 闹钟, 待办, 健康, 倒数日, 天气, AI额度) knows now, as text for 小智 to answer from.
+    bool voiceQuery(const char* kind, char* out, size_t size);
     bool settingsKey(Key key);
     // 已保存的 WiFi: rereads the names; rememberWifi puts a joined network first and makes it the one tried at boot;
     // forgetWifi (a long Down on its row, twice) deletes the selected one.

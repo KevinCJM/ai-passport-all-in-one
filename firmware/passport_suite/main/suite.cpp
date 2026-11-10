@@ -752,6 +752,338 @@ void Runtime::endTodoRing(TodoRing how) {
     else if (how == TodoRing::Snooze) strcpy(m.lastNotice, "10 分钟后再提醒");
     reloadTodo();
 }
+// 小智 MCP. What voiceList numbers, voiceDelete and voiceUpdate take by that number: today's entries for 记账 and
+// 健康记录, the newest 12 notes, the user's own 倒数日 / 状态牌 labels. None of these opens the page.
+namespace {
+struct VoiceLines {
+    char* out; size_t size, used{}; unsigned n{};
+    template <class... A> void line(const char* format, A... values) {
+        if (used + 8 >= size) return;
+        used += snprintf(out + used, size - used, "%s%u. ", n ? "；" : "", n + 1); ++n;
+        if (used < size) used += snprintf(out + used, size - used, format, values...);
+        used = std::min(used, size - 1);
+    }
+};
+// The n-th (from 1) of today's health records, its index in the book; -1 none.
+int healthToday(const HealthBook& b, unsigned n) {
+    const time_t today = ledgerToday();
+    for (unsigned i = 0; i < b.count; ++i) if (!(b.items[i].flags & HealthBook::kDeleted) && time_t(b.items[i].at) >= today && !--n) return int(i);
+    return -1;
+}
+int countdownSlot(const CountdownBoard& c, unsigned n) {
+    for (unsigned i = 0; i < CountdownBoard::kEvents; ++i) if (*c.events[i].name && !--n) return int(i);
+    return -1;
+}
+constexpr unsigned kVoiceMemos = 12;
+}
+bool Runtime::voiceList(App page, char* out, size_t size) {
+    auto& m = model; VoiceLines l{out, size}; const time_t now = time(nullptr);
+    *out = 0;
+    if (page == App::Alarm) {
+        static const char* const modes[]{"已关闭", "每天", "工作日", "仅一次"};
+        for (unsigned i = 0; i < m.alarms.count; ++i) { const auto& a = m.alarms.items[i]; l.line("%s %02u:%02u", modes[a.mode & 3], a.hour, a.minute); }
+    } else if (page == App::Todo) {
+        std::unique_ptr<TodoList> list(new (std::nothrow) TodoList); if (!list) return snprintf(out, size, "内存不足"), false;
+        SettingsStore::loadTodo(*list); list->sort();
+        for (unsigned i = 0; i < list->count; ++i) {
+            const auto& t = list->items[i]; char when[32] = "不提醒"; if (t.at) todoWhen(t.at, now, when, sizeof(when));
+            l.line("%s %s%s", when, t.text, (t.flags & TodoList::kDone) ? "（已完成）" : "");
+        }
+    } else if (page == App::Countdown) {
+        for (const auto& e : m.countdown.events) if (*e.name)
+            l.line("%s %lu年%lu月%lu日%s", e.name, static_cast<unsigned long>(e.date / 10000), static_cast<unsigned long>(e.date / 100 % 100), static_cast<unsigned long>(e.date % 100),
+                   (e.flags & CountdownBoard::kLunar) ? "（农历，每年）" : (e.flags & CountdownBoard::kYearly) ? "（每年）" : "");
+    } else if (page == App::Ledger) {
+        std::unique_ptr<LedgerBook> book(new (std::nothrow) LedgerBook); if (!book) return snprintf(out, size, "内存不足"), false;
+        SettingsStore::loadLedger(*book); uint8_t order[LedgerBook::kMax]; const unsigned shown = book->shown(ledgerToday(), order);
+        for (unsigned i = 0; i < shown; ++i) { const auto& e = book->items[order[i]]; char amount[24]; ledgerAmount(e.cents, amount, sizeof(amount)); l.line("%s %s %s", e.note, kLedgerCategories[e.category], amount); }
+    } else if (page == App::Health) {
+        std::unique_ptr<HealthBook> book(new (std::nothrow) HealthBook); if (!book) return snprintf(out, size, "内存不足"), false;
+        SettingsStore::loadHealth(*book);
+        for (unsigned n = 1;; ++n) {
+            const int i = healthToday(*book, n); if (i < 0) break;
+            const auto& e = book->items[i]; char value[24]; healthValue(e, value, sizeof(value)); tm t{}; const time_t at = e.at; localtime_r(&at, &t);
+            l.line("%02d:%02d %s %s%s", t.tm_hour, t.tm_min, kHealthNames[e.kind % kHealthKinds], value, healthUnit(HealthKind(e.kind % kHealthKinds)));
+        }
+    } else if (page == App::Memo) {
+        const bool mounted = m.memoMounted || MemoStore::mount(); if (!mounted) return snprintf(out, size, "笔记读取失败"), false;
+        std::unique_ptr<MemoNote> note(new (std::nothrow) MemoNote);
+        const unsigned count = note ? std::min(MemoStore::count(), kVoiceMemos) : 0;
+        for (unsigned i = 0; i < count; ++i) if (MemoStore::load(i, *note)) { size_t b = 0; for (unsigned c = 0; c < 20 && note->text[b]; ++c) b += voice::charBytes(static_cast<unsigned char>(note->text[b])); l.line("%.*s", int(b), note->text); }
+        if (!m.memoMounted) MemoStore::unmount();
+    } else if (page == App::Rate) {
+        RateBoard board; if (!SettingsStore::loadRates(board)) board = {};
+        for (const auto& t : board.targets) if (*t) l.line("%s", currencyName(t));
+    } else if (page == App::Train) {
+        const auto trips = loadTrips(); if (!trips) return snprintf(out, size, "内存不足"), false;
+        for (unsigned i = 0; i < trips->count; ++i) { const auto& t = trips->items[i];
+            l.line("%lu月%lu日 %s %s→%s %02u:%02u", static_cast<unsigned long>(t.date / 100 % 100), static_cast<unsigned long>(t.date % 100), t.code, t.from, t.to, t.depart % 1440 / 60, t.depart % 60); }
+    } else if (page == App::Status) {
+        for (const auto& c : m.status.custom) if (*c) l.line("%s", c);
+    } else if (page == App::Wheel) {
+        std::unique_ptr<WheelBoard> w(new (std::nothrow) WheelBoard); if (!w) return snprintf(out, size, "内存不足"), false;
+        if (!SettingsStore::loadWheel(*w)) *w = defaultWheel();
+        for (unsigned i = 0; i < w->count; ++i) l.line("%s", w->modes[i].name);
+    } else return snprintf(out, size, "这一页不能列出内容"), false;
+    if (!l.n) snprintf(out, size, "没有内容");
+    return true;
+}
+bool Runtime::voiceDelete(App page, unsigned n, char* out, size_t size) {
+    auto& m = model;
+    const auto done = [&](bool saved) { snprintf(out, size, saved ? "已删除第 %u 条" : "保存失败", n); return saved; };
+    const auto none = [&]() { snprintf(out, size, "没有第 %u 条", n); return false; };
+    if (!n) return none();
+    if (page == App::Alarm) {
+        auto& list = m.alarms;
+        if (m.alarmRinging) return snprintf(out, size, "闹钟正在响"), false;
+        if (n > list.count) return none();
+        std::copy(list.items + n, list.items + list.count, list.items + n - 1); list.items[--list.count] = {};
+        if (m.alarmIndex > list.count) m.alarmIndex = list.count;
+        return done(SettingsStore::saveAlarms(list));
+    }
+    if (page == App::Todo) {
+        if (m.todoRinging || active_ == App::Todo) return snprintf(out, size, "待办页正在使用，请稍后"), false;
+        std::unique_ptr<TodoList> list(new (std::nothrow) TodoList); if (!list) return snprintf(out, size, "内存不足"), false;
+        SettingsStore::loadTodo(*list); list->sort();
+        if (n > list->count) return none();
+        std::copy(list->items + n, list->items + list->count, list->items + n - 1); list->items[--list->count] = {};
+        const bool saved = SettingsStore::saveTodo(*list); reloadTodo();
+        return done(saved);
+    }
+    if (page == App::Countdown) {
+        const int slot = countdownSlot(m.countdown, n); if (slot < 0) return none();
+        m.countdown.events[slot] = {}; m.countdownIndex = 0;
+        return done(SettingsStore::saveCountdown(m.countdown));
+    }
+    if (page == App::Ledger) {
+        if (active_ == App::Ledger) return snprintf(out, size, "记账页正在使用，请稍后"), false;
+        std::unique_ptr<LedgerBook> book(new (std::nothrow) LedgerBook); if (!book) return snprintf(out, size, "内存不足"), false;
+        bool found = false;
+        const bool ok = editLedger(*book, [&](LedgerBook& b) {
+            uint8_t order[LedgerBook::kMax]; const unsigned shown = b.shown(ledgerToday(), order);
+            found = n <= shown; if (found) b.remove(order[n - 1]); return found; });
+        return found ? done(ok) : none();
+    }
+    if (page == App::Health) {
+        if (active_ == App::Health) return snprintf(out, size, "健康页正在使用，请稍后"), false;
+        std::unique_ptr<HealthBook> book(new (std::nothrow) HealthBook); if (!book) return snprintf(out, size, "内存不足"), false;
+        bool found = false;
+        const bool ok = editHealth(*book, [&](HealthBook& b) { const int i = healthToday(b, n); found = i >= 0; if (found) b.remove(unsigned(i)); return found; });
+        return found ? done(ok) : none();
+    }
+    if (page == App::Memo) {
+        if (active_ == App::Memo) return snprintf(out, size, "笔记页正在使用，请稍后"), false;
+        if (!MemoStore::mount()) return snprintf(out, size, "笔记读取失败"), false;
+        const bool found = n <= std::min(MemoStore::count(), kVoiceMemos), ok = found && MemoStore::remove(n - 1);
+        MemoStore::unmount();
+        return found ? done(ok) : none();
+    }
+    if (page == App::Rate) {
+        RateBoard board; if (!SettingsStore::loadRates(board)) board = {};
+        char* picked = nullptr; unsigned seen = 0, used = 0;
+        for (auto& t : board.targets) if (*t) { ++used; if (++seen == n) picked = t; }
+        if (!picked) return none();
+        if (used == 1) return snprintf(out, size, "至少保留 1 种货币"), false;
+        unsigned kept = 0;
+        for (auto& t : board.targets) if (*t && t != picked) memmove(board.targets[kept++], t, sizeof(t));
+        for (unsigned i = kept; i < RateBoard::kTargets; ++i) *board.targets[i] = 0;
+        return done(SettingsStore::saveRates(board));
+    }
+    if (page == App::Train) {
+        if (active_ == App::Train) return snprintf(out, size, "高铁页正在使用，请稍后"), false;
+        auto trips = loadTrips(); if (!trips) return snprintf(out, size, "内存不足"), false;
+        if (n > trips->count) return none();
+        trips->remove(n - 1); const bool ok = SettingsStore::saveTrain(*trips);
+        m.trainTrips = trips->count; trainNote(m, *trips, time(nullptr));
+        return done(ok);
+    }
+    if (page == App::Status) {
+        auto& b = m.status; unsigned at = 0, seen = 0;
+        for (unsigned i = 0; i < StatusBoard::kCustom; ++i) if (*b.custom[i] && ++seen == n) at = i + 1;
+        if (!at) return none();
+        for (unsigned i = at - 1; i + 1 < StatusBoard::kCustom; ++i) memcpy(b.custom[i], b.custom[i + 1], sizeof(b.custom[i]));
+        *b.custom[StatusBoard::kCustom - 1] = 0;
+        if (b.index >= m.statusCount()) b.index = 0;
+        return done(SettingsStore::saveStatus(b));
+    }
+    if (page == App::Wheel) {
+        if (active_ == App::Wheel) return snprintf(out, size, "转盘页正在使用，请稍后"), false;
+        std::unique_ptr<WheelBoard> w(new (std::nothrow) WheelBoard); if (!w) return snprintf(out, size, "内存不足"), false;
+        if (!SettingsStore::loadWheel(*w)) *w = defaultWheel();
+        if (n > w->count) return none();
+        std::copy(w->modes + n, w->modes + w->count, w->modes + n - 1); w->modes[--w->count] = {};
+        if (w->current >= w->count) w->current = w->count ? w->count - 1 : 0;
+        return done(SettingsStore::saveWheel(*w));
+    }
+    return snprintf(out, size, "这一页不能删除"), false;
+}
+bool Runtime::voiceUpdate(App page, unsigned n, const char* action, const char* text, char* out, size_t size) {
+    auto& m = model; const time_t now = time(nullptr);
+    const auto is = [&](const char* a) { return !strcmp(action, a); };
+    if (page == App::Alarm) {
+        auto& list = m.alarms;
+        if (!n || n > list.count) return snprintf(out, size, "没有第 %u 个闹钟", n), false;
+        auto& a = list.items[n - 1];
+        if (is("改时间")) {
+            const auto parsed = m.clockValid ? parseAlarm(text, now) : AlarmParse{};
+            if (!parsed.ok) return snprintf(out, size, "%s", parsed.error ? parsed.error : "没听懂时间"), false;
+            a.hour = parsed.hour; a.minute = parsed.minute;
+            if (!a.mode || strstr(text, "每天") || strstr(text, "工作日") || strstr(text, "一次")) a.mode = parsed.mode;
+        } else if (is("关闭")) a.mode = 0;
+        else if (is("开启")) { if (!a.mode) a.mode = 1; }
+        else if (is("每天")) a.mode = 1;
+        else if (is("工作日")) a.mode = 2;
+        else if (is("仅一次")) a.mode = 3;
+        else return snprintf(out, size, "闹钟不能「%s」", action), false;
+        m.alarmSnooze = 0;
+        static const char* const modes[]{"已关闭", "每天", "工作日", "仅一次"};
+        if (!SettingsStore::saveAlarms(list)) return snprintf(out, size, "保存失败"), false;
+        return snprintf(out, size, "第 %u 个闹钟：%s %02u:%02u", n, modes[a.mode & 3], a.hour, a.minute), true;
+    }
+    if (page == App::Todo) {
+        if (m.todoRinging || active_ == App::Todo) return snprintf(out, size, "待办页正在使用，请稍后"), false;
+        std::unique_ptr<TodoList> list(new (std::nothrow) TodoList); if (!list) return snprintf(out, size, "内存不足"), false;
+        SettingsStore::loadTodo(*list); list->sort();
+        if (!n || n > list->count) return snprintf(out, size, "没有第 %u 条待办", n), false;
+        auto& t = list->items[n - 1];
+        if (is("完成")) t.flags |= TodoList::kDone | TodoList::kRung;
+        else if (is("未完成")) t.flags &= ~(TodoList::kDone | TodoList::kRung);
+        else if (is("改时间")) {
+            const auto parsed = parseTodo(text, now);
+            if (!parsed.at || !m.clockValid) return snprintf(out, size, "没听懂时间"), false;
+            t.at = static_cast<uint32_t>(parsed.at); t.flags &= ~(TodoList::kDone | TodoList::kRung);
+        } else return snprintf(out, size, "待办不能「%s」", action), false;
+        list->sort(); const bool saved = SettingsStore::saveTodo(*list); reloadTodo();
+        return snprintf(out, size, saved ? "已更新第 %u 条待办" : "保存失败", n), saved;
+    }
+    return snprintf(out, size, "这一页不能修改"), false;
+}
+int Runtime::voiceControl(const char* action, const char* text, int value, char* out, size_t size) {
+    auto& m = model; const uint64_t us = esp_timer_get_time();
+    const auto is = [&](const char* a) { return !strcmp(action, a); };
+    const auto say = [&](const char* note) { snprintf(out, size, "%s", note); return 1; };
+    const auto fail = [&](const char* note) { snprintf(out, size, "%s", note); return 0; };
+    if (is("倒计时暂停")) { if (!m.timerEnd) return fail("倒计时没有在走"); m.timerLeft = std::max<uint32_t>(1, m.timerShown(now_)); m.timerEnd = 0; return say("倒计时已暂停"); }
+    if (is("倒计时继续")) { if (!m.timerLeft) return fail("没有暂停的倒计时"); m.timerEnd = now_ + m.timerLeft; m.timerLeft = 0; return say("倒计时继续"); }
+    if (is("倒计时停止")) { if (!m.timerEnd && !m.timerLeft) return fail("没有倒计时"); m.timerEnd = 0; m.timerLeft = 0; return say("倒计时已停止"); }
+    if (is("番茄钟开始")) { if (!m.focusRunning) m.action(App::Focus, now_); switchTo(App::Focus); return say("番茄钟开始"); }
+    if (is("番茄钟暂停")) { if (!m.focusRunning) return fail("番茄钟没有在走"); m.action(App::Focus, now_); return say("番茄钟已暂停"); }
+    if (is("番茄钟重置")) { m.focusRunning = m.focusFinished = false; m.focusRemaining = m.focusDuration; return say("番茄钟已重置"); }
+    if (is("秒表开始")) { if (!m.swRunning) { m.swStarted = us; m.swRunning = true; } switchTo(App::Stopwatch); return say("秒表开始"); }
+    if (is("秒表暂停")) { if (!m.swRunning) return fail("秒表没有在走"); m.swBase += us - m.swStarted; m.swRunning = false; return say("秒表已暂停"); }
+    if (is("秒表清零")) { m.swRunning = false; m.swBase = 0; m.swLapCount = 0; m.swLaps = {}; return say("秒表已清零"); }
+    if (is("白噪音播放")) {
+        unsigned kind = 0; for (unsigned i = 0; i < std::size(kNoiseSounds); ++i) if (*text && strstr(text, kNoiseSounds[i].name)) kind = i;
+        if (switchTo(App::Noise) != Result::Ok) return fail("打开失败");
+        m.noiseKind = m.noiseRow = static_cast<uint8_t>(kind); m.noisePlaying = true; m.noiseUntil = m.noiseTimer ? now_ + m.noiseTimer * 60u : 0;
+        snprintf(out, size, "正在播放%s", kNoiseSounds[kind].name); return 1;
+    }
+    if (is("红方加分") || is("蓝方加分") || is("撤销上一分")) {
+        if (switchTo(App::Score) != Result::Ok) return fail("打开失败");
+        key(is("红方加分") ? Key::Up : is("蓝方加分") ? Key::Down : Key::Confirm, now_);
+        return say(*m.lastNotice ? m.lastNotice : "已记分");
+    }
+    if (is("记分重开")) {
+        std::unique_ptr<ScoreBoard> s(new (std::nothrow) ScoreBoard); if (!s) return fail("内存不足"); SettingsStore::loadScore(*s); const uint8_t rule = s->rule; *s = {}; s->rule = rule;
+        if (!SettingsStore::saveScore(*s)) return fail("保存失败");
+        switchTo(App::Score); return say("记分牌已清零");
+    }
+    if (is("立即锁屏")) return switchTo(App::Guard) == Result::Ok ? (snprintf(out, size, "正在锁电脑"), 2) : fail("打开失败");
+    if (is("AI全部已读")) return switchTo(App::Codex) == Result::Ok ? (snprintf(out, size, "AI 回复已全部标为已读"), 3) : fail("打开失败");
+    if (is("息屏")) { switchTo(App::Home); screenOff_ = true; return say("已息屏"); }
+    if (is("状态牌常亮") || is("状态牌不常亮")) {
+        m.status.awake = is("状态牌常亮");
+        return SettingsStore::saveStatus(m.status) ? say(m.status.awake ? "状态牌页会常亮" : "状态牌页按时息屏") : fail("保存失败");
+    }
+    if (is("清除已完成待办")) {
+        if (m.todoRinging || active_ == App::Todo) return fail("待办页正在使用，请稍后");
+        std::unique_ptr<TodoList> list(new (std::nothrow) TodoList); if (!list) return fail("内存不足");
+        SettingsStore::loadTodo(*list); unsigned kept = 0;
+        for (unsigned i = 0; i < list->count; ++i) if (!(list->items[i].flags & TodoList::kDone)) list->items[kept++] = list->items[i];
+        const unsigned removed = list->count - kept; for (unsigned i = kept; i < list->count; ++i) list->items[i] = {};
+        list->count = static_cast<uint8_t>(kept);
+        if (!removed) return fail("没有已完成的待办");
+        const bool saved = SettingsStore::saveTodo(*list); reloadTodo();
+        if (!saved) return fail("保存失败");
+        snprintf(out, size, "已清除 %u 条已完成", removed); return 1;
+    }
+    // Settings switches: wake word, 说功能名跳转, 打开 Mac 程序 (the last two stored as "off"), 连电脑时常亮.
+    struct Switch { const char* name; bool* on; const char* key; bool storedOff; };
+    const Switch switches[]{{"语音唤醒", &m.wakeWord, "wake_word", false}, {"说功能名跳转", &m.voiceJump, "jump_off", true},
+                            {"打开Mac程序", &m.macOpen, "mac_off", true}, {"连电脑常亮", &m.usbAwake, "usb_dim", true}};
+    for (const auto& w : switches) {
+        const size_t n = strlen(w.name);
+        if (strncmp(action, w.name, n) || (strcmp(action + n, "开") && strcmp(action + n, "关"))) continue;
+        const bool on = !strcmp(action + n, "开");
+        if (!SettingsStore::saveByte(w.key, w.storedOff ? !on : on)) return fail("保存失败");
+        *w.on = on; snprintf(out, size, "%s已%s", w.name, on ? "打开" : "关闭"); return 1;
+    }
+    if (is("息屏时间")) {
+        if (value < 1 || value > 1440) return fail("息屏时间要在 1-1440 分钟之间");
+        if (!setIdleMinutes(unsigned(value))) return fail("保存失败");
+        snprintf(out, size, "%d 分钟没操作就息屏", value); return 1;
+    }
+    snprintf(out, size, "不支持「%s」", action); return 0;
+}
+bool Runtime::voiceQuery(const char* kind, char* out, size_t size) {
+    auto& m = model; const time_t now = time(nullptr);
+    const auto is = [&](const char* k) { return !strcmp(kind, k); };
+    *out = 0;
+    if (is("记账")) {
+        std::unique_ptr<LedgerBook> book(new (std::nothrow) LedgerBook); if (!book) return snprintf(out, size, "内存不足"), false;
+        SettingsStore::loadLedger(*book); uint8_t order[LedgerBook::kMax]; const unsigned shown = book->shown(ledgerToday(), order);
+        int64_t spent = 0, income = 0;
+        for (unsigned i = 0; i < shown; ++i) { const auto& e = book->items[order[i]]; (e.category == 9 ? income : spent) += e.cents < 0 ? -e.cents : e.cents; }
+        char a[24], b[24]; ledgerAmount(int32_t(spent), a, sizeof(a)); ledgerAmount(int32_t(income), b, sizeof(b));
+        snprintf(out, size, "今天记了 %u 笔，支出 %s，收入 %s（胸牌只保留今天的账，之前的在电脑的 CSV 里）", shown, a, b); return true;
+    }
+    if (is("闹钟")) {
+        const time_t next = nextAlarm(m.alarms, now); char when[32] = "";
+        if (next) todoWhen(next, now, when, sizeof(when));
+        const size_t used = snprintf(out, size, "下一个闹钟：%s。全部：", next ? when : "没有");
+        if (used < size) voiceList(App::Alarm, out + used, size - used);
+        if (m.timerEnd || m.timerLeft) { const size_t u = strlen(out); snprintf(out + u, size - u, "。倒计时%s，还剩 %u 秒", m.timerEnd ? "在走" : "已暂停", unsigned(m.timerEnd ? m.timerShown(now_) : m.timerLeft)); }
+        return true;
+    }
+    if (is("待办")) return voiceList(App::Todo, out, size);
+    if (is("健康")) {
+        std::unique_ptr<HealthBook> book(new (std::nothrow) HealthBook); if (!book) return snprintf(out, size, "内存不足"), false;
+        SettingsStore::loadHealth(*book); const int day = healthDay(now);
+        size_t used = snprintf(out, size, "今天喝水 %u 杯。", book->cups(day));
+        for (unsigned k = 1; k < 5 && used < size; ++k) {
+            const int i = book->latest(HealthKind(k)); if (i < 0) continue;
+            const auto& e = book->items[i]; char value[24]; healthValue(e, value, sizeof(value)); char when[32]; todoWhen(e.at, now, when, sizeof(when));
+            used += snprintf(out + used, size - used, "最近%s %s%s（%s）。", kHealthNames[k], value, healthUnit(HealthKind(k)), when);
+        }
+        return true;
+    }
+    if (is("倒数日")) {
+        CountdownItem items[20]; int minutes = 0; const Date d = today(&minutes);
+        const unsigned count = m.countdownItems(d, minutes, items, std::size(items));
+        VoiceLines l{out, size};
+        for (unsigned i = 0; i < count; ++i) l.line("%s 还有 %d 天", items[i].name, items[i].days);
+        if (!l.n) snprintf(out, size, "没有倒数日");
+        return true;
+    }
+    if (is("天气")) {
+        const auto& w = m.weatherReading;
+        if (!w.known) return snprintf(out, size, "还没有天气数据，可以打开天气预报"), false;
+        snprintf(out, size, "%s %s，%.0f℃，今天 %.0f~%.0f℃，湿度 %.0f%%%s%s", w.city, w.condition, w.temperature, w.minimum, w.maximum, w.humidity, *w.warning ? "，预警：" : "", w.warning);
+        return true;
+    }
+    if (is("AI额度")) {
+        static const char* const tools[]{"Codex", "Claude Code", "Gemini", "Cursor", "OpenCode Go"};
+        size_t used = 0;
+        for (unsigned t = 0; t < Model::kQuotaTools && used < size; ++t) {
+            used += snprintf(out + used, size - used, "%s%s：", t ? "；" : "", tools[t]); bool any = false;
+            for (unsigned k = 0; k < Model::kQuotaWindows && used < size; ++k) { const auto& q = m.quotas[t * Model::kQuotaWindows + k]; if (!q.known) continue; used += snprintf(out + used, size - used, "%s剩 %u%%", any ? "、" : "", 100u - std::min<unsigned>(q.used, 100)); any = true; }
+            if (!any && used < size) used += snprintf(out + used, size - used, "未知");
+            if (m.aiRows[t][0] && used < size) used += snprintf(out + used, size - used, "，%u 条新回复", m.aiRows[t][0]);
+        }
+        return true;
+    }
+    return snprintf(out, size, "不能查询「%s」", kind), false;
+}
 namespace {
 // Selects the todo with this reminder and text (after a sort moved it): its row, scrolled into view.
 void selectTodo(Model& m, uint32_t at, const char* text) {

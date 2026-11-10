@@ -338,6 +338,8 @@ int LiveServices::control(void* value) {
 }
 void LiveServices::action(Key key) {
     const auto active=runtime_.active();
+    // 语音指令: any short key turns down a delete 小智 asked (Confirm then goes on to say another phrase).
+    if(active==App::Voice&&dropAsk_.page!=App::Count){dropAsk_={};runtime_.model.voiceDropAsk=false;copy(runtime_.model.lastNotice,"已取消删除");voiceAt_=esp_timer_get_time()/1000000;if(key!=Key::Confirm)return;}
     if(active==App::Focus) { persistFocus(); return; }
     if(active==App::Words) {
         const auto* card=wordsCurrent(runtime_.model.words,runtime_.model.wordSession);
@@ -420,6 +422,28 @@ void LiveServices::speak() {
     // 汇率 and 自选股 (its list) fetch online: the phrase waits for a fetch under way, then the page fetches again.
     if((active==App::Rate||(active==App::Stock&&!m.stockDetail))&&!m.voiceBusy()&&!voiceJob_){m.rateArmed=m.stockArmed=false;copy(m.lastNotice,"正在连接小智…");request("speak");}
 }
+#ifdef PASSPORT_DEVICE
+// 小智 MCP: line n (from 1) of what voiceList (自选股: the device's list) shows for page, without its "n. ".
+bool LiveServices::itemLine(App page,unsigned n,char* out,size_t size){
+    char list[NativeServices::kMcpAnswer];
+    if(!(page==App::Stock?native_->stockItems(0,list,sizeof(list)):runtime_.voiceList(page,list,sizeof(list))))return false;
+    char head[16];snprintf(head,sizeof(head),n==1?"1. ":"；%u. ",n);
+    const char* at=n==1?(strncmp(list,head,3)?nullptr:list):strstr(list,head);if(!at||!n)return false;at+=strlen(head);
+    char next[16];snprintf(next,sizeof(next),"；%u. ",n+1);const char* end=strstr(at,next);
+    const size_t length=end?size_t(end-at):strlen(at);snprintf(out,size,"%.*s",int(length),at);
+    return true;
+}
+// 语音指令: a long Down deletes what 小智 asked to, if the list still shows it there.
+void LiveServices::confirmDrop(){
+    auto& m=runtime_.model;
+    if(runtime_.active()!=App::Voice||dropAsk_.page==App::Count)return;
+    char now[sizeof(dropAsk_.label)];
+    if(!itemLine(dropAsk_.page,dropAsk_.index,now,sizeof(now))||strcmp(now,dropAsk_.label))copy(m.lastNotice,"内容已变，没有删除");
+    else if(char result[96];dropAsk_.page==App::Stock?native_->stockItems(dropAsk_.index,result,sizeof(result)):runtime_.voiceDelete(dropAsk_.page,dropAsk_.index,result,sizeof(result)))snprintf(m.lastNotice,sizeof(m.lastNotice),"已删除「%s」",dropAsk_.label);
+    else copy(m.lastNotice,result);
+    dropAsk_={};m.voiceDropAsk=false;voiceAt_=esp_timer_get_time()/1000000;
+}
+#endif
 void LiveServices::dropStock() {
     auto& m=runtime_.model;
     if(runtime_.active()!=App::Stock||m.stockDetail||!m.stockCount||m.voiceBusy()||voiceJob_){m.stockArmed=false;return;}
@@ -483,16 +507,59 @@ bool LiveServices::tick(uint64_t now) {
     // 小智 MCP: the chat's model set the volume or the brightness.
     if(const int v=native_->takeVolume();v>=0&&board::setVolume(v)){model.volume=v;dirty=true;}
     if(const int b=native_->takeBrightness();b>=0&&runtime_.setBrightness(b)){board::setBrightness(b);dirty=true;}
-    // 小智 MCP: open a page and, for add_item, say the text to it as if heard there; the notice is the tool's answer.
+    // 小智 MCP: open a page and, for add_item, say the text to it as if heard there; or list, delete, update, a page
+    // action, a query (the page staying closed unless the action opens it). The answer is the tool's.
     if(const auto* job=native_->mcpJob()){
-        const App page=spokenApp(job->page);char said[160],answer[96];bool ok=false;
-        snprintf(said,sizeof(said),"%s%s",strcmp(job->page,"倒计时")?"":"倒计时",job->text);
-        if(page==App::Count)snprintf(answer,sizeof(answer),"胸牌上没有「%s」",job->page);
-        else if(runtime_.switchTo(page)!=Result::Ok)copy(answer,"打开失败，请再说一次");
-        else if(!*job->text){ok=true;snprintf(answer,sizeof(answer),"已打开%s",job->page);}
-        else if(const int added=addHeard(runtime_,page,said);added<0)copy(answer,"这一页不能语音添加");
-        else{ok=added>0;copy(answer,*model.lastNotice?model.lastNotice:ok?"已完成":"没听懂，请换个说法");}
-        native_->mcpDone(ok,answer);return true;
+        char* answer=native_->mcpAnswer();constexpr size_t size=NativeServices::kMcpAnswer;
+        const App page=spokenApp(job->page);bool ok=false;
+        if(job->op==McpJob::Control){
+            const int done=runtime_.voiceControl(job->page,job->text,job->value,answer,size);ok=done>0;
+            if(done==2||done==3){afterEnter_=done;}
+            if(!strncmp(job->page,"番茄钟",9))persistFocus();
+        }else if(job->op==McpJob::Query){
+            if(!strcmp(job->page,"设备")){
+                const auto& s=runtime_.settings();ok=true;
+                snprintf(answer,size,"音量 %u，亮度 %u，电量 %s%u%%，%s，%u 分钟没操作息屏",board::volume(),unsigned(s.brightness),model.batteryKnown?"":"约 ",model.batteryPercent,
+                         model.wifiConnected?"已连 WiFi":model.pppConnected?"通过 USB 联网":"未联网",unsigned(s.idleSeconds/60));
+            }else ok=runtime_.voiceQuery(job->page,answer,size);
+        }else if(job->op==McpJob::List)ok=runtime_.voiceList(page,answer,size);
+        else if(job->op==McpJob::Delete){
+            // Deleting is only asked here: the page shows the entry, a long Down deletes it (confirmDrop).
+            if(active!=App::Voice)snprintf(answer,size,"%s","删除要在语音指令里说（双击确认键），好让用户在胸牌上确认");
+            else if(dropAsk_.page!=App::Count)snprintf(answer,size,"一次只能删一条，先等用户确认「%s」",dropAsk_.label);
+            else if(itemLine(page,job->index,dropAsk_.label,sizeof(dropAsk_.label))){
+                dropAsk_.page=page;dropAsk_.index=job->index;ok=true;
+                snprintf(answer,size,"胸牌已显示「%s」，用户长按下键后才删除",dropAsk_.label);
+            }else snprintf(answer,size,"没有第 %u 条",job->index);
+        }
+        else if(job->op==McpJob::Update)ok=runtime_.voiceUpdate(page,job->index,job->action,job->text,answer,size);
+        else{
+            char said[160];snprintf(said,sizeof(said),"%s%s",strcmp(job->page,"倒计时")?"":"倒计时",job->text);
+            const bool memo=page==App::Memo,rate=page==App::Rate,train=page==App::Train;
+            if(page==App::Count)snprintf(answer,size,"胸牌上没有「%s」",job->page);
+            else if(runtime_.switchTo(page)!=Result::Ok)snprintf(answer,size,"%s","打开失败，请再说一次");
+            else if(!*job->text){ok=true;snprintf(answer,size,"已打开%s",job->page);}
+            else{
+                const int added=memo?runtime_.addMemo(job->text,now):rate?runtime_.addRate(job->text):train?runtime_.addTrain(job->text):addHeard(runtime_,page,said);
+                ok=added>0;
+                if(added<0)snprintf(answer,size,"%s","这一页不能语音添加");
+                else snprintf(answer,size,"%s",*model.lastNotice?model.lastNotice:ok?"已完成":"没听懂，请换个说法");
+            }
+        }
+        native_->mcpDone(ok);dirty=true;
+        if(runtime_.active()!=active)return true;
+    }
+    // 小智 MCP's delete waits on 语音指令 for a long Down; leaving the page drops it. Once the phrase's task has ended,
+    // the page shows the entry and how to confirm, whatever 小智 said.
+    if(dropAsk_.page!=App::Count){
+        if(active!=App::Voice){dropAsk_={};model.voiceDropAsk=false;}
+        else if(nativeIdle()){char ask[sizeof(model.lastNotice)];snprintf(ask,sizeof(ask),"删除「%s」？",dropAsk_.label);
+            if(strcmp(ask,model.lastNotice)||!model.voiceDropAsk){copy(model.lastNotice,ask);model.voiceDropAsk=true;dirty=true;}}
+    }
+    // 小智 MCP's 立即锁屏 / AI全部已读 opened their page: the computer is asked once the page is entered.
+    if(afterEnter_&&!entered){
+        if(afterEnter_==2&&active==App::Guard)guardCommand(false);else if(afterEnter_==3&&active==App::Codex)aiReadAll();
+        afterEnter_=0;
     }
     // 语音笔记: the text the cloud heard, saved once; the device's task waits until it is.
     if(active==App::Memo||speaksOnce(active)||active==App::Rate||active==App::Voice||active==App::Train)if(const char* heard=native_->memoHeard()){
@@ -848,7 +915,7 @@ bool LiveServices::tick(uint64_t now) {
 #endif
     ) { requestedAt_=now; request("refresh"); }
     // 语音指令: home 10 s after the phrase (or a failure), where 你好小智 listens again.
-    if(active==App::Voice){if(entered||model.voiceBusy()||model.livePhase==LivePhase::Loading||!nativeIdle())voiceAt_=now;else if(now>=voiceAt_+10){runtime_.switchTo(App::Home);return true;}}
+    if(active==App::Voice){if(entered||model.voiceBusy()||model.livePhase==LivePhase::Loading||!nativeIdle())voiceAt_=now;else if(now>=voiceAt_+(dropAsk_.page!=App::Count?20:10)){runtime_.switchTo(App::Home);return true;}}
     if(now!=renderedAt_) {
         renderedAt_=now; renderLocal(now);
         // A running 倒计时 shows in the status bar on every page.
