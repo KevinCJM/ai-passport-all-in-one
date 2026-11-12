@@ -769,10 +769,10 @@ int execute(const char* name) {
     // 语音输入: Confirm starts and ends speaking; on the error screen it reconnects instead (LiveServices).
     if(previous==App::Dictation && !strcmp(name,"ok") && runtime.model.livePhase!=LivePhase::Error) return dictationBle.toggle(runtime.generation());
     if(previous==App::Dictation && !strcmp(name,"back")) dictationBle.cancel();
-    // Its shortcuts on the computer's input line: Down presses Return, Up deletes the whole line (between phrases).
+    // Its shortcuts on the computer's input line: Up presses Return, Down deletes the whole line (between phrases).
     if(previous==App::Dictation && (!strcmp(name,"up")||!strcmp(name,"down"))){
         runtime.wake(now);
-        const int result=runtime.model.voiceBusy()?-9:dictationBle.key(runtime.generation(),!strcmp(name,"down")?BleDictation::Return:BleDictation::ClearLine);
+        const int result=runtime.model.voiceBusy()?-9:dictationBle.key(runtime.generation(),!strcmp(name,"up")?BleDictation::Return:BleDictation::ClearLine);
         if(!result)runtime.model.dictationAt=now;
         return result;
     }

@@ -2052,7 +2052,7 @@ void drawDictation(lv_event_t* e){
     p.rect(112-38,76-38,112+38,76+38,kDictation,38);
     p.text(ICON_MIC,62,64,162,kBg,LV_TEXT_ALIGN_CENTER,&passport_icon_font_24);
     p.text("按确认开始说话",0,132,223,kText,LV_TEXT_ALIGN_CENTER);
-    p.text(m.aiDictation?"下键：发送    上键：删除":"下键：回车    上键：删除整行",0,154,223,0x5f7f94,LV_TEXT_ALIGN_CENTER);
+    p.text(m.aiDictation?"上键：发送    下键：删除":"上键：回车    下键：删除整行",0,154,223,0x5f7f94,LV_TEXT_ALIGN_CENTER);
     // The last input: its start (two lines, "…" when cut short), length and time.
     p.rect(0,182,223,254,kPanel,8);
     if(!*m.liveLines[0]){p.text("还没有输入",0,206,223,kMuted,LV_TEXT_ALIGN_CENTER);return;}
@@ -3048,15 +3048,16 @@ void renderQuotas(const Model& model){
     if(static_cast<int>(page)!=quotaShown){lv_obj_set_parent(quotaDetail,quotaRows[page]);quotaShown=page;}
     lv_obj_set_height(quotaDetail,detailH);
     for(unsigned n=0;n<3;++n){
-        const auto& q=model.quotas[page*3+n];const int left=q.known?100-q.used:0;
+        // Gemini shows Flash above Pro (the computer sends Pro, Flash, 第三方).
+        const auto& q=model.quotas[page*3+(page==2&&n<2?1-n:n)];const int left=q.known?100-q.used:0;
         const bool show=n<winCount;
         visible(quotaNames[n],show);visible(quotaResets[n],show);visible(quotaValues[n],show);visible(lv_obj_get_parent(quotaFills[n]),show);
         if(!show)continue;
         reset[0]=0;
         if(q.known)quotaLine(name,reset,sizeof(name),q);else strcpy(name,"暂不可用");
         if(q.known&&page==2){
-            if(n==0)strcpy(name,"Pro");
-            else if(n==1)strcpy(name,"Flash");
+            if(n==0)strcpy(name,"Flash");
+            else if(n==1)strcpy(name,"Pro");
             else strcpy(name,"第三方");
         }
         if(q.known&&page==3)strcpy(name,n?"API":"本期");

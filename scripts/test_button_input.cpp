@@ -19,4 +19,6 @@ int main() {
     { Rig r; r.hold(2, 80); r.hold(-1, 100); r.hold(0, 80); r.hold(-1, 100); assert((r.got == std::vector{ButtonEvent::Confirm, ButtonEvent::Up})); }  // Confirm then Up: order kept
     { Rig r; r.hold(0, 80); r.hold(-1, 100); assert((r.got == std::vector{ButtonEvent::Up})); }  // Up is not delayed
     { Rig r; r.hold(2, 1200); r.hold(-1, 500); assert((r.got == std::vector{ButtonEvent::Back})); }  // long Confirm unchanged
+    { Rig r; r.hold(2, 400); r.hold(-1, 500); assert((r.got == std::vector{ButtonEvent::Confirm})); }  // 0.4 s is still a click
+    { Rig r; r.hold(1, 600); assert((r.got == std::vector{ButtonEvent::Settings})); }  // 0.6 s Down is long
 }

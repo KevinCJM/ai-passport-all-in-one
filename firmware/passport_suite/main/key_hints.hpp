@@ -109,7 +109,7 @@ inline const char* keyHint(App app,SettingsPage page,bool focusRunning,bool pair
     if(error)return "确认：重试  |  长按确认：返回";
     // tab: 0 ready, 1 listening, 2 recognising.
     // 语音输入; alt: opened on an AI 控制器 conversation.
-    if(app==App::Dictation){static const char* const hints[]{"确认：说话  |  下：回车  |  上：删除整行  |  长按确认：返回","确认：结束并输入  |  长按确认：放弃","正在识别，请稍候"};return alt&&tab%3==0?"确认：说话  |  下：发送  |  上：删除  |  长按确认：回到对话":hints[tab%3];}
+    if(app==App::Dictation){static const char* const hints[]{"确认：说话  |  上：回车  |  下：删除整行  |  长按确认：返回","确认：结束并输入  |  长按确认：放弃","正在识别，请稍候"};return alt&&tab%3==0?"确认：说话  |  上：发送  |  下：删除  |  长按确认：回到对话":hints[tab%3];}
     if(app==App::Radio)return "上下：音量  |  长按上：换台  |  长按下：定时关闭  |  确认：播放/停止  |  长按确认：返回";
     // alt: a program is open in the player.
     // tab 1: 选期.

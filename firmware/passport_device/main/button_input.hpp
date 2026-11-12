@@ -45,7 +45,7 @@ class ButtonInput {
                 }
             }
         }
-        if (stable_ >= 0 && !sent_ && !suppressed_ && now - pressedAt_ >= 1000) {
+        if (stable_ >= 0 && !sent_ && !suppressed_ && now - pressedAt_ >= LongMs) {
             // Home: long Up/Down do nothing (no hotspot/settings shortcuts); long Confirm turns the screen off.
             if((context&HomeScreen)&&stable_<2){sent_=true;return ButtonEvent::None;}
             // Chat volume changes once on release, including a long press.
@@ -59,6 +59,8 @@ public:
     static constexpr uint32_t Volume = 1, Awake = 2, HomeScreen = 4;
     // A Confirm click waits this long for a second press (a double click) before it counts as one click.
     static constexpr uint64_t DoubleMs = 150;
+    // A key held this long is a long press (all three keys); was 1000 ms until 0.5.45.
+    static constexpr uint64_t LongMs = 500;
     void invalidSample() { candidate_ = -2; }
     ButtonEvent sample(int millivolts, uint64_t now, uint32_t context) {
         const int current = millivolts < 150 ? 0 : millivolts < 447 ? 1 : millivolts < 1900 ? 2 : -1;

@@ -256,7 +256,7 @@ class BluetoothDictation:
         if generation!=self.context[1]:
             self.stats['stale_reports']=self.stats.get('stale_reports',0)+1;return
         if length>160:raise ValueError('invalid C3 audio length')
-        # A shortcut key between phrases (Down: Return, Up: delete the line); it belongs to no utterance.
+        # A shortcut key between phrases (Up: Return, Down: delete the line); it belongs to no utterance.
         if kind==7:
             if length!=1 or raw[12] not in (1,2):raise ValueError('invalid C3 key report')
             threading.Thread(target=self.press,args=(raw[12],),daemon=True).start();return
