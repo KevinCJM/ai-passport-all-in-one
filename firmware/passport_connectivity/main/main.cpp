@@ -1329,6 +1329,9 @@ extern "C" void app_main() {
 #endif
         live.transport(pppLink.up()||station,runtime.connected(),encrypted);
         dirty |= live.tick(esp_timer_get_time() / 1000000);
+        // A page opened without a key (语音指令, 小智 MCP, a ring, 对讲) shows in /status too: the computer drops a page's
+        // requests whose app and generation /status does not report.
+        appId=static_cast<int>(runtime.active());appGeneration=runtime.generation();
         const auto currentPower = runtime.power(esp_timer_get_time() / 1000000);
         if (currentPower != previousPower) {
             previousPower = currentPower;
