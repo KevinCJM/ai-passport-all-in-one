@@ -12,6 +12,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from passport_books import decode
+
 COLUMNS = ['日期', '时间', '项目', '数值', '单位', '补充', '标签', '提示', 'id']
 NAMES = {'water': '喝水', 'weight': '体重', 'glucose': '血糖', 'temperature': '体温', 'pressure': '血压', 'period': '经期', 'intimacy': '亲密'}
 UNITS = {'water': '杯', 'weight': 'kg', 'glucose': 'mmol/L', 'temperature': '℃', 'pressure': 'mmHg'}
@@ -37,9 +39,9 @@ class Health:
     def __init__(self, path):
         self.path = Path(path); self.rows = {}; self.last = -1e9; self.stats = {'synced': 0, 'deleted': 0, 'syncs': 0}
         if self.path.exists():
-            with self.path.open(encoding='utf-8-sig', newline='') as source:
-                for line in csv.DictReader(source):
-                    if line.get('id'): self.rows[int(line['id'])] = line
+            # Excel or WPS on Chinese Windows saves an edited CSV as GBK: read that too (it is written back as UTF-8).
+            for line in csv.DictReader(io.StringIO(decode(self.path.read_bytes()), newline='')):
+                if line.get('id'): self.rows[int(line['id'])] = line
 
     def save(self):
         out = io.StringIO(); writer = csv.DictWriter(out, COLUMNS, lineterminator='\n'); writer.writeheader()

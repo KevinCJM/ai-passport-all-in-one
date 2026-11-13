@@ -37,6 +37,13 @@ class LedgerTests(TestCase):
             self.assertEqual(again.rows[now+99]['类型'],'收入')
             self.assertTrue(path.read_bytes().startswith(b'\xef\xbb\xbf'),'Excel needs the BOM')
 
+    def test_reads_csv_saved_as_gbk(self):
+        # Excel/WPS on Chinese Windows saves an edited CSV as GBK; reading it as UTF-8 stopped the assistant connecting.
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'记账.csv'
+            path.write_bytes('日期,时间,类型,分类,金额,备注,id\n2026-11-13,12:00,支出,餐饮,12.50,午饭,7\n'.encode('gbk'))
+            self.assertEqual(Ledger(path).rows[7]['备注'],'午饭')
+
     def test_due_only_when_waiting_or_month_unknown(self):
         with tempfile.TemporaryDirectory() as folder:
             ledger=Ledger(Path(folder)/'x.csv')

@@ -11,6 +11,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from passport_books import decode
+
 COLUMNS = ['日期', '时间', '类型', '分类', '金额', '备注', 'id']
 
 
@@ -18,9 +20,9 @@ class Ledger:
     def __init__(self, path):
         self.path = Path(path); self.rows = {}; self.last = 0; self.stats = {'synced': 0, 'deleted': 0, 'syncs': 0}
         if self.path.exists():
-            with self.path.open(encoding='utf-8-sig', newline='') as source:
-                for row in csv.DictReader(source):
-                    if row.get('id'): self.rows[int(row['id'])] = row
+            # Excel or WPS on Chinese Windows saves an edited CSV as GBK: read that too (it is written back as UTF-8).
+            for row in csv.DictReader(io.StringIO(decode(self.path.read_bytes()), newline='')):
+                if row.get('id'): self.rows[int(row['id'])] = row
 
     def save(self):
         out = io.StringIO(); writer = csv.DictWriter(out, COLUMNS, lineterminator='\n'); writer.writeheader()
