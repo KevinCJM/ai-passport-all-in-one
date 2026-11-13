@@ -5,7 +5,9 @@
 #include "lunar.hpp"
 #include "settings.hpp"
 #include "todo_time.hpp"
+#include "i18n.hpp"
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <ctime>
 #include <initializer_list>
@@ -315,6 +317,24 @@ inline App spokenApp(const char* heard) {
             if (!shed) break;
         }
     }
+    // English ("open the radio", "FX rates page"): the English name of a page (i18n.hpp), letters and digits only.
+    std::string e;
+    for (const char c : s) if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) e += c;
+    for (bool shed = true; shed && !e.empty();) {
+        shed = false;
+        for (const char* w : {"please", "open", "goto", "show", "start", "launch", "switchto", "the", "my"})
+            if (!e.compare(0, strlen(w), w) && e.size() > strlen(w)) { e.erase(0, strlen(w)); shed = true; }
+        for (const char* w : {"page", "app"})
+            if (e.size() > strlen(w) && !e.compare(e.size() - strlen(w), strlen(w), w)) { e.resize(e.size() - strlen(w)); shed = true; }
+    }
+    if (e.size() >= 2)
+        for (const auto& w : kAppWords) {
+            const char* name = i18n::exact(w.word);
+            if (!name) continue;
+            std::string n;
+            for (const char* c = name; *c; ++c) if (isalnum(static_cast<unsigned char>(*c))) n += char(tolower(static_cast<unsigned char>(*c)));
+            if (n == e) return w.app;
+        }
     return App::Count;
 }
 // 打开 Mac 程序 (语音指令): the program a sentence asks the computer to open, else "". Every sentence led by

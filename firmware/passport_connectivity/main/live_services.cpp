@@ -5,6 +5,7 @@
 #include "board.hpp"
 #include "native_services.hpp"
 #include "voice_add.hpp"
+#include "radio_stations.hpp"
 #endif
 #include <algorithm>
 #include <cstdio>
@@ -389,6 +390,8 @@ void LiveServices::action(Key key) {
         auto& m=runtime_.model;
         m.trainArmed=false;copy(m.lastNotice,"正在连接小智…");m.livePhase=LivePhase::Ready;request("speak");return;
     }
+    // 选台 took the Confirm (Runtime::key); a pick is asked for by tick.
+    if(key==Key::Confirm&&active==App::Radio&&(runtime_.model.radioList||runtime_.model.radioPlay||runtime_.model.radioArea))return;
     if(key==Key::Confirm&&runtime_.model.livePhase==LivePhase::Error&&active!=App::Macro) { request("enter");runtime_.model.livePhase=LivePhase::Loading;loadingAt_=requestedAt_=esp_timer_get_time()/1000000;return; }
     if(key==Key::Confirm&&active==App::Daily) { request("say"); return; }
     // Confirm on the list opens the player (tick asks for the program); in the player it plays or pauses.
@@ -647,7 +650,10 @@ bool LiveServices::tick(uint64_t now) {
             }
             if(active==App::Radio){
                 const auto* m=field(json,"media");const auto value=[&](const char* key,uint8_t limit){const auto v=number(m,key,0);return static_cast<uint8_t>(v>=0&&v<=limit?v:0);};
-                model.mediaCount=value("count",255);model.mediaIndex=value("index",model.mediaCount?model.mediaCount-1:0);
+                model.mediaCount=value("count",Model::kRadioIds);model.mediaIndex=value("index",model.mediaCount?model.mediaCount-1:0);
+                model.radioRegion=value("region",std::size(kRadioRegions));copy(model.radioHome,string(m,"home"));
+                unsigned n=0;const cJSON* id;cJSON_ArrayForEach(id,field(m,"ids"))if(n<model.mediaCount&&cJSON_IsNumber(id)&&id->valueint>=0&&unsigned(id->valueint)<std::size(kRadioStations))model.radioIds[n++]=static_cast<uint16_t>(id->valueint);
+                if(n<model.mediaCount)model.mediaCount=static_cast<uint8_t>(n);
             }
             // 语音笔记 and 语音输入 (whose computer reports it): the recording screen times from the start of listening.
             if(((message.native&&(keepsListening(active)||speaksOnce(active)||speaksToo(active)||active==App::Voice))||active==App::Dictation)&&model.listening()&&!wasListening)model.listenAt=now;
@@ -953,6 +959,10 @@ bool LiveServices::tick(uint64_t now) {
         else if(model.podcastEpPick){char operation[16];snprintf(operation,sizeof(operation),"pick:%u",model.podcastEpPick-1u);model.podcastEpPick=0;request(operation);dirty=true;}
         else if(!model.podcastEpisodes)episodesAsked_=-1;
         else if(model.podcastEpPage!=episodesAsked_){episodesAsked_=model.podcastEpPage;char operation[16];snprintf(operation,sizeof(operation),"eps:%u",model.podcastEpPage);request(operation);dirty=true;}}
+    // 选台: the station or region picked.
+    if(active==App::Radio&&!pending_&&(model.radioPlay||model.radioArea)){char operation[16];
+        snprintf(operation,sizeof(operation),model.radioArea?"region:%u":"play:%u",model.radioArea?model.radioArea-1u:model.radioPlay-1u);
+        model.radioPlay=model.radioArea=0;request(operation);dirty=true;}
     // 定时关闭: the time left redraws each second; at zero a playing stream stops as Confirm would.
     if((active==App::Radio||active==App::Podcast)&&model.mediaUntil){
         if(now!=timerShown_){timerShown_=now;dirty=true;}

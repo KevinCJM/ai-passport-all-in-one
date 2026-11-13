@@ -20,8 +20,9 @@ import certifi
 from passport_computer_link import start_gateway
 from passport_identity import paired_port
 from passport_paths import helper, user_data, codex_command, PACKAGED
+from passport_i18n import T
 
-VERSION='0.1.24-preview'
+VERSION='0.1.25-preview'
 LABEL='local.ai-passport.assistant'
 WINDOWS=sys.platform=='win32'
 UI_PORT=8768
@@ -350,7 +351,7 @@ def gui(controller,background=False):
     from objc import python_method
     WIDTH=500
     def text(value='',size=13,bold=False,color=None,wrap=False):
-        item=A.NSTextField.wrappingLabelWithString_(value) if wrap else A.NSTextField.labelWithString_(value)
+        value=T(value);item=A.NSTextField.wrappingLabelWithString_(value) if wrap else A.NSTextField.labelWithString_(value)
         item.setFont_(A.NSFont.boldSystemFontOfSize_(size) if bold else A.NSFont.systemFontOfSize_(size))
         if color:item.setTextColor_(color)
         if wrap:item.setPreferredMaxLayoutWidth_(WIDTH-80)
@@ -369,15 +370,15 @@ def gui(controller,background=False):
     class Delegate(NSObject):
         @python_method
         def button(self,title,selector,primary=False):
-            item=A.NSButton.buttonWithTitle_target_action_(title,self,selector)
+            item=A.NSButton.buttonWithTitle_target_action_(T(title),self,selector)
             if primary:item.setKeyEquivalent_('\r')
             return item
         @python_method
         def switch(self,title,selector,on):
-            item=A.NSButton.checkboxWithTitle_target_action_(title,self,selector);item.setState_(int(on));return item
+            item=A.NSButton.checkboxWithTitle_target_action_(T(title),self,selector);item.setState_(int(on));return item
         def applicationDidFinishLaunching_(self,notification):
             self.window=A.NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(((0,0),(WIDTH,560)),1|2|4,A.NSBackingStoreBuffered,False)
-            self.window.setTitle_('AI Passport 助手');self.window.setReleasedWhenClosed_(False)
+            self.window.setTitle_(T('AI Passport 助手'));self.window.setReleasedWhenClosed_(False)
             # Header
             icon=A.NSImageView.imageViewWithImage_(A.NSApplication.sharedApplication().applicationIconImage())
             icon.widthAnchor().constraintEqualToConstant_(44).setActive_(True);icon.heightAnchor().constraintEqualToConstant_(44).setActive_(True)
@@ -414,7 +415,7 @@ def gui(controller,background=False):
             # Web settings: one button per section of the assistant's page, opened in the browser.
             self.webButtons=[]
             for index,(title,_) in enumerate(WEB_PAGES):
-                item=self.button(title,'webPage:');item.setTag_(index);item.setToolTip_('在浏览器打开「'+title+'」；胸牌连上后可用');self.webButtons.append(item)
+                item=self.button(title,'webPage:');item.setTag_(index);item.setToolTip_(T('在浏览器打开「'+title+'」；胸牌连上后可用'));self.webButtons.append(item)
             webRows=[stack(self.webButtons[:4]),stack(self.webButtons[4:])]
             for row in webRows:row.setDistribution_(A.NSStackViewDistributionFillEqually)
             self.toggle=self.button('暂停助手','toggle:')
@@ -433,10 +434,10 @@ def gui(controller,background=False):
             else:self.item.button().setTitle_('Passport')
             menu=A.NSMenu.alloc().init();menu.setAutoenablesItems_(False)
             def entry(title,selector,key=''):
-                item=menu.addItemWithTitle_action_keyEquivalent_(title,selector,key);item.setTarget_(self);return item
-            self.menuStatus=menu.addItemWithTitle_action_keyEquivalent_('正在检查','',"");self.menuStatus.setEnabled_(False)
+                item=menu.addItemWithTitle_action_keyEquivalent_(T(title),selector,key);item.setTarget_(self);return item
+            self.menuStatus=menu.addItemWithTitle_action_keyEquivalent_(T('正在检查'),'',"");self.menuStatus.setEnabled_(False)
             menu.addItem_(A.NSMenuItem.separatorItem());entry('打开助手窗口','show:')
-            self.webItems=[entry(title+'…','webPage:') for title,_ in WEB_PAGES]
+            self.webItems=[entry(T(title)+'…','webPage:') for title,_ in WEB_PAGES]
             for index,item in enumerate(self.webItems):item.setTag_(index)
             entry('记账表格','ledger:');entry('健康表格','health:');menu.addItem_(A.NSMenuItem.separatorItem())
             self.menuToggle=entry('暂停助手','toggle:');entry('退出 AI Passport 助手','quit:','q');self.item.setMenu_(menu)
@@ -454,7 +455,7 @@ def gui(controller,background=False):
         def setRow(self,key,ok,detail):
             image,label=self.rows[key]
             name,color={True:('checkmark.circle.fill',A.NSColor.systemGreenColor()),False:('exclamationmark.circle.fill',A.NSColor.systemOrangeColor()),None:('circle',A.NSColor.tertiaryLabelColor())}[ok]
-            image.setImage_(A.NSImage.imageWithSystemSymbolName_accessibilityDescription_(name,None));image.setContentTintColor_(color);label.setStringValue_(detail)
+            image.setImage_(A.NSImage.imageWithSystemSymbolName_accessibilityDescription_(name,None));image.setContentTintColor_(color);label.setStringValue_(T(detail))
         def refresh_(self,_):
             state=controller.snapshot();deps=state['dependencies']
             message=state['error']
@@ -462,9 +463,9 @@ def gui(controller,background=False):
             if state['code']:message='核对胸牌屏幕上的配对码，一致就在胸牌上按确认。'
             color=(A.NSColor.systemGrayColor() if not state['enabled'] else A.NSColor.systemGreenColor() if state['connected'] else
                    A.NSColor.systemRedColor() if state['error'] and not state['code'] else A.NSColor.systemOrangeColor())
-            self.dot.setTextColor_(color);self.status.setStringValue_(state['status']);self.message.setStringValue_(message);self.message.setHidden_(not message)
+            self.dot.setTextColor_(color);self.status.setStringValue_(T(state['status']));self.message.setStringValue_(T(message));self.message.setHidden_(not message)
             self.code.setStringValue_(' '.join(state['code']));self.code.setHidden_(not state['code'])
-            self.menuStatus.setTitle_(state['status'])
+            self.menuStatus.setTitle_(T(state['status']))
             candidates=state['devices']
             if candidates!=self.current_choices:
                 old=self.choices.indexOfSelectedItem();selected=self.current_choices[old]['mac'] if 0<=old<len(self.current_choices) else None
@@ -475,7 +476,7 @@ def gui(controller,background=False):
             for key,_,ok,detail in features(deps):self.setRow(key,ok,detail)
             self.fix.setHidden_(features(deps)[-1][2] is not False)
             for item in self.webButtons+self.webItems:item.setEnabled_(state['web'])
-            self.toggle.setTitle_('暂停助手' if state['enabled'] else '恢复助手');self.menuToggle.setTitle_(self.toggle.title())
+            self.toggle.setTitle_(T('暂停助手' if state['enabled'] else '恢复助手'));self.menuToggle.setTitle_(self.toggle.title())
             permission=controller.permission_event()
             if permission=='required':self.permissionGuide_(None)
             if permission=='granted':
@@ -495,7 +496,7 @@ def gui(controller,background=False):
         def deviceSelected_(self,_):
             item=self.selected()
             self.pairButton.setEnabled_(bool(item and item.get('port')))
-            self.pairButton.setTitle_('已配对' if item and item['paired'] and not item.get('port') else '重新配对' if item and item['paired'] else '配对')
+            self.pairButton.setTitle_(T('已配对' if item and item['paired'] and not item.get('port') else '重新配对' if item and item['paired'] else '配对'))
         def import_(self,_):
             panel=A.NSOpenPanel.openPanel();panel.setCanChooseDirectories_(False);panel.setAllowsMultipleSelection_(False)
             panel.setMessage_('选择从其他电脑导出的 device.json 配对文件')
@@ -508,13 +509,13 @@ def gui(controller,background=False):
             if deps['accessibility'] and deps['post_event_access'] and not deps.get('bluetooth_denied'):return
             if self.window.attachedSheet():return
             self.show_(None)
-            alert=A.NSAlert.alloc().init();alert.setMessageText_('允许 AI Passport 助手使用电脑功能')
-            alert.setInformativeText_('辅助功能：把识别出的文字粘贴到光标处。\n蓝牙：拔线后和胸牌无线连接。\n\n在打开的系统设置页里打开 AI Passport Assistant 的开关，助手会自动检测。\n\n如果开关已打开仍无效：先用「－」移除旧条目，再点「在 Finder 显示助手」把当前助手拖进去。')
+            alert=A.NSAlert.alloc().init();alert.setMessageText_(T('允许 AI Passport 助手使用电脑功能'))
+            alert.setInformativeText_(T('辅助功能：把识别出的文字粘贴到光标处。\n蓝牙：拔线后和胸牌无线连接。\n\n在打开的系统设置页里打开 AI Passport Assistant 的开关，助手会自动检测。\n\n如果开关已打开仍无效：先用「－」移除旧条目，再点「在 Finder 显示助手」把当前助手拖进去。'))
             options=[]
             if deps.get('bluetooth_denied'):options.append(('打开蓝牙设置','Privacy_Bluetooth'))
             if not (deps.get('accessibility') and deps.get('post_event_access')):options.append(('打开辅助功能设置','Privacy_Accessibility'))
-            for title,_ in options:alert.addButtonWithTitle_(title)
-            for title in ['在 Finder 显示助手','稍后']:alert.addButtonWithTitle_(title)
+            for title,_ in options:alert.addButtonWithTitle_(T(title))
+            for title in ['在 Finder 显示助手','稍后']:alert.addButtonWithTitle_(T(title))
             self.permissionAlert=alert
             def completed(response):
                 index=response-A.NSAlertFirstButtonReturn
@@ -532,16 +533,16 @@ def gui(controller,background=False):
                 sender.setState_(int(not sender.state()))
                 controller.error=str(error) if isinstance(error,ValueError) else '设置登录启动失败；请从应用程序文件夹打开助手'
         def help_(self,_):
-            alert=A.NSAlert.alloc().init();alert.setMessageText_('AI Passport 助手使用说明');alert.setInformativeText_(HELP);alert.runModal()
+            alert=A.NSAlert.alloc().init();alert.setMessageText_(T('AI Passport 助手使用说明'));alert.setInformativeText_(T(HELP));alert.runModal()
         def webPage_(self,sender):open_url(WEB+'#'+WEB_PAGES[sender.tag()][1])
         def ledger_(self,_):
             try:controller.ledger()
             except ValueError as error:
-                alert=A.NSAlert.alloc().init();alert.setMessageText_('还没有记账记录');alert.setInformativeText_(str(error).split('：',1)[-1]);alert.runModal()
+                alert=A.NSAlert.alloc().init();alert.setMessageText_(T('还没有记账记录'));alert.setInformativeText_(T(str(error).split('：',1)[-1]));alert.runModal()
         def health_(self,_):
             try:controller.health()
             except ValueError as error:
-                alert=A.NSAlert.alloc().init();alert.setMessageText_('还没有健康记录');alert.setInformativeText_(str(error).split('：',1)[-1]);alert.runModal()
+                alert=A.NSAlert.alloc().init();alert.setMessageText_(T('还没有健康记录'));alert.setInformativeText_(T(str(error).split('：',1)[-1]));alert.runModal()
         def show_(self,_):self.window.makeKeyAndOrderFront_(None);A.NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
         def quit_(self,_):A.NSApplication.sharedApplication().terminate_(None)
         def applicationShouldTerminateAfterLastWindowClosed_(self,_):return False
@@ -570,10 +571,10 @@ def tray(controller,background=False):
         try:controller.health()
         except ValueError:open_page()
     Item=pystray.MenuItem
-    menu=pystray.Menu(Item(lambda _:controller.snapshot()['status'],None,enabled=False),pystray.Menu.SEPARATOR,
-        Item('打开助手',page('assistant'),default=True),Item('网页设置',pystray.Menu(*[Item(title,page(key)) for title,key in WEB_PAGES])),
-        Item('记账表格',ledger),Item('健康表格',health),pystray.Menu.SEPARATOR,Item(lambda _:'暂停助手' if controller.enabled else '恢复助手',toggle),
-        Item('开机自动启动',login,checked=lambda _:login_enabled()),Item('退出 AI Passport 助手',lambda icon:icon.stop()))
+    menu=pystray.Menu(Item(lambda _:T(controller.snapshot()['status']),None,enabled=False),pystray.Menu.SEPARATOR,
+        Item(T('打开助手'),page('assistant'),default=True),Item(T('网页设置'),pystray.Menu(*[Item(T(title),page(key)) for title,key in WEB_PAGES])),
+        Item(T('记账表格'),ledger),Item(T('健康表格'),health),pystray.Menu.SEPARATOR,Item(lambda _:T('暂停助手' if controller.enabled else '恢复助手'),toggle),
+        Item(T('开机自动启动'),login,checked=lambda _:login_enabled()),Item(T('退出 AI Passport 助手'),lambda icon:icon.stop()))
     icon=pystray.Icon('ai-passport',Image.open(Path(getattr(sys,'_MEIPASS',Path(__file__).parent/'assets'))/'assistant_icon.png'),'AI Passport 助手',menu)
     def watch(icon):
         icon.visible=True
@@ -582,9 +583,9 @@ def tray(controller,background=False):
         while not controller.stop.wait(1):
             state=controller.snapshot()
             if (state['status'],state['code'])!=shown:
-                shown=(state['status'],state['code']);icon.title='AI Passport 助手 · '+state['status'];icon.update_menu()
+                shown=(state['status'],state['code']);icon.title=T('AI Passport 助手 · '+state['status']);icon.update_menu()
                 # The pairing code is compared on the page; a notification brings it to the front.
-                if state['code']:icon.notify('核对胸牌上的配对码：'+state['code'],'AI Passport 配对')
+                if state['code']:icon.notify(T('核对胸牌上的配对码：'+state['code']),T('AI Passport 配对'))
     icon.run(watch)
 
 

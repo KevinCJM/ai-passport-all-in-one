@@ -34,7 +34,7 @@ class NativeServices {
     std::atomic<int> error_{},tlsError_{},tlsFlags_{},socketError_{},tlsResult_{};
     struct WarnSeen{char id[32];bool covers;} warnSeen_[6]{};unsigned warnSeenNext_{};  // provincial warnings already read
     char weather_[4][160]{};WeatherReading weatherReading_;std::atomic<uint64_t> weatherAt_{};uint32_t weatherPrefs_{};
-    uint8_t mediaIndex_{},mediaCount_{};
+    uint8_t mediaIndex_{},mediaCount_{},mediaRegion_{};uint16_t mediaIds_[kMaxRadios]{};char mediaHome_[24]{};  // 收音机, for 选台
     esp_transport_handle_t ws_{},ssl_{};
     char session_[96]{},stt_[160]{},answer_[480]{};
     unsigned speechTurn_{};

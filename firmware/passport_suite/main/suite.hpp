@@ -96,6 +96,12 @@ struct Model {
     uint8_t historyCount{};
     int cpu{37}, ram{62}, quotaUsed{};
     uint8_t mediaIndex{}, mediaCount{};  // position in the station list
+    // 选台 (long Up on 收音机): radioList 1 = the stations (row 0: 地区), 2 = the regions (row 0: 本地, then kRadioRegions);
+    // radioRow is the row picked. The device sends its stations (kRadioStations ids), radioRegion (0 = the city's own,
+    // else kRadioRegions index + 1) and the city. Confirm leaves radioPlay (station + 1) or radioArea (region + 1)
+    // for LiveServices to ask for.
+    static constexpr unsigned kRadioIds=24;
+    uint8_t radioList{},radioRow{},radioRegion{},radioPlay{},radioArea{};uint16_t radioIds[kRadioIds]{};char radioHome[24]{};
     bool mediaPlaying{};  // the radio or a podcast is playing: the screen goes off, but no deep sleep
     // 收音机/播客 定时关闭: minutes chosen (0 = none) and when playback stops (monotonic seconds, 0 = not set).
     uint8_t mediaTimer{};uint64_t mediaUntil{};
@@ -440,7 +446,8 @@ public:
     // Long Up / long Down on the word page: known / not known.
     void gradeWord(bool known, uint64_t now);
     void stepMediaTimer(uint64_t now);
-    void podcastEpisodes(uint64_t now);  // 播客 player: long Up opens 选期
+    void podcastEpisodes(uint64_t now);
+    void radioStations(uint64_t now);  // 收音机 long Up: 选台  // 播客 player: long Up opens 选期
     // 对讲机: a call came in on another page; it opens 对讲机 at once (the page ends whatever it was doing).
     void walkieCall(uint64_t now);
     // A key on the PPT page (long Up / long Down: black screen / end show).

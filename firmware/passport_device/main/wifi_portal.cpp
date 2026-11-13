@@ -9,6 +9,7 @@
 #include "stock_catalog.hpp"
 #include "settings.hpp"
 #include "apps.hpp"
+#include "i18n.hpp"
 #include "cJSON.h"
 #include "esp_mac.h"
 #include "esp_app_desc.h"
@@ -45,6 +46,8 @@ void WifiPortal::init(httpd_handle_t server,esp_netif_t* ap){
     upload.uri="/stocks";upload.handler=[](httpd_req_t* request){return static_cast<WifiPortal*>(request->user_ctx)->stockSave(request);};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server,&upload));
     upload.uri="/wheel";upload.handler=[](httpd_req_t* request){return static_cast<WifiPortal*>(request->user_ctx)->wheelSave(request);};
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server,&upload));
+    upload.uri="/language";upload.handler=[](httpd_req_t* request){return static_cast<WifiPortal*>(request->user_ctx)->languageSave(request);};
     ESP_ERROR_CHECK(httpd_register_uri_handler(server,&upload));
 }
 bool WifiPortal::access(httpd_req_t* request,bool owner)const{
@@ -324,6 +327,17 @@ esp_err_t WifiPortal::wheelSave(httpd_req_t* request){
     if(!SettingsStore::saveWheel(*board))return reply(request,"500 Internal Server Error","{\"message\":\"保存失败，请重试\"}");
     return reply(request,"200 OK","{\"saved\":true}");
 }
+// 语言 / Language from the page's switch, the same setting as 系统设置 > 语言: {"language":0} 中文, 1 English.
+esp_err_t WifiPortal::languageSave(httpd_req_t* request){
+    if(!access(request)||!sameOrigin(request))return reply(request,"403 Forbidden","{\"message\":\"请在设备上开启手机配置后重试\"}");
+    char body[32]{};if(request->content_len<=0||request->content_len>=int(sizeof(body))||httpd_req_recv(request,body,request->content_len)!=request->content_len)return reply(request,"400 Bad Request","{\"message\":\"设置内容过长\"}");
+    auto* json=cJSON_Parse(body);const auto* value=cJSON_GetObjectItemCaseSensitive(json,"language");
+    const int language=cJSON_IsNumber(value)&&(value->valueint==0||value->valueint==1)?value->valueint:-1;cJSON_Delete(json);
+    if(language<0)return reply(request,"400 Bad Request","{\"message\":\"设置内容过长\"}");
+    if(!SettingsStore::saveByte("language",language))return reply(request,"500 Internal Server Error","{\"message\":\"保存失败，请重试\"}");
+    uiLanguage=language?Language::English:Language::Chinese;
+    return reply(request,"200 OK","{\"saved\":true}");
+}
 void WifiPortal::phase(const char* phase,const char* message,const char* ssid,const char* ip){
     xSemaphoreTake(mutex_,portMAX_DELAY);snprintf(phase_,sizeof(phase_),"%s",phase);snprintf(message_,sizeof(message_),"%s",message);snprintf(target_,sizeof(target_),"%s",ssid);snprintf(ip_,sizeof(ip_),"%s",ip);xSemaphoreGive(mutex_);
 }
@@ -374,6 +388,7 @@ esp_err_t WifiPortal::status(httpd_req_t* request){
     cJSON_AddStringToObject(json,"firmware",esp_app_get_description()->version);
     SystemSettings saved{};SettingsStore store;cJSON_AddBoolToObject(json,"bluetooth_enabled",store.load(saved)&&saved.bluetoothEnabled);
     cJSON_AddStringToObject(json,"bluetooth_name",board::bluetoothName());
+    cJSON_AddNumberToObject(json,"language",static_cast<unsigned>(uiLanguage));
     auto* station=esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");esp_netif_ip_info_t address{};if(station)esp_netif_get_ip_info(station,&address);char stationIp[16];snprintf(stationIp,sizeof(stationIp),IPSTR,IP2STR(&address.ip));cJSON_AddStringToObject(json,"station_ip",stationIp);
     auto* route=esp_netif_get_default_netif();const char* key=route?esp_netif_get_ifkey(route):"";
     cJSON_AddStringToObject(json,"route_key",key);

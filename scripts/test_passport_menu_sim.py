@@ -12,8 +12,12 @@ import time
 import zlib
 
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'releases/menu-customization-test'
-BUILD=ROOT/'firmware/passport_suite/build'
+import sys
+# --english: the build-en simulator (SIM_ENGLISH=1 scripts/build_passport_suite.sh); its frames and the Chinese text it
+# still shows (i18n-missing.txt) go to releases/i18n-english-test.
+ENGLISH='--english' in sys.argv
+OUT=ROOT/('releases/i18n-english-test' if ENGLISH else 'releases/menu-customization-test')
+BUILD=ROOT/('firmware/passport_suite/build-en' if ENGLISH else 'firmware/passport_suite/build')
 EMU=Path.home()/'.local/share/esp32-agent/bin/esp-emu'
 
 
@@ -66,7 +70,7 @@ def main():
                         if line.startswith('FRAME_BEGIN '):
                             _,name,w,h=line.split();assert (w,h)==('240','320') and active is None
                             active=(name,bytearray(240*320*3),bytearray(240*320))
-                        elif line.startswith('ROW ') and active:
+                        elif line.startswith('ROW ') and active and len(line.split())==4:
                             _,x,y,data=line.split();x,y=int(x),int(y);raw=base64.b64decode(data,validate=True);length=len(raw)//2
                             assert len(raw)%2==0 and 0<=y<320 and 0<=x and x+length<=240
                             offset=y*240+x;active[1][offset*3:(offset+length)*3]=b''.join(colors[p[0]] for p in struct.iter_unpack('<H',raw));active[2][offset:offset+length]=b'\1'*length
@@ -77,6 +81,9 @@ def main():
         finally:
             if proc.poll() is None:proc.kill();proc.wait()
     log=(OUT/'serial.log').read_text(errors='replace')
+    if ENGLISH:  # percent-encoded by the firmware (the emulator wants ASCII lines); a cut-off tail may not decode
+        from urllib.parse import unquote
+        (OUT/'i18n-missing.txt').write_text(''.join(sorted({unquote(l[10:],errors='replace').replace('\n','|')+'\n' for l in log.splitlines() if l.startswith('I18N_MISS ')})),encoding='utf-8')
     assert proc.returncode==0 and not failures,failures or log[-4000:]
     for marker in ('SIM_BOOT_OK suite','NETWORK_OK real_wifi_driver=1','SUITE_PASS','SUITE_DONE','menu_layout_categories_continuous_custom_order_hidden_voice_nvs_and_recovery'):assert marker in log,marker
     for frame in ('menu_continuous_top','menu_continuous_scroll','menu_custom_finance','menu_custom_daily','menu_settings_only'):assert frame in frames,frame

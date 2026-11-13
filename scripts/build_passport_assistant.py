@@ -16,8 +16,8 @@ from passport_signing import identity,sign,requirement
 ROOT=Path(__file__).resolve().parents[1]
 WORK=ROOT/'experiments/passport-assistant-build'
 SOURCES=WORK/'sources'
-VERSION='0.1.24'
-BUILD_NUMBER='23'
+VERSION='0.1.25'
+BUILD_NUMBER='24'
 DIST=ROOT/f'releases/ai-passport-assistant-{VERSION}-preview'
 TOOLS=ROOT/'experiments/passport-connectivity-tools/bin'
 OPUS=Path('/opt/homebrew/opt/opus/lib/libopus.0.dylib').resolve()  # 语音输入's encoder, loaded with ctypes
@@ -111,7 +111,7 @@ def main():
              '--hidden-import','bleak.backends.corebluetooth.client','--hidden-import','bleak.backends.corebluetooth.scanner',
              '--hidden-import','sounddevice','--hidden-import','websockets.sync.client',
              '--collect-all','_sounddevice_data', '--add-data',str(WORK/'source-hashes.json')+':.',
-             '--add-data',str(licenses)+':licenses','--add-data',str(ROOT/'scripts/passport_menu.js')+':.']
+             '--add-data',str(licenses)+':licenses','--add-data',str(ROOT/'scripts/passport_menu.js')+':.','--add-data',str(ROOT/'scripts/passport_i18n.js')+':.','--add-data',str(ROOT/'scripts/passport_i18n.json')+':.']
     for file in [TOOLS/'passport-dictation',TOOLS/'passport-ppp',encoder,opus]:command.extend(['--add-binary',str(file)+':helpers'])
     command.append(ROOT/'scripts/passport_assistant.py');run(command,ROOT,dict(os.environ,PYINSTALLER_CONFIG_DIR=str(WORK/'cache'),PYTHONNOUSERSITE='1'))
     app=DIST/'AI Passport Assistant.app';info=app/'Contents/Info.plist'
@@ -140,6 +140,7 @@ def main():
         archive.add(Path(__file__),arcname='build_passport_assistant.py')
         for path in (ROOT/'scripts').glob('passport*.py'):archive.add(path,arcname='assistant-source/'+path.name)
         archive.add(ROOT/'scripts/passport_menu.js',arcname='assistant-source/passport_menu.js')
+        for name in ('passport_i18n.js','passport_i18n.json'):archive.add(ROOT/'scripts'/name,arcname='assistant-source/'+name)
         for name in ['mac_dictation_bridge.cpp','passport_ppp_gateway.cpp']:archive.add(ROOT/'scripts'/name,arcname='assistant-source/'+name)
     manifest={'version':VERSION+'-preview','build':BUILD_NUMBER,'platform':'macOS arm64','minimum_macos':'15.0','official_apps_bundled':False,'private_config_bundled':False,
               'signed_with_developer_id':False,'notarized':False,'firmware_flashed_by_build':False,

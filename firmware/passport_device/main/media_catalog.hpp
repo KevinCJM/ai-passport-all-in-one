@@ -42,6 +42,14 @@ inline RadioPicks pickRadios(const char* city,const char* province){
     for(unsigned i=0;i<std::size(kRadioStations);++i)if(!kRadioStations[i].region)add(i,kMaxRadios);
     return picks;
 }
+// 选台: a region chosen on the radio page (kRadioRegions index + 1; 0 = the city's own), kept apart from the city.
+struct RadioPrefs{static constexpr uint32_t kVersion=1;uint32_t version{kVersion};uint8_t region{};};
+// That region's own stations, most listened first (全国 = the national and online ones).
+inline RadioPicks pickRegion(unsigned region){
+    RadioPicks picks;picks.region=static_cast<int>(region);
+    for(unsigned i=0;i<std::size(kRadioStations)&&picks.count<kMaxRadios;++i)if(kRadioStations[i].region==region)picks.index[picks.count++]=static_cast<uint16_t>(i);
+    return picks;
+}
 inline RadioTier radioTier(const RadioStation& s,const char* city,const char* province){
     return !s.region?RadioTier::National:!*province||strstr(s.name,city)?RadioTier::Local:RadioTier::Province;
 }

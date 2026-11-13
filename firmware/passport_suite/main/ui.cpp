@@ -8,6 +8,8 @@
 #include "moon.hpp"
 #include "todo_time.hpp"
 #include "typhoon_map.hpp"
+#include "radio_stations.hpp"
+#include "i18n.hpp"
 #ifdef PASSPORT_DEVICE
 #include "board.hpp"
 #endif
@@ -202,6 +204,7 @@ Badge settingsBadge(SettingsPage page){
     case SettingsPage::Volume: return {LV_SYMBOL_VOLUME_MAX,0x4bffc4};
     case SettingsPage::Wake: return {LV_SYMBOL_AUDIO,0xc792ff};
     case SettingsPage::City: return {LV_SYMBOL_GPS,0x34d399};
+    case SettingsPage::Language: return {LV_SYMBOL_KEYBOARD,0x7dd3fc};
     case SettingsPage::Contact: return {LV_SYMBOL_ENVELOPE,0xff9f7a};
     default: return {LV_SYMBOL_POWER,0xff8a73};
     }
@@ -216,7 +219,8 @@ std::atomic<size_t> poolBytes{uiPoolCapacity(App::Home)};
 UiPoolBuffer uiPool;
 #endif
 App guiApp{App::Home};bool resourcesReady=true;
-void setLabel(lv_obj_t* obj,const char* value){if(obj&&strcmp(lv_label_get_text(obj),value))lv_label_set_text(obj,value);}
+// Fixed text shows in the language picked (i18n.hpp); text built with snprintf translates its format first.
+void setLabel(lv_obj_t* obj,const char* value){value=tr(value);reportChinese(value);if(obj&&strcmp(lv_label_get_text(obj),value))lv_label_set_text(obj,value);}
 void trackUiMemory(){lv_mem_monitor_t m{};lv_mem_monitor(&m);uiFree=m.free_size;uiPeak=std::max(uiPeak.load(),static_cast<unsigned>(m.max_used));}
 lv_obj_t *heading, *footer, *notice, *value, *sleepOverlay;
 lv_obj_t *chatRoot,*chatLabels[6];
@@ -241,6 +245,7 @@ lv_obj_t *statusRoot,*statusText,*statusTag,*statusFoot,*statusVoice;
 lv_obj_t *cells[kCells],*cellBadges[kCells],*cellIcons[kCells],*cellNames[kCells],*menuTitle,*menuPage;
 bool menuListShape;  // cells currently laid out as compact list rows
 constexpr int kPodcastRows=5;
+lv_obj_t *mediaList,*mediaRows[kPodcastRows],*mediaRowNames[kPodcastRows],*mediaRowNotes[kPodcastRows];  // 收音机 选台
 lv_obj_t *podRoot,*podPosition,*podSleep,*podList,*podRows[kPodcastRows],*podNames[kPodcastRows],*podNotes[kPodcastRows],*podPlayer,*podTitle,*podProgram,*podStatus,*podVolume,*podDetail,*podFill,*podTime,*podNote;
 lv_obj_t *torchRoot,*torchName;
 lv_obj_t *qrRoot,*qrCode,*qrTitleLabel,*qrInfo;uint32_t qrShown;
@@ -295,10 +300,10 @@ void initChrome(lv_obj_t* screen){
 void renderChrome(const Runtime& runtime){
     statusBarRender(runtime);const auto& m=runtime.model;
     const auto app=runtime.active();
-    const bool alt=app==App::Codex?m.aiLevel>0:app==App::Dictation?m.aiDictation:app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Stock?m.stockDetail:app==App::Macro?m.macroDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Walkie?m.walkieAuto:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
+    const bool alt=app==App::Codex?m.aiLevel>0:app==App::Dictation?m.aiDictation:app==App::Calendar?m.calendarView!=0:app==App::Quiz?m.quizShown:app==App::Podcast?m.podcastPlayer:app==App::Radio?m.radioList!=0:app==App::Stock?m.stockDetail:app==App::Macro?m.macroDetail:app==App::Hot?m.hotDetail:app==App::Forecast?m.forecastView==3&&m.page.forecast.warnings&&m.page.forecast.warnings!=0xff:app==App::Alarm?m.alarmRinging:app==App::Walkie?m.walkieAuto:app==App::Noise?m.noiseRow==std::size(kNoiseSounds):app==App::Stopwatch&&m.swRunning;
     const auto* hint=keyHint(app,m.settingsPage,m.focusRunning,*m.pairingCode,m.live&&m.livePhase==LivePhase::Loading,m.live&&m.livePhase==LivePhase::Error,alt,app==App::Wifi?m.wifiTab:app==App::Settings?(m.settingsPage==SettingsPage::City?dictationTab(m):m.settingsPage==SettingsPage::Idle?m.idleRow:m.wifiSetup?0u:m.wifiArmed?3u:m.wifiRow?2u:1u):
         app==App::Rate?voiceTab(m,m.rateArmed):app==App::Stock?voiceTab(m,m.stockArmed):app==App::Macro?0u:app==App::Countdown?voiceTab(m,m.countdownArmed):
-        app==App::Alarm?(m.alarmRinging&&m.timerRang?10u:m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit&&m.timerPicked()?(m.timerEnd?7u:m.timerLeft?8u:6u):m.alarmEdit?5u:m.timerPicked()?9u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:(m.page.score.players()>2?3u:0u)+(m.page.score.fresh()?0u:1u)):app==App::Feishu?(m.feishuDetail?1u:m.page.feishu.count?0u:2u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Health?healthTab(m):app==App::Train?trainTab(m):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:app==App::Voice&&m.voiceDropAsk?3u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:app==App::Podcast?unsigned(m.podcastEpisodes):m.soundView);
+        app==App::Alarm?(m.alarmRinging&&m.timerRang?10u:m.listening()?3u:m.voiceBusy()?4u:m.alarmEdit&&m.timerPicked()?(m.timerEnd?7u:m.timerLeft?8u:6u):m.alarmEdit?5u:m.timerPicked()?9u:m.alarmArmed?2u:m.alarmIndex?1u:0u):app==App::Memo?memoTab(m):app==App::Wheel?(m.wheelArmed?3u:dictationTab(m)):app==App::Score?(m.scoreArmed?2u:(m.page.score.players()>2?3u:0u)+(m.page.score.fresh()?0u:1u)):app==App::Feishu?(m.feishuDetail?1u:m.page.feishu.count?0u:2u):app==App::Todo?(m.todoRinging?5u:m.listening()?3u:m.voiceBusy()?4u:m.todoArmed?2u:m.todoIndex?1u:0u):app==App::Ledger?(m.listening()?3u:m.voiceBusy()?4u:m.ledgerArmed?2u:m.ledgerIndex?1u:0u):app==App::Health?healthTab(m):app==App::Train?trainTab(m):app==App::Calc||app==App::Voice?(m.listening()?1u:m.voiceBusy()?2u:app==App::Voice&&m.voiceDropAsk?3u:0u):app==App::Walkie?(m.walkieTalk?1u:m.walkiePhase==2?2u:0u):app==App::Dictation||app==App::Status||app==App::Translate?dictationTab(m):app==App::Calendar?m.calendarView:app==App::Podcast?unsigned(m.podcastEpisodes):app==App::Radio?unsigned(m.radioList):m.soundView);
     if(app==App::Menu&&runtime.menuLayout().mode==MenuLayout::List)hint="上下：选择 | 长按上下：快移 | 确认：进入";
     char text[256];
     // 打开 Mac 程序: what the computer is doing takes the key hints' place for a few seconds, on any page.
@@ -306,7 +311,7 @@ void renderChrome(const Runtime& runtime){
     // 高铁查询: on the day of a trip the home page shows it (and its 检票口) instead of the key hints.
     else if(app==App::Home&&*m.trainNext&&time(nullptr)<static_cast<time_t>(m.trainNextAt)+600)snprintf(text,sizeof(text),"今天 %s",m.trainNext);
     else if(runtime.active()==App::Words&&!*m.pairingCode&&!m.wordSession.size)snprintf(text,sizeof(text),"确认：再学 10 个  |  长按确认：返回");
-    else snprintf(text,sizeof(text),"%s",hint);
+    else snprintf(text,sizeof(text),"%s",tr(hint));
     if(strcmp(lv_label_get_text(footer),text)){
         setLabel(footer,text);setTextColor(footer,lv_color_hex(!strncmp(m.macNote,"飞书·",8)?(m.feishuVip?0xff5a5a:0x5fb0ff):*m.macNote||!strncmp(text,"今天 ",7)?kAccent:kMuted),0);lv_point_t size{};
         lv_text_get_size(&size,text,LV_FONT_DEFAULT,0,0,LV_COORD_MAX,LV_TEXT_FLAG_NONE);
@@ -317,8 +322,8 @@ void renderChrome(const Runtime& runtime){
 // rounds towards the long break. No rotated decorations: those cost a layer per frame.
 void initPomodoro(lv_obj_t* screen) {
     pomoRoot=lv_obj_create(screen);box(pomoRoot,0,35,240,257,kBg);
-    titleMark(pomoRoot,12,10);auto* title=label(pomoRoot,24,7,80,LV_FONT_DEFAULT,kText);setLabel(title,"番茄钟");
-    pomoRounds=label(pomoRoot,96,7,70,LV_FONT_DEFAULT,kMuted);setTextAlign(pomoRounds,LV_TEXT_ALIGN_RIGHT,0);
+    titleMark(pomoRoot,12,10);auto* title=label(pomoRoot,24,7,90,LV_FONT_DEFAULT,kText);setLabel(title,"番茄钟");  // "Pomodoro" needs 82 px
+    pomoRounds=label(pomoRoot,110,7,56,LV_FONT_DEFAULT,kMuted);setTextAlign(pomoRounds,LV_TEXT_ALIGN_RIGHT,0);
     for(unsigned i=0;i<4;++i){pomoDots[i]=lv_obj_create(pomoRoot);box(pomoDots[i],174+i*14,12,9,9,kBorder,5);}
     auto* track=lv_obj_create(pomoRoot);box(track,12,32,216,26,kPanel,13);
     const char* names[]={"专注","短休","长休"};
@@ -425,7 +430,7 @@ void renderChat(const Model& model){
         if(hint){setTextColor(chatLabels[i],lv_color_hex(kMuted),0);setTextAlign(chatLabels[i],LV_TEXT_ALIGN_CENTER,0);}
         else if(shown)lv_obj_add_style(chatLabels[i],model.chat[i].user?&chatUser:&chatReply,0);
         // Static text is re-read on every call, so an appended sentence shows without a copy.
-        lv_label_set_text_static(chatLabels[i],shown?model.chat[i].text:hint?"说话后，对话文字会显示在这里":"");
+        lv_label_set_text_static(chatLabels[i],shown?model.chat[i].text:hint?tr("说话后，对话文字会显示在这里"):"");
     }
 }
 void initConnection(lv_obj_t* screen){
@@ -468,6 +473,13 @@ void initMedia(lv_obj_t* screen){
     mediaNeedle=lv_obj_create(lower);box(mediaNeedle,0,0,3,30,0xff6b5f,1);
     mediaNext=label(lower,12,33,200,LV_FONT_DEFAULT,kMuted);lv_obj_set_height(mediaNext,20);
     mediaNote=label(mediaRoot,12,236,216,LV_FONT_DEFAULT,kWarn);lv_obj_set_height(mediaNote,20);
+    mediaList=lv_obj_create(mediaRoot);box(mediaList,0,34,240,223,kBg);
+    for(int i=0;i<kPodcastRows;++i){
+        mediaRows[i]=lv_obj_create(mediaList);box(mediaRows[i],8,i*44,224,42,kPanel,8);
+        mediaRowNames[i]=label(mediaRows[i],10,1,204,LV_FONT_DEFAULT,kText);lv_obj_set_height(mediaRowNames[i],20);
+        mediaRowNotes[i]=label(mediaRows[i],10,21,204,LV_FONT_DEFAULT,kMuted);lv_obj_set_height(mediaRowNotes[i],20);
+    }
+    visible(mediaList,false);
 }
 void renderMedia(const Model& model){
     // Built-in sample until the device's first reply.
@@ -480,6 +492,36 @@ void renderMedia(const Model& model){
     char text[96];
     if(count)snprintf(text,sizeof(text),"%u / %u",index+1,count);else text[0]=0;
     setLabel(mediaPosition,text);setSleepLabel(mediaSleep,model);
+    // 选台: the stations under a 地区 row, or the regions under 本地; five rows in view round the one picked.
+    visible(mediaList,model.radioList);
+    if(model.radioList){
+        const bool regions=model.radioList==2;const unsigned rows=1+(regions?std::size(kRadioRegions):model.mediaCount),selected=model.radioRow%rows;
+        snprintf(text,sizeof(text),"%u / %u",selected+1,rows);setLabel(mediaPosition,text);
+        const unsigned first=rows>kPodcastRows?std::min(selected>2?selected-2:0,rows-kPodcastRows):0;
+        for(unsigned i=0;i<kPodcastRows;++i){
+            const unsigned at=first+i;visible(mediaRows[i],at<rows);if(at>=rows)continue;
+            char name[64],note[64];
+            if(regions){
+                if(at)snprintf(name,sizeof(name),"%s",kRadioRegions[at-1]);else snprintf(name,sizeof(name),"%s","本地");
+                unsigned count=0;if(at)for(const auto& s:kRadioStations)count+=s.region==at-1;
+                if(at)snprintf(note,sizeof(note),"%u 个电台",std::min<unsigned>(count,Model::kRadioIds));
+                else if(*model.radioHome)snprintf(note,sizeof(note),"所在城市：%s",model.radioHome);else snprintf(note,sizeof(note),"%s","手机配置页可选择所在城市");
+                if(at==model.radioRegion)strncat(note," · 当前",sizeof(note)-strlen(note)-1);
+            }else if(!at){
+                if(model.radioRegion)snprintf(name,sizeof(name),"地区：%s ›",kRadioRegions[model.radioRegion-1]);
+                else if(*model.radioHome)snprintf(name,sizeof(name),"地区：本地 · %s ›",model.radioHome);else snprintf(name,sizeof(name),"%s","地区：本地 ›");
+                snprintf(note,sizeof(note),"%s","确认：换个地区听");
+            }else{
+                const auto& s=kRadioStations[model.radioIds[at-1]];snprintf(name,sizeof(name),"%s",s.name);
+                snprintf(note,sizeof(note),"%s%s",s.region?kRadioRegions[s.region]:"全国 · 网络",at-1!=model.mediaIndex?"":model.mediaPlaying?" · 正在播放":" · 当前");
+            }
+            const bool on=at==selected;
+            setBgColor(mediaRows[i],lv_color_hex(on?kAccent:kPanel),0);
+            setLabel(mediaRowNames[i],name);setTextColor(mediaRowNames[i],lv_color_hex(on?kBg:kText),0);
+            setLabel(mediaRowNotes[i],note);setTextColor(mediaRowNotes[i],lv_color_hex(on?kBg:kMuted),0);
+        }
+        return;
+    }
     setBgColor(mediaArt,lv_color_hex(count?0xff8a73:kBorder),0);
     setLabel(mediaArtIcon,count?LV_SYMBOL_VOLUME_MAX:LV_SYMBOL_REFRESH);
     setLabel(mediaName,name);setLabel(mediaMeta,meta);setLabel(mediaDetail,detail);
@@ -667,10 +709,13 @@ void renderStatus(const Model& m){
     const uint32_t c=entry.color,ink=((c>>16)*299+(c>>8&255)*587+(c&255)*114)/1000>150?kBg:0xffffff;
     setBgColor(statusRoot,lv_color_hex(c),0);
     // Typed labels use the enlarged font throughout: mixing it with the sharper preset glyphs looks uneven.
-    setTextFont(statusText,*entry.tag?&passport_status_font:&passport_ui_font_x3,0);
-    setLabel(statusText,entry.text);setTextColor(statusText,lv_color_hex(ink),0);
-    setLabel(statusTag,*entry.tag?entry.tag:"MY STATUS");setTextColor(statusTag,lv_color_hex(ink),0);
-    char text[48];snprintf(text,sizeof(text),"%u / %u  ·  %s",m.status.index+1,m.statusCount(),m.status.awake?"常亮":"自动熄屏");
+    // In English a preset shows its English tag as the label (48 px when no word is longer than 6 letters).
+    const bool english=uiLanguage==Language::English&&*entry.tag;
+    unsigned word=0,longest=0;for(const char* c=entry.tag;*c;++c){word=*c==' '?0:word+1;longest=std::max(longest,word);}
+    setTextFont(statusText,english?(longest<=6?&lv_font_montserrat_48:&lv_font_montserrat_24):*entry.tag?&passport_status_font:&passport_ui_font_x3,0);
+    setLabel(statusText,english?entry.tag:entry.text);setTextColor(statusText,lv_color_hex(ink),0);
+    setLabel(statusTag,english?"":*entry.tag?entry.tag:"MY STATUS");setTextColor(statusTag,lv_color_hex(ink),0);
+    char text[48];snprintf(text,sizeof(text),"%u / %u  ·  %s",m.status.index+1,m.statusCount(),tr(m.status.awake?"常亮":"自动熄屏"));
     setLabel(statusFoot,*m.lastNotice?m.lastNotice:text);setTextColor(statusFoot,lv_color_hex(ink),0);
     visible(statusVoice,m.voiceBusy());visible(statusRoot,!m.voiceBusy());
     if(m.voiceBusy()){drawModel=&m;lv_obj_invalidate(statusVoice);}
@@ -719,7 +764,9 @@ void renderMenu(const Runtime& runtime){
         if(app==App::Calendar&&runtime.model.clockValid){snprintf(day,sizeof(day),"%d",t.tm_mday);badge.symbol=day;}
         setBadge(cellBadges[i],cellIcons[i],badge,on);
         setBgColor(cells[i],lv_color_hex(on?kAccent:kPanel),0);
-        setLabel(cellNames[i],menuLabel(app));setTextColor(cellNames[i],lv_color_hex(on?kBg:kText),0);
+        // A 72 px cell: in English a short name ("菜单·记分牌" -> "Scores") where the page's own is too long.
+        char key[40];snprintf(key,sizeof(key),"菜单·%s",menuLabel(app));const char* cell=!list&&uiLanguage==Language::English?i18n::exact(key):nullptr;
+        setLabel(cellNames[i],cell?cell:menuLabel(app));setTextColor(cellNames[i],lv_color_hex(on?kBg:kText),0);
     }
     setLabel(menuTitle,list||layout.mode==MenuLayout::Continuous?"全部功能":layout.mode==MenuLayout::Categories?kMenuPages[view.groups[page]]:layout.names[view.groups[page]]);
     char text[16];snprintf(text,sizeof(text),"%u/%u",list?selected+1:page+1,list?view.count:view.pages);setLabel(menuPage,text);
@@ -766,7 +813,7 @@ void drawCalendar(lv_event_t* e){
     static const char* const week[]{"日","一","二","三","四","五","六"};
     for(int c=0;c<7;++c){
         lv_area_t cell{area.x1+c*34,area.y1,area.x1+c*34+33,area.y1+17};
-        text.font=LV_FONT_DEFAULT;text.color=lv_color_hex(c==0||c==6?0xff8a73:kMuted);text.text=week[c];lv_draw_label(layer,&text,&cell);
+        text.font=LV_FONT_DEFAULT;text.color=lv_color_hex(c==0||c==6?0xff8a73:kMuted);text.text=tr(week[c]);lv_draw_label(layer,&text,&cell);  // exact entries: table pointers outlive the draw
     }
     for(int d=1;d<=days;++d){
         const int at=lead+d-1,c=at%7,r=at/7;const Date date{first.year,first.month,d};
@@ -790,7 +837,7 @@ void drawCalendar(lv_event_t* e){
         lv_area_t bottom=cell;bottom.y1+=h>=40?19:16;
         // A 34 px cell holds two characters: 劳动节 shows as 劳动.
         char shortName[7];snprintf(shortName,sizeof(shortName),"%s",below);
-        text.font=LV_FONT_DEFAULT;text.color=lv_color_hex(today?kBg:off==2?kWarn:name?0xffc861:lunar.day==1?kAccent:kMuted);text.text=shortName;
+        text.font=LV_FONT_DEFAULT;text.color=lv_color_hex(today?kBg:off==2?kWarn:name?0xffc861:lunar.day==1?kAccent:kMuted);text.text=shortName;  // lunar days and holidays, two characters a cell: kept Chinese
         lv_draw_label(layer,&text,&bottom);
     }
 }
@@ -990,7 +1037,7 @@ void initSonar(lv_obj_t* screen){
 }
 void renderSonar(const Runtime& runtime){
     const auto& m=runtime.model;drawModel=&m;uint8_t order[Model::kSonarSlots];const unsigned count=m.sonarVisible(order);char text[96];
-    snprintf(text,sizeof(text),"%s %u",m.sonarNamed?"有标识":"未标识",count);setLabel(sonarMode,text);visible(sonarMode,!m.sonarList);
+    snprintf(text,sizeof(text),"%s %u",tr(m.sonarNamed?"有标识":"未标识"),count);setLabel(sonarMode,text);visible(sonarMode,!m.sonarList);
     const Model::SonarDevice* focus=nullptr;for(unsigned i=0;i<count;++i)if(!memcmp(m.sonar[order[i]].addr,m.sonarFocus,6))focus=&m.sonar[order[i]];
     if(m.sonarPeerRssi&&!focus){snprintf(text,sizeof(text),"■ 已连接手机  %d dBm",m.sonarPeerRssi);setLabel(sonarInfo,text);setTextColor(sonarInfo,lv_color_hex(0x22c55e),0);
         snprintf(text,sizeof(text),"约 %.1f 米 · 上下键选择其他设备",sonarMeters(m.sonarPeerRssi));setLabel(sonarDetail,text);}
@@ -1025,13 +1072,13 @@ void renderRate(const Model& m){
         visible(rateRows[i],i<m.rateCount);if(i>=m.rateCount)continue;
         const auto& r=m.rates[i];const double each=1/r.value;int units=1;while(each*units<1&&units<10000)units*=100;
         const bool on=i==m.rateIndex;
-        if(units==1)snprintf(text,sizeof(text),"%s %s",currencyName(r.code),r.code);else snprintf(text,sizeof(text),"%d %s",units,currencyName(r.code));
+        if(units==1)uiLanguage==Language::English?snprintf(text,sizeof(text),"%s",r.code):snprintf(text,sizeof(text),"%s %s",currencyName(r.code),r.code);else snprintf(text,sizeof(text),"%d %s",units,tr(currencyName(r.code)));
         setLabel(rateNames[i],text);snprintf(text,sizeof(text),each*units>=100?"%.2f":"%.4f",each*units);setLabel(rateValues[i],text);
         setBgColor(rateRows[i],lv_color_hex(on?kAccent:kPanel),0);setTextColor(rateNames[i],lv_color_hex(on?kBg:kText),0);setTextColor(rateValues[i],lv_color_hex(on?kBg:kAccent),0);
     }
     if(!m.rateCount){setLabel(rateFoot,"");return;}
     const auto& r=m.rates[m.rateIndex%m.rateCount];
-    snprintf(text,sizeof(text),"1 %s = %.4g %s",currencyName(m.rateBase),r.value,currencyName(r.code));setLabel(rateFoot,text);
+    {char base[24];snprintf(base,sizeof(base),"%s",tr(currencyName(m.rateBase)));snprintf(text,sizeof(text),"1 %s = %.4g %s",base,r.value,tr(currencyName(r.code)));}setLabel(rateFoot,text);
     // The picked row turns red while its delete is asked.
     if(m.rateArmed)setBgColor(rateRows[m.rateIndex%m.rateCount],lv_color_hex(0xff5a5a),0);
 }
@@ -1111,7 +1158,7 @@ void renderQuake(const Model& m){
     setLabel(quakeLevel,q.mag>=70?"大地震":q.mag>=60?"强震":q.mag>=45?"中强震":q.mag>=30?"有感地震":"微震");
     setLabel(quakePlace,q.place);
     snprintf(text,sizeof(text),"深 %u km",q.depth);setLabel(quakeDepth,text);
-    char when[24],rel[24];time_t at=q.at;tm t{};localtime_r(&at,&t);strftime(when,sizeof(when),"%m月%d日 %H:%M",&t);ago(q.at,rel,sizeof(rel));
+    char when[24],rel[24];time_t at=q.at;tm t{};localtime_r(&at,&t);strftime(when,sizeof(when),tr("%m月%d日 %H:%M"),&t);ago(q.at,rel,sizeof(rel));
     snprintf(text,sizeof(text),"%s%s%s",when,*rel?"  ·  ":"",rel);setLabel(quakeTime,text);
     for(unsigned i=0;i<4;++i){
         const unsigned index=m.quakeIndex%m.quakeCount+1+i;
@@ -1176,7 +1223,18 @@ void renderTabs(lv_obj_t** tabs,lv_obj_t** texts,unsigned count,unsigned on){
 struct Painter{
     lv_layer_t* layer;lv_area_t area;
     void text(const char* s,int x1,int y,int x2,uint32_t color,lv_text_align_t align=LV_TEXT_ALIGN_LEFT,const lv_font_t* font=LV_FONT_DEFAULT){
-        lv_draw_label_dsc_t d;lv_draw_label_dsc_init(&d);d.text=s;d.text_local=1;d.font=font;d.color=lv_color_hex(color);d.align=align;
+        lv_draw_label_dsc_t d;lv_draw_label_dsc_init(&d);d.text=tr(s);reportChinese(d.text);d.text_local=1;  // text_local: copied, so tr()'s buffer may be reused
+        // One line: English that does not fit takes the smaller Latin font, then is cut with "…" (the Chinese was laid out for its width).
+        char cut[192];
+        const auto width=[](const char* s,size_t n,const lv_font_t* f){lv_text_attributes_t plain{};plain.text_flags=LV_TEXT_FLAG_NONE;return lv_text_get_width(s,n,f,&plain);};
+        if(uiLanguage==Language::English&&width(d.text,strlen(d.text),font)>x2-x1){
+            const bool ascii=std::all_of(d.text,d.text+strlen(d.text),[](char c){return static_cast<unsigned char>(c)<0x80;});
+            if(ascii&&font==LV_FONT_DEFAULT&&width(d.text,strlen(d.text),&lv_font_montserrat_14)<=x2-x1)font=&lv_font_montserrat_14;
+            else{size_t n=std::min(strlen(d.text),sizeof(cut)-4);memcpy(cut,d.text,n);
+                while(n){while(n&&(static_cast<unsigned char>(cut[n-1])&0xc0)==0x80)--n;if(n)--n;memcpy(cut+n,"…",4);if(width(cut,n+3,font)<=x2-x1)break;}
+                d.text=cut;}
+        }
+        d.font=font;d.color=lv_color_hex(color);d.align=align;
         lv_area_t a{area.x1+x1,area.y1+y,area.x1+x2,area.y1+y+lv_font_get_line_height(font)};lv_draw_label(layer,&d,&a);
     }
     void rect(int x1,int y1,int x2,int y2,uint32_t color,int radius=0){
@@ -1255,7 +1313,7 @@ void renderWifi(const Model& m){
     else if(m.wifiTab==2&&m.lanCount){
         const auto* mac=m.page.wifi.lan[m.wifiIndex%m.lanCount].mac;snprintf(info,sizeof(info),"MAC %02X:%02X:%02X:%02X:%02X:%02X",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
         snprintf(status,sizeof(status),"局域网内 %u 台设备在线",m.lanCount);
-    }else if(m.wifiTab==3&&m.wakeSentAt){const time_t at=m.wakeSentAt;tm t{};localtime_r(&at,&t);strftime(info,sizeof(info),"%H:%M:%S 已发送唤醒包",&t);}
+    }else if(m.wifiTab==3&&m.wakeSentAt){const time_t at=m.wakeSentAt;tm t{};localtime_r(&at,&t);strftime(info,sizeof(info),tr("%H:%M:%S 已发送唤醒包"),&t);}
     setLabel(wifiInfo,info);setLabel(wifiStatus,*m.wifiNote?m.wifiNote:status);
     lv_obj_invalidate(wifiView);
 }
@@ -2298,7 +2356,7 @@ void drawHealthOverview(Painter& p,const Model& m,time_t now){
         }
         const auto kind=kinds[row];const uint32_t color=kHealthColors[unsigned(kind)];
         static const char* const marks[]{"水","重","糖","温","压","经","亲"};p.rect(4,y+4,28,y+24,color,6);p.text(marks[unsigned(kind)],4,y+5,28,kBg,LV_TEXT_ALIGN_CENTER);
-        p.text(kHealthNames[unsigned(kind)],36,y+5,80,kText);
+        p.text(kHealthNames[unsigned(kind)],36,y+5,kind==HealthKind::Water||kind==HealthKind::Period?80:118,kText);  // values sit right of 120
         if(kind==HealthKind::Water){
             const unsigned cups=b.cups(healthDay(now)),goal=kWaterGoals[m.healthPrefs.goal%4];
             p.rect(80,y+12,150,y+17,kBg,3);if(cups)p.rect(80,y+12,80+70*std::min(cups,goal)/goal,y+17,color,3);
@@ -2942,7 +3000,7 @@ void renderSlides(const Runtime& runtime){
     setLabel(slidesStatus,off?"● 请在设置中打开蓝牙":m.slidesReady?"● 可以翻页":"● 在电脑蓝牙中添加此设备");
     setTextColor(slidesStatus,lv_color_hex(m.slidesReady?kAccent:kWarn),0);
     const char* names[]={"上一页","下一页","开始放映","黑屏","结束放映"};
-    if(!m.slidesPressed)text[0]=0;else snprintf(text,sizeof(text),"%s%s",m.slidesFailed?"未发送：":"已发送：",names[static_cast<unsigned>(m.slidesLast)]);
+    if(!m.slidesPressed)text[0]=0;else {char sent[24];snprintf(sent,sizeof(sent),"%s",tr(m.slidesFailed?"未发送：":"已发送："));snprintf(text,sizeof(text),"%s%s",sent,tr(names[static_cast<unsigned>(m.slidesLast)]));}
     setLabel(slidesLast,text);setTextColor(slidesLast,lv_color_hex(m.slidesFailed?kWarn:kText),0);
 #ifdef PASSPORT_DEVICE
     setLabel(slidesName,board::bluetoothName());
@@ -3270,7 +3328,7 @@ bool uiPrepare(App app){
     if(dashboardNeeded&&!dashboard){initDashboard(lv_screen_active(),app);created=true;}
     if(app==App::Settings&&!rows[0]){
         auto* screen=lv_screen_active();
-        const bool menu=false;const int count=kRows,top=64,step=26,height=24,badge=21;  // eight rows end at y=270, above the notice
+        const bool menu=false;const int count=kRows,top=62,step=23,height=22,badge=20;  // nine rows end at y=268, above the notice
         for (int i = 0; i < count; ++i) {
             rows[i] = lv_obj_create(screen);
             box(rows[i], 8, top + i * step, 224, height, kPanel, 8);
@@ -3326,12 +3384,13 @@ void uiRender(const Runtime& runtime) {
         strcpy(values[1],!runtime.settings().bluetoothEnabled?"已关闭":model.bleConnected?"已连接":"未连接");
         snprintf(values[2],sizeof(values[2]),"%u%%",runtime.settings().brightness);
         snprintf(values[3],sizeof(values[3]),"%u%%",model.volume);
-        if(runtime.settings().idleSeconds)snprintf(values[4],sizeof(values[4]),"%lu 分钟",static_cast<unsigned long>(runtime.settings().idleSeconds/60));else strcpy(values[4],"永不");
+        if(runtime.settings().idleSeconds)snprintf(values[4],sizeof(values[4]),tr("%lu 分钟"),static_cast<unsigned long>(runtime.settings().idleSeconds/60));else strcpy(values[4],"永不");
         strcpy(values[5],model.wakeWord?"已开启":"已关闭");
         // The city without its province ("杭州 · 浙江").
         snprintf(values[6],sizeof(values[6]),"%s",*model.cityName?model.cityName:"未设置");if(char* dot=strstr(values[6]," · "))*dot=0;
-        strcpy(values[7],"");
-        const char* names[kRows]={"WiFi 配置","蓝牙连接","屏幕亮度","默认音量","自动息屏","唤醒与对讲","所在城市","联系开发者"};
+        strcpy(values[7],uiLanguage==Language::English?"English":"中文");strcpy(values[8],"");
+        // 语言 keeps both names, so it can be found in either language.
+        const char* names[kRows]={"WiFi 配置","蓝牙连接","屏幕亮度","默认音量","自动息屏","唤醒与对讲","所在城市","语言 Language","联系开发者"};
         for(unsigned i=0;i<kRows;++i){
             const bool selected=i==model.settingsSelection;
             setLabel(rowLabels[i],names[i]);setLabel(rowValues[i],values[i]);setBadge(rowBadges[i],rowIcons[i],settingsBadge(static_cast<SettingsPage>(i+1)),selected);
@@ -3466,6 +3525,15 @@ void uiRender(const Runtime& runtime) {
                 setTextColor(lines[0],lv_color_hex(usb?kMuted:kAccent),0);setTextColor(lines[1],lv_color_hex(usb?kAccent:kMuted),0);
                 setLabel(lines[2],editing?"上下调整时间，0 表示永不":usb?(model.usbAwake?"连着电脑一直亮屏":"连着电脑也按时间熄屏"):"确认后上下调整");
                 setLabel(lines[3],usb?"连电脑时只熄屏，不会睡眠":editing?"确认保存 · 长按确认取消":"充电头供电照常熄屏");
+            }else if(page==SettingsPage::Language){
+                // Two rows like 所在城市: the one picked in the accent colour, the saved one marked 当前.
+                const unsigned at=model.settingsValue&1;const char* names[2]{"中文","English"};
+                setLabel(heading,"语言 Language");setLabel(value,names[at]);
+                for(unsigned i=0;i<2;++i){
+                    char row[48];snprintf(row,sizeof(row),"%s  %s%s%s",i==at?"●":"○",names[i],i==static_cast<unsigned>(uiLanguage)?" · ":"",i==static_cast<unsigned>(uiLanguage)?tr("当前"):"");
+                    setLabel(lines[i],row);setTextColor(lines[i],lv_color_hex(i==at?kAccent:kMuted),0);
+                }
+                setLabel(lines[2],"确认后立即生效");setLabel(lines[3],"英文版仍有部分中文");
             }else if(page==SettingsPage::Contact){
                 // A read-only card: the developer's WeChat and email, and a thank-you.
                 setLabel(heading,"联系开发者");setLabel(value,"感谢使用！");

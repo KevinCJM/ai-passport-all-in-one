@@ -35,6 +35,7 @@ class WifiPortal {
     esp_err_t stockSave(httpd_req_t*);
     esp_err_t wheelList(httpd_req_t*);
     esp_err_t wheelSave(httpd_req_t*);
+    esp_err_t languageSave(httpd_req_t*);
 public:
     char name[28]{};
     void init(httpd_handle_t,esp_netif_t*);

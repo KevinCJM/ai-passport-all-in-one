@@ -268,6 +268,8 @@ class Device:
      state['transport']=self.transport
      with self.lock:self.state=state;self.next_id=max(self.next_id,state['command_id'])
      last=time.monotonic();self.last_seen=last
+     if 'language' in state:  # the assistant's window follows the badge's 语言 on its next start
+      import passport_i18n;passport_i18n.follow_badge(state['language'])
      if self.link_changed:
       self.link_changed=False
       self.next_control=self.request('/app_state')['control_id']
@@ -387,7 +389,7 @@ button:hover{border-color:var(--accent)}button.primary{background:var(--accent);
 <section id=diag><h2>诊断</h2><p class=muted>助手和胸牌之间的连接状态，每 2 秒刷新。遇到问题时复制下来发给开发者。</p>
 <div class=row><button onclick="copyDiag()">复制诊断信息</button><span id=diagResult class=out></span></div><pre id=state>正在读取…</pre></section>
 </main>
-<script src="/menu-editor.js"></script><script>
+<script src="/i18n.js"></script><script src="/menu-editor.js"></script><script>
 const $=s=>document.querySelector(s);
 PassportMenu.mount($('#menu-editor'),'/api');
 function say(out,text,kind=''){out.textContent=text;out.className='out '+kind}
@@ -465,7 +467,7 @@ async function act(command){const out=$('#actResult');try{await post('/api/actio
 async function copyDiag(){try{await navigator.clipboard.writeText($('#state').textContent);say($('#diagResult'),'已复制')}catch(e){say($('#diagResult'),'复制失败，请手动选中复制','err')}}
 // The badge connects after the page opened (or comes back): read the sections that could not be read yet.
 let wasReady;
-async function poll(){try{const s=await (await fetch('/api/state')).json(),c=$('#conn');const ready=!!s.link_ready;
+async function poll(){try{const s=await (await fetch('/api/state')).json(),c=$('#conn');const ready=!!s.link_ready;if(s.language===1)PassportI18n.start(true);
  if(ready&&wasReady===false){if(!loaded.labels)loadLabels();if(!loaded.events)loadEvents();if(!loaded.codes)loadCodes();if(!macApps.length)macLoad()}wasReady=ready;const via=s.transport=='usb'?'USB':s.transport=='ble'?'蓝牙':'';c.textContent=ready?'胸牌已连接 · '+via:'胸牌未连接'+(via?'（正在通过'+via+'连接）':'');c.className='pill '+(ready?'ok':'bad');$('#state').textContent=JSON.stringify(s,null,2)}catch(e){$('#conn').textContent='助手未响应';$('#conn').className='pill bad'}}
 poll();setInterval(poll,2000);
 // 电脑助手: pairing, the computer's features and options (the Windows assistant's only window; the Mac window has them too).
@@ -495,6 +497,10 @@ class Handler(BaseHTTPRequestHandler):
   try:
    if self.headers.get('Host')!='127.0.0.1:%d'%UI_PORT:return self.send(403,{'error':'host'})
    if self.path=='/':return self.send(200,PAGE,'text/html;charset=utf-8')
+   # English (the badge's 语言 setting, else the computer's): the translator, started at once when English.
+   if self.path=='/i18n.js':
+    import passport_i18n
+    return self.send(200,(pathlib.Path(__file__).parent/'passport_i18n.js').read_text(encoding='utf-8')+('PassportI18n.start(true);\n' if passport_i18n.english() else ''),'application/javascript;charset=utf-8')
    if self.path=='/menu-editor.js':return self.send(200,(pathlib.Path(__file__).parent/'passport_menu.js').read_text(encoding='utf-8'), 'application/javascript;charset=utf-8')
    if self.path=='/api/assistant':return self.send(200,ASSISTANT.web_state() if ASSISTANT else {})
    if DEVICE is None:return self.send(503,{'error':'胸牌未连接'})

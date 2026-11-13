@@ -70,7 +70,8 @@ void NativeServices::publish(const Job& job,const char* state,const char* phase,
     if(*notice_){cJSON_AddStringToObject(j.value,"notice",notice_);notice_[0]=0;}
     if(*city_){cJSON_AddStringToObject(j.value,"city",city_);city_[0]=0;}
     if(select_>=0){cJSON_AddNumberToObject(j.value,"select",select_);select_=-1;}
-    if(job.app==App::Radio){auto* m=cJSON_AddObjectToObject(j.value,"media");cJSON_AddNumberToObject(m,"index",mediaIndex_);cJSON_AddNumberToObject(m,"count",mediaCount_);}
+    if(job.app==App::Radio){auto* m=cJSON_AddObjectToObject(j.value,"media");cJSON_AddNumberToObject(m,"index",mediaIndex_);cJSON_AddNumberToObject(m,"count",mediaCount_);
+        cJSON_AddNumberToObject(m,"region",mediaRegion_);cJSON_AddStringToObject(m,"home",mediaHome_);auto* ids=cJSON_AddArrayToObject(m,"ids");for(unsigned i=0;i<mediaCount_;++i)cJSON_AddItemToArray(ids,cJSON_CreateNumber(mediaIds_[i]));}
     if(job.app==App::Radio||job.app==App::Podcast)cJSON_AddBoolToObject(j.value,"playing",playing_);
     if(job.app==App::Podcast){auto* p=cJSON_AddObjectToObject(j.value,"podcast");
         if(podcastPlayer_){cJSON_AddNumberToObject(p,"pos",podcastPos_);cJSON_AddNumberToObject(p,"dur",podcastDur_);
@@ -1146,17 +1147,22 @@ void NativeServices::media(){
     auto bytes=std::unique_ptr<uint8_t[]>(new(std::nothrow)uint8_t[1024]);
     if(!bytes){publish(current_,"内存不足","error");return;}
     MediaPrefs prefs{};mediaLoad("prefs",prefs);
-    const auto radios=pickRadios(prefs.city,prefs.province);const unsigned total=radios.count;
-    const char* note=*prefs.city?"":"手机配置页可选择所在城市";
+    // 选台 may pick another region than the city's (kept in NVS "radio").
+    RadioPrefs chosen{};if(!mediaLoad("radio",chosen)||chosen.region>std::size(kRadioRegions))chosen.region=0;
+    const auto pick=[&]{return chosen.region?pickRegion(chosen.region-1):pickRadios(prefs.city,prefs.province);};
+    auto radios=pick();unsigned total=radios.count;
+    const char* note=*prefs.city||chosen.region?"":"手机配置页可选择所在城市";
     const auto station=[&](unsigned i)->const RadioStation&{return kRadioStations[radios.index[i]];};
     const auto show=[&](const char* state,const char* phase="ready"){
         static constexpr const char* tiers[]{"本地","省内","全国"};const auto& s=station(index);
         char meta[40]{},area[96]{},upcoming[96]{};
-        snprintf(meta,sizeof(meta),"%s%s",tiers[static_cast<unsigned>(radioTier(s,prefs.city,prefs.province))],s.url?"":" · 64k");
-        if(*prefs.city)snprintf(area,sizeof(area),"所在城市：%s",prefs.city);else copy(area,"全国与网络电台");
+        snprintf(meta,sizeof(meta),"%s%s",chosen.region?kRadioRegions[s.region]:tiers[static_cast<unsigned>(radioTier(s,prefs.city,prefs.province))],s.url?"":" · 64k");
+        if(chosen.region)snprintf(area,sizeof(area),"收听地区：%s",kRadioRegions[chosen.region-1]);
+        else if(*prefs.city)snprintf(area,sizeof(area),"所在城市：%s",prefs.city);else copy(area,"全国与网络电台");
         if(total>1)snprintf(upcoming,sizeof(upcoming),"下一个：%s",station((index+1)%total).name);
         const char* lines[]{meta,area,upcoming,note};
-        mediaIndex_=index;mediaCount_=total;playing_=playing;
+        mediaIndex_=index;mediaCount_=total;playing_=playing;mediaRegion_=chosen.region;copy(mediaHome_,prefs.city);
+        for(unsigned i=0;i<total;++i)mediaIds_[i]=radios.index[i];
         publish(current_,state,phase,s.name,lines);
     };
     const auto close=[&](){if(client){esp_http_client_close(client);esp_http_client_cleanup(client);client=nullptr;}audio_.stop();};
@@ -1166,6 +1172,11 @@ void NativeServices::media(){
             current_.request=action.request;retries=0;
             if(!strcmp(action.operation,"toggle")){playing=!playing;restart=playing;close();if(!playing)show("已停止");}
             else if(!strcmp(action.operation,"next")||!strcmp(action.operation,"prev")){index=(index+(strcmp(action.operation,"next")?total-1:1))%total;restart=playing;close();if(!playing)show("已停止");}
+            // 选台: "play:N" plays station N; "region:R" lists region R's stations (0 = the city's), stopped.
+            else if(!strncmp(action.operation,"play:",5)&&unsigned(atoi(action.operation+5))<total){index=atoi(action.operation+5);playing=restart=true;close();}
+            else if(!strncmp(action.operation,"region:",7)&&unsigned(atoi(action.operation+7))<=std::size(kRadioRegions)){
+                chosen.region=static_cast<uint8_t>(atoi(action.operation+7));mediaSave("radio",chosen);
+                radios=pick();total=radios.count;index=0;playing=false;close();show("已停止");}
             else show(playing?"正在播放":"已停止");
         }
         if(!playing)continue;

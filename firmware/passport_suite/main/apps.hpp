@@ -3,8 +3,8 @@
 #include <cstdint>
 namespace passport {
 enum class App : uint8_t { Home, Chat, Dictation, Codex, Focus, Monitor, Menu=7, RetiredOtp, Radio, Settings, Words, Slides, Alert, Status, Calendar, Countdown, Torch, Qr, News, Sonar, Rate, Stopwatch, History, Daily, Quake, Quiz, Hacker, Wifi, Sound, Motion, Podcast, Forecast, Noise, Alarm, Stock, Typhoon, Hot, Memo, Wheel, Translate, Guard, Todo, Ledger, Calc, Voice, Walkie, Macro, Score, Feishu, Book, Health, Train, Count };
-enum class SettingsPage : uint8_t { List, Wifi, Bluetooth, Brightness, Volume, Idle, Wake, City, Contact };
-inline constexpr uint8_t kSettingsRows = 8;
+enum class SettingsPage : uint8_t { List, Wifi, Bluetooth, Brightness, Volume, Idle, Wake, City, Language, Contact };
+inline constexpr uint8_t kSettingsRows = 9;
 // Menu order: themed pages of up to eight (< 9, fitting 3 x 3 grid with breathing room);
 // kMenuPages names them and kMenuStarts holds each page's first entry. The voice pages come first, 系统设置 ends the last page.
 inline constexpr std::array<App,48> kFunctions{

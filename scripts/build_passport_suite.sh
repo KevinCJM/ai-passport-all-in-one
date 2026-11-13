@@ -36,19 +36,22 @@ FONT_PYTHON="$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies/pyth
 [[ -x "$FONT_PYTHON" ]] || FONT_PYTHON=python3
 # The generated fonts are committed: without Pillow the build uses them as they are.
 if "$FONT_PYTHON" -c "import PIL" 2>/dev/null; then "$FONT_PYTHON" "$ROOT/scripts/generate_passport_font.py"; else echo "Pillow missing: using the committed fonts"; fi
-python "$IDF_PATH/tools/idf.py" -DIDF_TARGET=esp32c3 build
-python "$IDF_PATH/tools/idf.py" merge-bin -o merged_flash.bin
+# SIM_ENGLISH=1: the simulator in English, built apart in build-en (scripts/test_passport_menu_sim.py --english).
+BUILD_DIR=build;BUILD_ARGS=()
+if [[ "${SIM_ENGLISH:-}" == 1 ]]; then BUILD_DIR=build-en;BUILD_ARGS=(-B build-en -DPASSPORT_SIM_ENGLISH=1); fi
+python "$IDF_PATH/tools/idf.py" ${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"} -DIDF_TARGET=esp32c3 build
+python "$IDF_PATH/tools/idf.py" ${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"} merge-bin -o merged_flash.bin
 # 语音唤醒's model, written by flash_passport_device.py to the free flash after the identity card.
 if [[ -d components/espressif__esp-sr ]]; then python -I components/espressif__esp-sr/model/pack_model.py -m components/espressif__esp-sr/model/wakenet_model -o "$PWD/build/srmodels.bin" >/dev/null; fi
-python - <<'PY'
-import json
+BUILD_DIR="$BUILD_DIR" python - <<'PY'
+import json, os
 from pathlib import Path
-c = json.loads(Path('build/config/sdkconfig.json').read_text())
+c = json.loads(Path(os.environ['BUILD_DIR'],'config/sdkconfig.json').read_text())
 assert c['IDF_TARGET'] == 'esp32c3'
 assert c['ESPTOOLPY_FLASHSIZE'] == '8MB' and not c.get('SPIRAM')
 assert c['ESP_WIFI_ENABLED']
 assert not c.get('COMPILER_CXX_EXCEPTIONS') and not c.get('COMPILER_CXX_RTTI')
-name = json.loads(Path('build/project_description.json').read_text())['project_name']
-assert Path('build', name + '.bin').stat().st_size <= (0x400000 if name=='passport_device' else 0x340000)
+name = json.loads(Path(os.environ['BUILD_DIR'],'project_description.json').read_text())['project_name']
+assert Path(os.environ['BUILD_DIR'], name + '.bin').stat().st_size <= (0x400000 if name=='passport_device' else 0x340000)
 print('SUITE_BUILD_OK C++ C3 8MB PSRAM=0 physical_build='+str(name=='passport_device'))
 PY

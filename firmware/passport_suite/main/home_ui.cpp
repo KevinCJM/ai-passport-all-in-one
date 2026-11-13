@@ -1,3 +1,4 @@
+#include "i18n.hpp"
 #include "home_ui.hpp"
 #include "identity.hpp"
 #include "lvgl.h"
@@ -12,7 +13,7 @@ constexpr uint32_t bg=0x021018,green=0x4bffc4,white=0xeaf4ff,muted=0x9bbbd1,line
 lv_obj_t *root,*clockHour,*dateLabel,*cityLabel,*conditionLabel,*warnBadge;
 char shownWarning[16];int shownLevel=-2;  // what the badge was last set to
 int drawnIcon=-1;  // the icon root's draw callback last painted
-void setText(lv_obj_t* obj,const char* text){if(strcmp(lv_label_get_text(obj),text))lv_label_set_text(obj,text);}
+void setText(lv_obj_t* obj,const char* text){text=tr(text);reportChinese(text);if(strcmp(lv_label_get_text(obj),text))lv_label_set_text(obj,text);}
 lv_obj_t *values[4],*captions[4];
 lv_obj_t *weatherRoot,*cardRoot,*photoRoot;
 uint32_t shownIdentity;
@@ -74,8 +75,8 @@ lv_obj_t* panel(lv_obj_t* parent,int x,int y,int width,int height,uint32_t color
 }
 bool ascii(const char* value){for(;*value;++value)if(static_cast<unsigned char>(*value)>127)return false;return true;}
 void placeholder(lv_obj_t* parent,int y,const char* title,const char* hint){
-    auto* t=text(parent,12,y,216,LV_FONT_DEFAULT,white);lv_obj_set_style_text_align(t,LV_TEXT_ALIGN_CENTER,0);lv_label_set_text(t,title);
-    auto* h=text(parent,20,y+28,200,LV_FONT_DEFAULT,muted);lv_label_set_long_mode(h,LV_LABEL_LONG_WRAP);lv_obj_set_style_text_align(h,LV_TEXT_ALIGN_CENTER,0);lv_label_set_text(h,hint);
+    auto* t=text(parent,12,y,216,LV_FONT_DEFAULT,white);lv_obj_set_style_text_align(t,LV_TEXT_ALIGN_CENTER,0);lv_label_set_text(t,tr(title));
+    auto* h=text(parent,20,y+28,200,LV_FONT_DEFAULT,muted);lv_label_set_long_mode(h,LV_LABEL_LONG_WRAP);lv_obj_set_style_text_align(h,LV_TEXT_ALIGN_CENTER,0);lv_label_set_text(h,tr(hint));
 }
 // Passport-style card: avatar on the left, name/title/number on the right, motto below.
 void initCard(lv_obj_t* screen){
@@ -83,7 +84,7 @@ void initCard(lv_obj_t* screen){
     cardRoot=panel(screen,0,35,240,257,bg,0,0);
     auto* card=panel(cardRoot,8,7,224,245,0x062433,12,0x1d5a73);
     auto* brand=text(card,12,8,140,&lv_font_montserrat_14,green);lv_label_set_text(brand,"AI PASSPORT");lv_obj_set_style_text_letter_space(brand,2,0);
-    auto* kind=text(card,150,8,62,LV_FONT_DEFAULT,muted);lv_obj_set_style_text_align(kind,LV_TEXT_ALIGN_RIGHT,0);lv_label_set_text(kind,"身份卡");lv_obj_set_y(kind,5);
+    auto* kind=text(card,150,8,62,LV_FONT_DEFAULT,muted);lv_obj_set_style_text_align(kind,LV_TEXT_ALIGN_RIGHT,0);lv_label_set_text(kind,tr("身份卡"));lv_obj_set_y(kind,5);
     panel(card,12,30,200,1,line,0,0);
     if(!id.valid){placeholder(card,90,id.busy?"正在更新身份卡":"尚未导入身份卡",id.busy?"请保持手机连接 Passport 热点":"设置 → WiFi 配置，用手机网页填写姓名、头像和签名");return;}
     const auto& h=id;
@@ -124,7 +125,7 @@ void homeUiInit(lv_obj_t* screen){
         values[i]=text(root,x,y,i%2?77:79,i==1?&lv_font_montserrat_20:&lv_font_montserrat_24,white);
         captions[i]=text(root,i%2?130:35,y+27,i%2?100:78,LV_FONT_DEFAULT,muted);
     }
-    lv_label_set_text(captions[0],"温度°C");lv_label_set_text(captions[1],"最低 / 最高");lv_label_set_text(captions[2],"湿度");lv_label_set_text(captions[3],"空气 AQI");
+    for(unsigned i=0;i<4;++i){static const char* const names[]{"温度°C","最低 / 最高","湿度","空气 AQI"};lv_label_set_text(captions[i],tr(names[i]));}
     cardRoot=photoRoot=nullptr;shownIdentity=identityRevision();drawnIcon=-1;
 }
 void homeUiRender(const Runtime& runtime){
@@ -141,7 +142,7 @@ void homeUiRender(const Runtime& runtime){
     if(screen!=HomeScreen::Weather)return; // Static screens are not redrawn every second.
     const auto stamp=time(nullptr);tm local{};const bool clockReady=m.clockValid&&stamp>1700000000;localtime_r(&stamp,&local);
     if(clockReady){strftime(buffer,sizeof(buffer),"%H:%M",&local);setText(clockHour,buffer);
-        const char* days[]={"周日","周一","周二","周三","周四","周五","周六"};char date[24];strftime(date,sizeof(date),"%Y-%m-%d",&local);snprintf(buffer,sizeof(buffer),"%s %s",date,days[local.tm_wday]);setText(dateLabel,buffer);
+        const char* days[]={"周日","周一","周二","周三","周四","周五","周六"};char date[24];strftime(date,sizeof(date),"%Y-%m-%d",&local);snprintf(buffer,sizeof(buffer),"%s %s",date,tr(days[local.tm_wday]));setText(dateLabel,buffer);
     }else{setText(clockHour,"--:--");setText(dateLabel,"等待网络校时");}
     setText(cityLabel,w.known?w.city:"请先选择城市");setText(conditionLabel,w.known?w.condition:m.livePhase==LivePhase::Loading?"更新中":"天气未知");
     // Style writes repaint even when unchanged, so the badge is only touched when the warning changes.

@@ -89,8 +89,6 @@ public:
         auto& m=runtime_.model;for(auto& row:m.aiRows)row[0]=0;for(unsigned i=0;i<m.page.ai.count;++i)if(m.page.ai.items[i].state==3)m.page.ai.items[i].state=2;
         request("readall");
     }
-    // Long press on Up/Down tunes the radio; short presses change the volume.
-    void station(bool next) { if(runtime_.active()==App::Radio) request(next?"next":"prev"); }
     void hostSeen() { hostContact_=esp_timer_get_time()/1000000; }
     void transport(bool network,bool usb,bool ble) { networkReady_=network;usb_=usb;bleReady_=ble; }
     esp_err_t receive(httpd_req_t* request);

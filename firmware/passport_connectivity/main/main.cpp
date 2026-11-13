@@ -1,4 +1,5 @@
 // SIMULATOR ONLY. Real IDF WiFi/NimBLE stacks; virtual peers and test credentials.
+#include "i18n.hpp"
 #include "startup_object.hpp"
 #include "suite.hpp"
 #include "identity.hpp"
@@ -117,7 +118,7 @@ void state(char* data, size_t size) {
     const auto used=strlen(data);
     if(used&&used+450<size) {
         char ppp[360];pppLink.status(ppp,sizeof(ppp));
-        snprintf(data+used-1,size-used+1,",\"ppp\":%s,\"usb_connected\":%s,\"idle_seconds\":%u,\"power\":%u,\"voice_interruptions\":%u,\"voice_ends\":%u,\"voice_overflows\":%u,\"minimum_heap\":%u,\"uptime_seconds\":%llu}",ppp,runtime.connected()?"true":"false",static_cast<unsigned>(settings.idleSeconds),static_cast<unsigned>(runtime.power(esp_timer_get_time()/1000000)),unsigned(live.audio().interruptions.load()),unsigned(live.audio().voiceEnds.load()),unsigned(live.audio().voiceOverflows.load()),unsigned(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)),static_cast<unsigned long long>(esp_timer_get_time()/1000000));
+        snprintf(data+used-1,size-used+1,",\"ppp\":%s,\"usb_connected\":%s,\"idle_seconds\":%u,\"power\":%u,\"voice_interruptions\":%u,\"voice_ends\":%u,\"voice_overflows\":%u,\"minimum_heap\":%u,\"uptime_seconds\":%llu,\"language\":%u}",ppp,runtime.connected()?"true":"false",static_cast<unsigned>(settings.idleSeconds),static_cast<unsigned>(runtime.power(esp_timer_get_time()/1000000)),unsigned(live.audio().interruptions.load()),unsigned(live.audio().voiceEnds.load()),unsigned(live.audio().voiceOverflows.load()),unsigned(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL|MALLOC_CAP_8BIT)),static_cast<unsigned long long>(esp_timer_get_time()/1000000),static_cast<unsigned>(uiLanguage));
     }
 #ifdef PASSPORT_DEVICE
     const size_t count=strlen(data);if(count+512<size){char boardState[512];board::diagnostics(boardState,sizeof(boardState));snprintf(data+count-1,size-count+1,",\"hardware\":%s}",boardState);}
@@ -764,7 +765,7 @@ int execute(const char* name) {
     if(previous==App::Settings&&settingsPageBefore==SettingsPage::Wifi&&!strcmp(name,"back")&&board::provisioning()){closePortalAt=0;setAp(false);if(!station&&*settings.wifiSsid)stationConnect(true);}
 #endif
     // Long Confirm in the podcast player only goes back to its list; the page and its task stay.
-    const bool leavingAudio=!strcmp(name,"back") && profile(previous).audio && !(previous==App::Podcast&&runtime.model.podcastPlayer);
+    const bool leavingAudio=!strcmp(name,"back") && profile(previous).audio && !(previous==App::Podcast&&runtime.model.podcastPlayer)&&!(previous==App::Radio&&runtime.model.radioList);
     const bool enteringAudio=!strcmp(name,"ok") && previous==App::Menu && profile(runtime.selectedApp()).audio && runtime.selectedApp()!=App::Dictation;
     // 语音输入: Confirm starts and ends speaking; on the error screen it reconnects instead (LiveServices).
     if(previous==App::Dictation && !strcmp(name,"ok") && runtime.model.livePhase!=LivePhase::Error) return dictationBle.toggle(runtime.generation());
@@ -785,10 +786,10 @@ int execute(const char* name) {
     if (!strcmp(name,"wake")) {runtime.wake(now);return 0;}
     // 高铁查询: "train:G7 明天" from the computer asks for a train as if it were said.
     if (!strncmp(name,"train:",6)) {runtime.wake(now);if(previous!=App::Train)runtime.switchTo(App::Train);return runtime.addTrain(name+6)?0:-9;}
-    // The radio reuses the long Up/Down presses (otherwise hotspot / settings shortcuts): long Up tunes to the next station
+    // The radio reuses the long Up/Down presses (otherwise hotspot / settings shortcuts): long Up opens 选台
     // (a podcast's player: 选期, its episode list), long Down steps the sleep timer.
     if (previous==App::Podcast&&!strcmp(name,"ap_on")) {runtime.podcastEpisodes(now);return 0;}
-    if (previous==App::Radio&&!strcmp(name,"ap_on")) {live.station(true);return 0;}
+    if (previous==App::Radio&&!strcmp(name,"ap_on")) {runtime.radioStations(now);return 0;}
     if ((previous==App::Radio||previous==App::Podcast)&&!strcmp(name,"settings")) {runtime.stepMediaTimer(now);return 0;}
     // The word page grades with them: long Up = known, long Down = not known.
     if (previous==App::Words&&(!strcmp(name,"ap_on")||!strcmp(name,"settings"))) {runtime.gradeWord(!strcmp(name,"ap_on"),now);return 0;}
@@ -991,7 +992,7 @@ extern "C" void app_main() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     // /app_state builds a bounded 2 KiB JSON snapshot; simulator and badge need the same stack budget.
     config.stack_size = 6144;
-    config.max_uri_handlers = 25;  // 22 + /content/* + /book + /health
+    config.max_uri_handlers = 26;  // 22 + /content/* + /book + /health + /language
     config.uri_match_fn=httpd_uri_match_wildcard;
 #ifdef PASSPORT_DEVICE
     config.lru_purge_enable=true;

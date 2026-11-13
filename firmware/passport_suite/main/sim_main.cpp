@@ -1,5 +1,7 @@
 #include <vector>
 #include "suite.hpp"
+#include "radio_stations.hpp"
+#include "i18n.hpp"
 #include "voice_add.hpp"
 #include <tuple>
 #include "ble_model.hpp"
@@ -128,6 +130,17 @@ void settingsTests(Runtime& runtime){
         runtime.key(Key::Back,0);CHECK(runtime.active()==App::Settings&&runtime.model.settingsPage==SettingsPage::List);
         runtime.key(Key::Back,0);CHECK(runtime.active()==App::Menu);runtime.key(Key::Back,0);CHECK(runtime.active()==App::Home);
     }
+#ifndef PASSPORT_SIM_ENGLISH  // the English simulator stays in English
+    // 语言 / Language: second from the bottom; Up/Down pick, Confirm saves and the UI (and its key hints) follow at once.
+    {CHECK(runtime.switchTo(App::Settings)==Result::Ok);auto& m=runtime.model;m.settingsPage=SettingsPage::List;m.settingsSelection=kSettingsRows-2;
+    runtime.key(Key::Confirm,0);CHECK(m.settingsPage==SettingsPage::Language&&m.settingsValue==0);
+    runtime.key(Key::Down,0);CHECK(m.settingsValue==1&&uiLanguage==Language::Chinese);uiRender(runtime);uiCapture("settings_language");
+    runtime.key(Key::Confirm,0);CHECK(m.settingsPage==SettingsPage::List&&uiLanguage==Language::English&&SettingsStore::loadByte("language")==1);
+    CHECK(!strcmp(tr("自动息屏"),"Screen off")&&!strcmp(tr("没有这条"),"没有这条"));
+    uiRender(runtime);uiCapture("settings_list_english");
+    runtime.key(Key::Confirm,0);runtime.key(Key::Up,0);runtime.key(Key::Confirm,0);CHECK(uiLanguage==Language::Chinese&&SettingsStore::loadByte("language")==0&&!strcmp(tr("自动息屏"),"自动息屏"));
+    m.lastNotice[0]=0;runtime.key(Key::Back,0);runtime.key(Key::Back,0);}
+#endif
     // 联系开发者: the last row, a read-only card; Up/Down/Confirm change nothing, Back returns to the list.
     {CHECK(runtime.switchTo(App::Settings)==Result::Ok);runtime.model.settingsPage=SettingsPage::List;runtime.model.settingsSelection=kSettingsRows-1;uiRender(runtime);uiCapture("settings_list_contact");
     const auto kept=runtime.settings();runtime.key(Key::Confirm,0);CHECK(runtime.model.settingsPage==SettingsPage::Contact);
@@ -182,8 +195,8 @@ void settingsTests(Runtime& runtime){
         m.wifiConnected=false;runtime.rememberWifi(before.wifiSsid,before.wifiPassword);CHECK(!strcmp(runtime.settings().wifiSsid,before.wifiSsid));
         runtime.key(Key::Back,30);CHECK(m.settingsPage==SettingsPage::List);
     }
-    // 唤醒与对讲: third from the bottom (above 所在城市 and 联系开发者), reached upward from the first; Confirm toggles and saves it.
-    runtime.key(Key::Up,29);runtime.key(Key::Up,29);runtime.key(Key::Up,29);CHECK(runtime.model.settingsSelection==kSettingsRows-3);runtime.key(Key::Confirm,29);CHECK(runtime.model.settingsPage==SettingsPage::Wake);
+    // 唤醒与对讲: fourth from the bottom (above 所在城市, 语言 and 联系开发者), reached upward from the first; Confirm toggles and saves it.
+    runtime.key(Key::Up,29);runtime.key(Key::Up,29);runtime.key(Key::Up,29);runtime.key(Key::Up,29);CHECK(runtime.model.settingsSelection==kSettingsRows-4);runtime.key(Key::Confirm,29);CHECK(runtime.model.settingsPage==SettingsPage::Wake);
     runtime.key(Key::Confirm,29);CHECK(runtime.model.wakeWord&&SettingsStore::loadByte("wake_word")==1);uiRender(runtime);uiCapture("settings_wake");
     runtime.key(Key::Confirm,29);CHECK(!runtime.model.wakeWord&&SettingsStore::loadByte("wake_word")==0);
     // The second row, 说功能名跳转, is on until switched off (saved as jump_off) and back on.
@@ -670,6 +683,8 @@ void voiceAddTests(Runtime& runtime){
     // 说功能名跳转 knows every page by the name the menu shows (and the home page and the menu themselves).
     for(App app:kFunctions)CHECK(spokenApp(profile(app).title)==app&&spokenApp(menuLabel(app))==app);
     CHECK(spokenApp(profile(App::Home).title)==App::Home&&spokenApp(profile(App::Menu).title)==App::Menu);
+    // English page names, as heard by 语音指令 ("open the radio").
+    CHECK(spokenApp("Open the radio.")==App::Radio&&spokenApp("FX rates page")==App::Rate&&spokenApp("open stopwatch")==App::Stopwatch&&spokenApp("open the moon")==App::Count);
     // A page opened any way is the one the menu shows on the way back.
     CHECK(runtime.switchTo(App::Ledger)==Result::Ok);runtime.key(Key::Back,40);CHECK(runtime.active()==App::Menu&&kFunctions[runtime.selection()]==App::Ledger);
     timeval saved{};gettimeofday(&saved,nullptr);
@@ -712,7 +727,7 @@ void voiceAddTests(Runtime& runtime){
     m.lastNotice[0]=0;m.stockArmed=true;uiRender(runtime);uiCapture("stock_delete");runtime.key(Key::Down,970);CHECK(!m.stockArmed&&m.stockIndex==0);
     strcpy(m.liveValue,"rec");m.listenAt=971;uiRender(runtime);uiCapture("stock_listening");runtime.key(Key::Down,972);CHECK(m.stockIndex==0);strcpy(m.liveValue,"--");m.stockCount=0;
     // 所在城市: the row above 联系开发者; the Confirm that opens it does not also start listening.
-    CHECK(runtime.switchTo(App::Settings)==Result::Ok);m.settingsPage=SettingsPage::List;m.settingsSelection=kSettingsRows-2;
+    CHECK(runtime.switchTo(App::Settings)==Result::Ok);m.settingsPage=SettingsPage::List;m.settingsSelection=kSettingsRows-3;
     strcpy(m.cityName,"杭州 · 浙江");uiRender(runtime);uiCapture("settings_city_row");
     runtime.key(Key::Confirm,980);CHECK(m.settingsPage==SettingsPage::City&&m.confirmTaken&&!m.cityRow);
     strcpy(m.lastNotice,"所在城市已改为杭州");uiRender(runtime);uiCapture("settings_city");
@@ -1744,6 +1759,23 @@ extern "C" void app_main() {
     runtime.switchTo(App::Radio);
     {const char* rows[]{"本地 · 64k","所在城市：杭州","下一个：西湖之声",""};media(2,24,"正在播放","杭州交通91.8电台",rows);}
     uiRender(runtime);uiCapture("media_radio");
+    // 选台: long Up opens the stations on the one playing; 地区 opens the regions; a region or a station is asked for.
+    {
+        auto& m=runtime.model;m.mediaCount=0;
+        for(unsigned i=0;i<std::size(kRadioStations)&&m.mediaCount<6;++i)if(kRadioStations[i].region==5)m.radioIds[m.mediaCount++]=static_cast<uint16_t>(i);
+        m.mediaIndex=1;m.radioRegion=0;strcpy(m.radioHome,"上海");m.mediaPlaying=true;
+        runtime.radioStations(1);CHECK(m.radioList==1&&m.radioRow==2);
+        uiRender(runtime);uiCapture("media_radio_stations");
+        runtime.key(Key::Down,2);CHECK(m.radioRow==3);runtime.key(Key::Confirm,3);CHECK(!m.radioList&&m.radioPlay==3);
+        m.radioPlay=0;runtime.radioStations(4);runtime.key(Key::Up,5);runtime.key(Key::Up,6);CHECK(m.radioRow==0);
+        runtime.key(Key::Confirm,7);CHECK(m.radioList==2&&m.radioRow==0);
+        runtime.key(Key::Down,8);runtime.key(Key::Down,9);runtime.key(Key::Down,10);  // 全国, 广东, 河北
+        uiRender(runtime);uiCapture("media_radio_regions");
+        runtime.key(Key::Up,11);runtime.key(Key::Confirm,12);CHECK(m.radioList==1&&m.radioArea==3&&m.radioRegion==2&&!m.mediaCount&&m.radioRow==1);
+        runtime.key(Key::Back,13);CHECK(!m.radioList&&runtime.active()==App::Radio);
+        runtime.radioStations(14);runtime.key(Key::Confirm,15);runtime.key(Key::Back,16);CHECK(m.radioList==1);runtime.key(Key::Back,17);CHECK(!m.radioList);
+        m.radioArea=m.radioRegion=0;m.mediaPlaying=false;
+    }
     runtime.model.mediaCount=0;
     // Chat record: a turn is logged once, reply sentences join one entry, re-entry starts empty.
     {

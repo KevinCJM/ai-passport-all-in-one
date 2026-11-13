@@ -1,4 +1,6 @@
 #include "suite.hpp"
+#include "radio_stations.hpp"
+#include "i18n.hpp"
 #include <algorithm>
 #include <cstring>
 #include "esp_heap_caps.h"
@@ -258,6 +260,11 @@ bool Runtime::init(SystemSettings& settings) {
     SettingsStore::loadMenu(menuLayout_);menuView_.build(menuLayout_);ensureMenuSelection();
     const auto screen = SettingsStore::loadByte("home_screen");
     model.wakeWord = SettingsStore::loadByte("wake_word") == 1;
+#ifdef PASSPORT_SIM_ENGLISH
+    uiLanguage = Language::English;
+#else
+    uiLanguage = SettingsStore::loadByte("language") == 1 ? Language::English : Language::Chinese;
+#endif
     model.voiceJump = SettingsStore::loadByte("jump_off") != 1;  // stored as off, so a badge that never saved it has it on
     model.macOpen = SettingsStore::loadByte("mac_off") != 1;
     model.usbAwake = SettingsStore::loadByte("usb_dim") != 1;
@@ -1540,6 +1547,7 @@ Result Runtime::switchTo(App target, bool failAlloc, bool failStart) {
     }
     if (target == App::Podcast) model.podcastPlayer = model.podcastEpisodes = false;
     if (target == App::Radio || target == App::Podcast) { model.mediaTimer = 0; model.mediaUntil = 0; }
+    if (target == App::Radio) model.radioList = model.radioPlay = model.radioArea = 0;
     if (target == App::Chat) { model.chatCount = 0; model.chatTurn = 0; model.chatSentence[0] = 0; ++model.chatRevision; }
     return lastResult = Result::Ok;
 }
@@ -1551,6 +1559,8 @@ void Runtime::key(Key key, uint64_t now) {
         // The podcast player goes back to its program list first.
         if (active_ == App::Podcast && model.podcastEpisodes) { model.podcastEpisodes = false; return; }
         if (active_ == App::Podcast && model.podcastPlayer) { model.podcastPlayer = false; return; }
+        // 选台: the regions go back to the stations, the stations to the player.
+        if (active_ == App::Radio && model.radioList) { model.radioRow = 0; model.radioList = model.radioList == 2 ? 1 : 0; return; }
         // So does a stock's detail; a ringing alarm stops first.
         if (active_ == App::Stock && model.stockDetail) { model.stockDetail = false; return; }
         if (active_ == App::Macro && model.macroDetail) { model.macroDetail = false; return; }
@@ -2020,6 +2030,17 @@ void Runtime::key(Key key, uint64_t now) {
             if (m.podcastCount && (key == Key::Up || key == Key::Down)) m.podcastIndex = (m.podcastIndex + (key == Key::Up ? m.podcastCount - 1 : 1)) % m.podcastCount;
             if (key == Key::Confirm && m.podcastCount) m.podcastPlayer = true;
         } else if (key == Key::Up || key == Key::Down) m.volume = static_cast<uint8_t>(std::clamp(int(m.volume) + (key == Key::Up ? 5 : -5), 0, 100));
+    } else if (active_ == App::Radio && model.radioList) {
+        // 选台: Up/Down move round the rows; Confirm on 地区 opens the regions, on a station plays it,
+        // on a region asks for its stations (the list stays, on the first of them).
+        auto& m = model;
+        const unsigned rows = 1 + (m.radioList == 2 ? std::size(kRadioRegions) : m.mediaCount);
+        if (key == Key::Up || key == Key::Down) m.radioRow = (m.radioRow + (key == Key::Up ? rows - 1 : 1)) % rows;
+        if (key == Key::Confirm) {
+            if (m.radioList == 1 && !m.radioRow) { m.radioList = 2; m.radioRow = m.radioRegion; }
+            else if (m.radioList == 1) { m.radioPlay = m.radioRow; m.radioList = 0; }
+            else { m.radioArea = m.radioRow + 1; m.radioRegion = m.radioRow; m.mediaCount = 0; m.radioList = 1; m.radioRow = 1; }
+        }
     } else if (active_ == App::Book) {
         // 电子书: Up/Down turn a page (long: the text size, Runtime::longKey).
         if (key == Key::Up || key == Key::Down) showBook(key == Key::Up ? -1 : 1);
@@ -2044,6 +2065,11 @@ void Runtime::podcastEpisodes(uint64_t now) {
     if (active_ != App::Podcast || !model.podcastPlayer || model.podcastEpisodes) return;
     tick(now); lastInput_ = now;
     model.podcastEpisodes = true; model.podcastEpCount = model.podcastEpIndex = 0; model.podcastEpPage = model.podcastEpPick = 0;
+}
+void Runtime::radioStations(uint64_t now) {
+    if (active_ != App::Radio || model.radioList) return;
+    tick(now); lastInput_ = now;
+    model.radioList = 1; model.radioRow = model.mediaCount ? model.mediaIndex + 1 : 0;
 }
 void Runtime::stepMediaTimer(uint64_t now) {
     if (active_ != App::Radio && active_ != App::Podcast) return;
@@ -2116,7 +2142,7 @@ bool Runtime::settingsKey(Key key) {
             if(page==SettingsPage::City){model.cityRow=0;model.lastNotice[0]=0;model.confirmTaken=true;}
             if(page==SettingsPage::Wake)model.wakeRow=0;
             if(page==SettingsPage::Idle)model.idleRow=0;
-            model.settingsValue=page==SettingsPage::Brightness?settings_->brightness:page==SettingsPage::Volume?model.volume:settings_->idleSeconds/60;
+            model.settingsValue=page==SettingsPage::Brightness?settings_->brightness:page==SettingsPage::Volume?model.volume:page==SettingsPage::Language?static_cast<uint32_t>(uiLanguage):settings_->idleSeconds/60;
         }
         return true;
     }
@@ -2153,6 +2179,13 @@ bool Runtime::settingsKey(Key key) {
         model.usbAwake=!model.usbAwake;return true;
     }
     if(page==SettingsPage::Contact)return true;  // read-only; Back is handled above
+    // 语言 / Language: Up/Down pick 中文 or English (settingsValue), Confirm saves it and the UI follows at once.
+    if(page==SettingsPage::Language){
+        if(key==Key::Up||key==Key::Down){model.settingsValue^=1;model.lastNotice[0]=0;return true;}
+        if(key!=Key::Confirm)return true;
+        if(!SettingsStore::saveByte("language",model.settingsValue)){strcpy(model.lastNotice,"保存失败，请重试");return false;}
+        uiLanguage=model.settingsValue?Language::English:Language::Chinese;page=SettingsPage::List;strcpy(model.lastNotice,"已保存");return true;
+    }
     if(page==SettingsPage::Bluetooth){
         if(key!=Key::Confirm)return true;
         auto candidate=*settings_;candidate.bluetoothEnabled=!candidate.bluetoothEnabled;SettingsStore store;

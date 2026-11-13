@@ -12,6 +12,7 @@ inline const char* keyHint(App app,SettingsPage page,bool focusRunning,bool pair
         if(page==SettingsPage::Wifi){static const char* const hints[]{"确认：关闭配网热点  |  长按确认：返回","上下：选择  |  确认：手机配网  |  长按确认：返回","上下：选择  |  确认：连接  |  长按下：删除","长按下：确认删除  |  其他键：取消"};return hints[tab%4];}
         if(page==SettingsPage::Bluetooth)return "确认：开关蓝牙  |  长按确认：返回";
         if(page==SettingsPage::Contact)return "长按确认：返回";
+        if(page==SettingsPage::Language)return "上下：选择  |  确认：保存  |  长按确认：返回";
         // tab: 0 the time picked, 1 连电脑时常亮 picked, 2 changing the time.
         if(page==SettingsPage::Idle){static const char* const hints[]{"上下：选择  |  确认：修改  |  长按确认：返回","上下：选择  |  确认：开关  |  长按确认：返回","上下：调整  |  确认：保存  |  长按确认：取消"};return hints[tab%3];}
         if(page==SettingsPage::Wake)return "上下：选择  |  确认：开关  |  长按确认：返回";
@@ -110,7 +111,9 @@ inline const char* keyHint(App app,SettingsPage page,bool focusRunning,bool pair
     // tab: 0 ready, 1 listening, 2 recognising.
     // 语音输入; alt: opened on an AI 控制器 conversation.
     if(app==App::Dictation){static const char* const hints[]{"确认：说话  |  上：回车  |  下：删除整行  |  长按确认：返回","确认：结束并输入  |  长按确认：放弃","正在识别，请稍候"};return alt&&tab%3==0?"确认：说话  |  上：发送  |  下：删除  |  长按确认：回到对话":hints[tab%3];}
-    if(app==App::Radio)return "上下：音量  |  长按上：换台  |  长按下：定时关闭  |  确认：播放/停止  |  长按确认：返回";
+    // alt: 选台 is open, tab 1 the stations, 2 the regions.
+    if(app==App::Radio&&alt)return tab==2?"上下：选择  |  确认：看这个地区的电台  |  长按确认：回电台列表":"上下：选择  |  确认：播放/换地区  |  长按确认：回播放器";
+    if(app==App::Radio)return "上下：音量  |  长按上：选台  |  长按下：定时关闭  |  确认：播放/停止  |  长按确认：返回";
     // alt: a program is open in the player.
     // tab 1: 选期.
     if(app==App::Podcast&&alt&&tab==1)return "上下：选择  |  确认：播放这期  |  长按确认：回播放器";
