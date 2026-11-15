@@ -113,7 +113,8 @@ void homeUiInit(lv_obj_t* screen){
     root=lv_obj_create(screen);lv_obj_remove_style_all(root);lv_obj_set_pos(root,0,0);lv_obj_set_size(root,240,320);lv_obj_remove_flag(root,LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(root,lv_color_hex(bg),0);lv_obj_set_style_bg_opa(root,LV_OPA_COVER,0);lv_obj_add_event_cb(root,draw,LV_EVENT_DRAW_MAIN,nullptr);
     weatherRoot=root;
-    clockHour=text(root,10,47,135,&lv_font_montserrat_48,green);
+    // "04:04" is ~140 px in Montserrat 48 (0 and 4 are the widest digits); one line, never wrapped onto the date.
+    clockHour=text(root,10,47,150,&lv_font_montserrat_48,green);lv_label_set_long_mode(clockHour,LV_LABEL_LONG_CLIP);
     dateLabel=text(root,12,108,161,LV_FONT_DEFAULT,muted);cityLabel=text(root,33,133,123,LV_FONT_DEFAULT,white);
     lv_obj_set_width(cityLabel,LV_SIZE_CONTENT);
     // 气象预警: the highest kind in force, on its level's colour, right after the city.
