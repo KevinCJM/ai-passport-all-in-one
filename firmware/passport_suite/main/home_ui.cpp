@@ -75,8 +75,13 @@ lv_obj_t* panel(lv_obj_t* parent,int x,int y,int width,int height,uint32_t color
 }
 bool ascii(const char* value){for(;*value;++value)if(static_cast<unsigned char>(*value)>127)return false;return true;}
 void placeholder(lv_obj_t* parent,int y,const char* title,const char* hint){
-    auto* t=text(parent,12,y,216,LV_FONT_DEFAULT,white);lv_obj_set_style_text_align(t,LV_TEXT_ALIGN_CENTER,0);lv_label_set_text(t,tr(title));
-    auto* h=text(parent,20,y+28,200,LV_FONT_DEFAULT,muted);lv_label_set_long_mode(h,LV_LABEL_LONG_WRAP);lv_obj_set_style_text_align(h,LV_TEXT_ALIGN_CENTER,0);lv_label_set_text(h,tr(hint));
+    // Center within the given parent: the identity card is 224 px wide and inset 8 px, the photo page is full width.
+    // Refresh the layout first: a freshly created panel still reports 0 px, which would push the text off the left edge.
+    lv_obj_update_layout(parent);
+    const int measured=lv_obj_get_width(parent);
+    const int width=measured>0?measured:240;
+    auto* t=text(parent,(width-216)/2,y,216,LV_FONT_DEFAULT,white);lv_obj_set_style_text_align(t,LV_TEXT_ALIGN_CENTER,0);lv_label_set_text(t,tr(title));
+    auto* h=text(parent,(width-200)/2,y+28,200,LV_FONT_DEFAULT,muted);lv_label_set_long_mode(h,LV_LABEL_LONG_WRAP);lv_obj_set_style_text_align(h,LV_TEXT_ALIGN_CENTER,0);lv_label_set_text(h,tr(hint));
 }
 // Passport-style card: avatar on the left, name/title/number on the right, motto below.
 void initCard(lv_obj_t* screen){

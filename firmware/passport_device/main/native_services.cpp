@@ -255,8 +255,8 @@ bool NativeServices::retryPause(unsigned attempt){
     return !cancelled();
 }
 bool NativeServices::fetch(const char* url,char* output,size_t capacity,Sink sink,void* context,const char* post,const char* userAgent,const char* const* headers){
-    // On the home page main stops Bluetooth now (LiveServices::nativeOnline); give it a second to hand back the memory.
-    if(current_.app==App::Home&&!online_.exchange(true))for(unsigned i=0;i<50&&!cancelled();++i)vTaskDelay(pdMS_TO_TICKS(20));
+    // 首页的三个请求都走明文 HTTP，只要几 KB 内存，不必等蓝牙交还后再发（原来在这里固定睡 1000 ms）。
+    if(current_.app==App::Home)online_.store(true);
     for(unsigned attempt=1;attempt<=networkAttempts&&!cancelled();++attempt){
     struct Body{NativeServices* self;char* bytes;size_t used,capacity;bool invalid,done;Sink sink;void* context;} body{this,output,0,capacity,false,false,sink,context};
     if(output){output[0]=0;}
@@ -288,7 +288,7 @@ void NativeServices::home(){
     auto data=std::unique_ptr<char[]>(new(std::nothrow)char[4096]);if(!data){error_=ESP_ERR_NO_MEM;return;}
     double latitude,longitude;char city[80]{};
     latitude=prefs.latitude;longitude=prefs.longitude;copy(city,prefs.city);
-    char url[512];snprintf(url,sizeof(url),"https://api.open-meteo.com/v1/forecast?latitude=%.5f&longitude=%.5f&current=temperature_2m,relative_humidity_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto",latitude,longitude);
+    char url[512];snprintf(url,sizeof(url),"http://api.open-meteo.com/v1/forecast?latitude=%.5f&longitude=%.5f&current=temperature_2m,relative_humidity_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto",latitude,longitude);
     if(!fetch(url,data.get(),4096)){const char* rows[]{"","天气请求失败","确认键重试",""};publish(current_,"天气暂不可用","ready","",rows);return;}
     {Json forecast(cJSON_Parse(data.get()));const auto* current=item(forecast.value,"current");const auto* daily=item(forecast.value,"daily");const auto* low=cJSON_GetArrayItem(item(daily,"temperature_2m_min"),0);const auto* high=cJSON_GetArrayItem(item(daily,"temperature_2m_max"),0);
      const double temperature=num(current,"temperature_2m"),humidity=num(current,"relative_humidity_2m"),code=num(current,"weather_code");
@@ -298,12 +298,15 @@ void NativeServices::home(){
      if(std::isfinite(offset)&&std::fabs(offset)<=14*3600){CityZone zone,saved;zone.offset=int32_t(offset);applyCityZone(zone.offset);if(!mediaLoad("zone",saved)||saved.offset!=zone.offset)mediaSave("zone",zone);}
      snprintf(weather_[1],sizeof(weather_[1]),"%s %s",city,weatherName(code));snprintf(weather_[2],sizeof(weather_[2]),"%.1f°C 低%.0f° 高%.0f°",temperature,low->valuedouble,high->valuedouble);snprintf(weather_[3],sizeof(weather_[3]),"湿度 %.0f%% · AQI --",humidity);}
     data.reset();
+    // 天气到手就先给屏上，AQI 与预警随后补：用户不用等后两个请求。
+    weatherAt_=esp_timer_get_time()/1000000;weatherPrefs_=revision;++weatherUpdates_;
+    {const char* rows[]{weather_[0],weather_[1],weather_[2],weather_[3]};publish(current_,source,"ready","",rows);}
+    if(cancelled()){return;}
     if(WeatherForecast reading{};air(latitude,longitude,reading)){const int aqi=reading.aqi[0];weatherReading_.aqi=aqi;weatherReading_.airKnown=true;char* start=strstr(weather_[3],"AQI --");if(start)snprintf(start,sizeof(weather_[3])-(start-weather_[3]),"AQI %d",aqi);}
+    if(!cancelled()){const char* rows[]{weather_[0],weather_[1],weather_[2],weather_[3]};publish(current_,source,"ready","",rows);}
     // The highest warning in force beside the city.
     {WeatherWarning list[2];uint8_t count=0;const bool read=warnings(prefs,list,count,std::size(list));
      weatherReading_.warningLevel=read&&count?list[0].level:-1;copy(weatherReading_.warning,read&&count?list[0].type:"");}
-    if(cancelled()){return;}
-    weatherAt_=esp_timer_get_time()/1000000;weatherPrefs_=revision;++weatherUpdates_;const char* rows[]{weather_[0],weather_[1],weather_[2],weather_[3]};publish(current_,source,"ready","",rows);
 }
 // 自选股: Tencent over plain HTTP, no key. The list's quotes in one request (about 400 bytes each); with
 // "chart:<row>:<days>" also that row's minutes today (read as they arrive: 10-15 KB) or its last 30 days.
