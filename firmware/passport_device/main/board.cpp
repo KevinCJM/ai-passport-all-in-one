@@ -89,6 +89,10 @@ uint32_t inputPage{UINT32_MAX}, inputPair{UINT32_MAX};
 std::atomic<unsigned> keySamples{}, keyDrops{};
 unsigned screenPower = 0;
 unsigned screenBrightness=80;
+// The eye sees LED duty roughly as its square root: linear duty made 50-100% look the same ("调了没反应").
+// Square the percent so each 10% step is a visible step; kMinDuty keeps 10% readable (tune on the panel).
+constexpr uint32_t kMinDuty=4;
+uint32_t backlightDuty(unsigned percent){return percent?kMinDuty+percent*percent*(255-kMinDuty)/10000:0;}
 RTC_DATA_ATTR unsigned sleepEntries=0,sleepWakeLevel=0;
 uint32_t wakeSeconds;  // wakeAfter: deep sleep also ends after this long (the alarm)
 unsigned speakerVolume=55;
@@ -245,7 +249,7 @@ void init(SystemSettings &settings) {
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel, true));
     ledc_timer_config_t backlightTimer{};backlightTimer.speed_mode=LEDC_LOW_SPEED_MODE;backlightTimer.duty_resolution=LEDC_TIMER_8_BIT;backlightTimer.timer_num=LEDC_TIMER_0;backlightTimer.freq_hz=5000;backlightTimer.clk_cfg=LEDC_AUTO_CLK;
     ESP_ERROR_CHECK(ledc_timer_config(&backlightTimer));
-    ledc_channel_config_t backlight{};backlight.gpio_num=21;backlight.speed_mode=LEDC_LOW_SPEED_MODE;backlight.channel=LEDC_CHANNEL_0;backlight.timer_sel=LEDC_TIMER_0;backlight.duty=settings.brightness*255/100;
+    ledc_channel_config_t backlight{};backlight.gpio_num=21;backlight.speed_mode=LEDC_LOW_SPEED_MODE;backlight.channel=LEDC_CHANNEL_0;backlight.timer_sel=LEDC_TIMER_0;backlight.duty=backlightDuty(settings.brightness);
     ESP_ERROR_CHECK(ledc_channel_config(&backlight));screenBrightness=settings.brightness;
     adc_oneshot_unit_init_cfg_t adcConfig{};
     adcConfig.unit_id = ADC_UNIT_1;
@@ -312,7 +316,7 @@ void fill(uint16_t color, uint16_t *band, int rows) {
     }
 }
 void backlight(bool on) {
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, on && !screenPower ? screenBrightness * 255 / 100 : 0);
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, on && !screenPower ? backlightDuty(screenBrightness) : 0);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
 }
 void keyMode(bool volumeKeys, uint32_t generation, bool awake, uint32_t pairEpoch,bool homeScreen) {
@@ -369,7 +373,7 @@ unsigned brightness(){return screenBrightness;}
 bool setBrightness(unsigned value){
     if(value>100)return false;
     screenBrightness=value;
-    return ledc_set_duty(LEDC_LOW_SPEED_MODE,LEDC_CHANNEL_0,screenPower?0:value*255/100)==ESP_OK&&ledc_update_duty(LEDC_LOW_SPEED_MODE,LEDC_CHANNEL_0)==ESP_OK;
+    return ledc_set_duty(LEDC_LOW_SPEED_MODE,LEDC_CHANNEL_0,screenPower?0:backlightDuty(value))==ESP_OK&&ledc_update_duty(LEDC_LOW_SPEED_MODE,LEDC_CHANNEL_0)==ESP_OK;
 }
 const char* bluetoothName(){static char name[32]{};if(!*name){uint8_t mac[6];esp_read_mac(mac,ESP_MAC_WIFI_STA);snprintf(name,sizeof(name),"AI-Passport-%02X%02X%02X%02X%02X%02X",mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);}return name;}
 void power(unsigned state) {

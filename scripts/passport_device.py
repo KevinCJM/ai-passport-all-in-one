@@ -24,7 +24,10 @@ def bonded_passport(expected):
  from types import SimpleNamespace
  from bleak.backends.device import BLEDevice
  address=(int(expected[-12:],16)+2)&0xffffffffffff
- return BLEDevice(':'.join('%02X'%(address>>shift&255) for shift in range(40,-8,-8)),expected,SimpleNamespace(adv=SimpleNamespace(bluetooth_address=address),scan=None),-127)
+ args=(':'.join('%02X'%(address>>shift&255) for shift in range(40,-8,-8)),expected,SimpleNamespace(adv=SimpleNamespace(bluetooth_address=address),scan=None))
+ # bleak 3 (Windows build) takes no rssi; bleak 0.22 (Mac, tests) still needs it.
+ try:return BLEDevice(*args)
+ except TypeError:return BLEDevice(*args,0)
 
 def connected_passport(expected):
  if sys.platform!='darwin':return None  # Windows: see bonded_passport
@@ -39,15 +42,40 @@ def connected_passport(expected):
  peer=matches[0]
  return BLEDevice(str(peer.identifier().UUIDString()),str(peer.name()),(peer,manager),-127)
 
+class StaleBond(Exception):pass  # Windows: linked, but the encrypted characteristics are missing or refused
+
 class Radio:
  def __init__(self,mac):
   self.loop=asyncio.new_event_loop();self.client=None;self.device=None;self.events=collections.deque(maxlen=1024);self.lock=threading.Lock();self.dropped=0
   self.expected='AI-Passport-'+mac.replace(':','').upper()
-  self.rpc_lock=asyncio.Lock();self.connect_lock=asyncio.Lock();self.sequence=0
+  self.rpc_lock=asyncio.Lock();self.connect_lock=asyncio.Lock();self.sequence=0;self.repaired=False
   self.thread=threading.Thread(target=self.loop.run_forever,daemon=True);self.thread.start()
+ async def open_client(self):
+  """Connects and proves the encrypted characteristics answer; Windows: StaleBond when the link is up but they don't."""
+  from bleak import BleakClient
+  windows=sys.platform=='win32'
+  # Windows (bleak 3): pair before the services are read, and read them from the badge, not the system's cache.
+  # The uncached discovery needs more than the 6 s that do on macOS.
+  options={'pair':True,'winrt':{'use_cached_services':False}} if windows else {}
+  client=BleakClient(self.device,services=[SERVICE,RPC_SERVICE],disconnected_callback=lambda c:c is self.client and self.notify(0,b''),timeout=20 if windows else 6,**options)
+  try:
+   await client.connect()
+   # Reading the encrypted key starts pairing; leave time to accept the macOS pairing prompt.
+   try:
+    async with asyncio.timeout(60):
+     await client.read_gatt_char(KEY)
+     await client.read_gatt_char(RPC_READ)
+   except Exception as error:
+    if windows:raise StaleBond() from error
+    raise
+  except BaseException:
+   if client.is_connected:await client.disconnect()
+   raise
+  return client
  def rpc(self,action,**values):
   future=asyncio.run_coroutine_threadsafe(self.call(action,values),self.loop)
-  try:return future.result(40)
+  # Connecting may wait 60 s for a pairing prompt, and Windows may unpair and pair again once.
+  try:return future.result(180 if action=='connect' else 40)
   except TimeoutError:future.cancel();raise
  def request(self,token,path,data=None):
   future=asyncio.run_coroutine_threadsafe(self.request_async(token,path,data),self.loop)
@@ -84,25 +112,24 @@ class Radio:
       if self.device is None:self.device=await BleakScanner.find_device_by_filter(lambda device,adv:adv.local_name==self.expected and SERVICE in [s.lower() for s in (adv.service_uuids or [])],timeout=6,service_uuids=[SERVICE])
       if self.device is None and sys.platform=='win32':self.device=bonded_passport(self.expected)
       if self.device is None:raise RuntimeError('paired Passport is not advertising')
-     client=BleakClient(self.device,services=[SERVICE,RPC_SERVICE],disconnected_callback=lambda _:self.notify(0,b''),timeout=6)
+     # A late callback from an earlier client must not report this session as dropped.
+     old,self.client=self.client,None
+     if old is not None:
+      try:await old.disconnect()
+      except Exception:pass
      try:
-      await client.connect()
-      # Reading the encrypted key starts pairing; leave time to accept the macOS pairing prompt.
-      # Windows does not pair on its own when a read needs encryption: ask for it (bleak accepts the confirmation).
-      # The badge also asks for security as it connects, so Windows may already be pairing and refuse this one
-      # (in progress / failed): wait and let the encrypted read below decide instead of dropping the link.
-      if sys.platform=='win32':
-       for attempt in range(3):
-        try:await client.pair();break
-        except Exception as error:print('BLE pair attempt',attempt+1,'failed:',error,file=sys.stderr,flush=True);await asyncio.sleep(2)
-      async with asyncio.timeout(60):
-       await client.read_gatt_char(KEY)
-       await client.read_gatt_char(RPC_READ)
-     except BaseException:
-      self.device=None
-      if client.is_connected:await client.disconnect()
-      raise
-     self.client=client
+      try:client=await self.open_client()
+      except StaleBond as error:
+       if self.repaired:raise
+       # Windows kept a bond (or a GATT table) the badge no longer has: forget it once and pair afresh.
+       # Only once until a link works, so a badge that is merely off is not unpaired on every retry.
+       print('BLE encrypted read failed, unpairing once:',error.__cause__,file=sys.stderr,flush=True);self.repaired=True
+       try:await BleakClient(self.device).unpair()
+       except Exception as failure:print('BLE unpair failed:',failure,file=sys.stderr,flush=True)
+       client=await self.open_client()
+     except StaleBond as error:self.device=None;raise RuntimeError('蓝牙加密连接失败：请在 Windows 设置 → 蓝牙 里删除 '+self.expected+'，重启胸牌后再连') from error
+     except BaseException:self.device=None;raise
+     self.client=client;self.repaired=False
     return {'ok':True,'result':{'connected':self.client.is_connected}}
   if action=='rssi':
    # 离座锁屏: the connected badge's signal (CoreBluetooth readRSSI), None while the link is down.

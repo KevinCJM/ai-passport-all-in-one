@@ -1,5 +1,5 @@
-# The Windows assistant's Python packages (same versions as the Mac build where they exist).
-bleak==0.22.3
+# The Windows assistant's Python packages (same versions as the Mac build where they exist; bleak 3 on Windows only).
+bleak==3.1.0
 certifi==2026.10.19
 cryptography==50.0.2
 numpy==2.5.4

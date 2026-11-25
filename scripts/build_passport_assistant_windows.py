@@ -63,7 +63,7 @@ def main():
     command=[sys.executable,'-m','PyInstaller','--noconfirm','--windowed','--onedir','--name',NAME,
              '--icon',ROOT/'scripts/assets/assistant_icon.png','--python-option','X utf8',  # files and pipes are UTF-8, not GBK
              '--distpath',WORK/'dist','--workpath',WORK/'pyinstaller','--specpath',WORK,
-             '--hidden-import','bleak.backends.winrt.client','--hidden-import','bleak.backends.winrt.scanner',
+             '--hidden-import','bleak.backends.winrt.client','--hidden-import','bleak.backends.winrt.scanner','--hidden-import','bleak.backends.winrt.adapter',
              '--hidden-import','pystray._win32','--hidden-import','sounddevice','--hidden-import','websockets.sync.client',
              '--collect-all','_sounddevice_data','--add-data',f'{WORK/"source-hashes.json"};.',
              '--add-data',f'{notices()};licenses','--add-data',f'{ROOT/"scripts/passport_menu.js"};.','--add-data',f'{ROOT/"scripts/passport_i18n.js"};.','--add-data',f'{ROOT/"scripts/passport_i18n.json"};.',

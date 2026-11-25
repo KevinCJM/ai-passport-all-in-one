@@ -70,6 +70,39 @@ class SerialTest(unittest.TestCase):
         badge = passport_device.bonded_passport('AI-Passport-4C11AE31B9FF')
         self.assertEqual((badge.address, badge.details.adv.bluetooth_address), ('4C:11:AE:31:BA:01', 0x4c11ae31ba01))
 
+    def test_bluetooth_pairs_first_repairs_a_stale_bond_once_and_ignores_old_clients(self):
+        import passport_device
+
+        class Client:
+            made, unpaired, failing = [], 0, 0
+            def __init__(self, device, services=None, disconnected_callback=None, **options):
+                self.options, self.callback, self.is_connected = options, disconnected_callback, False; Client.made.append(self)
+            async def connect(self): self.is_connected = True
+            async def read_gatt_char(self, uuid):
+                if Client.failing: raise OSError('characteristic not found')
+            async def disconnect(self):
+                self.is_connected = False
+                if self.callback: self.callback(self)
+            async def unpair(self): Client.unpaired += 1; Client.failing -= 1
+
+        with patch.dict(sys.modules, {'bleak': SimpleNamespace(BleakClient=Client, BleakScanner=None)}), patch.object(passport_device.sys, 'platform', 'win32'):
+            radio = passport_device.Radio('4C:11:AE:31:B9:FF'); radio.device = object()
+            try:
+                Client.failing = 1  # a bond Windows kept but the badge lost: unpaired once, then paired afresh
+                radio.rpc('connect')
+                self.assertEqual((Client.unpaired, len(Client.made)), (1, 3))
+                self.assertEqual(Client.made[0].options, {'pair': True, 'winrt': {'use_cached_services': False}, 'timeout': 20})
+                old = radio.client; old.is_connected = False
+                Client.failing = 2  # still refused after the fresh pairing: a clear error, unpaired only once
+                with self.assertRaisesRegex(RuntimeError, '删除 AI-Passport-4C11AE31B9FF'): radio.rpc('connect')
+                self.assertEqual(Client.unpaired, 2)
+                self.assertIsNone(radio.client)
+                Client.failing = 0; radio.device = object(); radio.rpc('connect')
+                old.callback(old)  # a late callback from the replaced client
+                self.assertEqual(radio.rpc('voice_events')['result']['events'], [])
+            finally:
+                radio.loop.call_soon_threadsafe(radio.loop.stop); radio.thread.join(2)
+
     def test_gateway_command(self):
         from passport_computer_link import start_gateway
         with patch('passport_computer_link.subprocess.Popen') as popen:

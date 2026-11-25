@@ -17,6 +17,7 @@
 #include "esp_transport_ssl.h"
 #include "esp_transport_ws.h"
 #include "esp_tls.h"
+#include "freertos/stream_buffer.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include <algorithm>
@@ -1142,10 +1143,49 @@ esp_http_client_handle_t NativeServices::openStream(const char* url,int timeoutM
         esp_http_client_close(connection);
     }esp_http_client_cleanup(connection);return nullptr;
 }
+// 收音机: the stream is read on its own small task into a ring of compressed audio (32 KiB is about 4 s of 64k
+// MP3), so a WiFi pause drains the ring instead of the speaker's 40 ms of DMA. Playback starts, and starts again
+// after running dry, only once the ring holds start() bytes: a weak link gives a few short pauses, not stutter.
+struct StreamReader {
+    esp_http_client_handle_t client{};
+    StreamBufferHandle_t ring{};size_t size{};
+    SemaphoreHandle_t done{};TaskHandle_t task{};
+    std::atomic<bool> stop{},running{};std::atomic<int> result{};
+    size_t start()const{return size*3/8;}
+    static void run(void* argument){
+        auto& r=*static_cast<StreamReader*>(argument);
+        uint8_t chunk[512];unsigned stalls=0;
+        while(!r.stop){
+            if(xStreamBufferSpacesAvailable(r.ring)<sizeof(chunk)){vTaskDelay(pdMS_TO_TICKS(20));continue;}
+            const int n=esp_http_client_read(r.client,reinterpret_cast<char*>(chunk),sizeof(chunk));
+            if(n>0){stalls=0;xStreamBufferSend(r.ring,chunk,n,0);continue;}
+            // A read timeout (0.5 s) is a pause in a slow stream, not its end: give it 12 s.
+            if(n==-ESP_ERR_HTTP_EAGAIN&&++stalls<24)continue;
+            r.result=n;break;
+        }
+        r.running=false;xSemaphoreGive(r.done);vTaskDelete(nullptr);
+    }
+    // The ring is taken once per play and kept across stations; it leaves room for the decoder's own buffers.
+    bool begin(esp_http_client_handle_t c){
+        if(!done&&!(done=xSemaphoreCreateBinary()))return false;
+        if(!ring){
+            const size_t largest=heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+            size=std::min<size_t>(32768,largest>22528?largest-16384:0)&~size_t(511);
+            if(size<6144||!(ring=xStreamBufferCreate(size,1)))return false;
+        }
+        xStreamBufferReset(ring);client=c;stop=false;running=true;result=0;
+        esp_http_client_set_timeout_ms(client,500);
+        if(xTaskCreate(run,"radio_rx",4096,this,4,&task)!=pdPASS){running=false;return false;}
+        return true;
+    }
+    void end(){if(!task)return;stop=true;xSemaphoreTake(done,portMAX_DELAY);task=nullptr;}  // the task gives done once, as it ends
+    ~StreamReader(){end();if(ring)vStreamBufferDelete(ring);if(done)vSemaphoreDelete(done);}
+};
 void NativeServices::media(){
-    unsigned index=0,stalls=0,retries=0;size_t streamed=0;bool playing=false,restart=false;esp_http_client_handle_t client=nullptr;
+    unsigned index=0,retries=0;size_t streamed=0;bool playing=false,restart=false,buffering=false;esp_http_client_handle_t client=nullptr;
     auto bytes=std::unique_ptr<uint8_t[]>(new(std::nothrow)uint8_t[1024]);
     if(!bytes){publish(current_,"内存不足","error");return;}
+    StreamReader reader;
     MediaPrefs prefs{};mediaLoad("prefs",prefs);
     // 选台 may pick another region than the city's (kept in NVS "radio").
     RadioPrefs chosen{};if(!mediaLoad("radio",chosen)||chosen.region>std::size(kRadioRegions))chosen.region=0;
@@ -1165,7 +1205,7 @@ void NativeServices::media(){
         for(unsigned i=0;i<total;++i)mediaIds_[i]=radios.index[i];
         publish(current_,state,phase,s.name,lines);
     };
-    const auto close=[&](){if(client){esp_http_client_close(client);esp_http_client_cleanup(client);client=nullptr;}audio_.stop();};
+    const auto close=[&](){reader.end();if(client){esp_http_client_close(client);esp_http_client_cleanup(client);client=nullptr;}audio_.stop();};
     show("已停止");
     while(!cancelled()){
         Job action{};if(xQueueReceive(actions_,&action,pdMS_TO_TICKS(playing?0:20))==pdTRUE&&action.generation==current_.generation){
@@ -1181,24 +1221,30 @@ void NativeServices::media(){
         }
         if(!playing)continue;
         if(restart){
-            restart=false;stalls=0;streamed=0;
+            restart=false;streamed=0;
             show("电台连接中","loading");char url[256];
             radioUrl(station(index),url,sizeof(url));client=openStream(url);
             // Qingting serves the same relay from a second host.
             if(!client&&!station(index).url&&!cancelled()){radioUrl(station(index),url,sizeof(url),true);client=openStream(url);}
             if(!client){playing=false;show("媒体连接失败","error");continue;}
-            if(!audio_.start(current_.app,current_.generation,true)){close();playing=false;show("播放内存不足","error");continue;}
-            show("正在播放");
+            if(!audio_.start(current_.app,current_.generation,true)||!reader.begin(client)){close();playing=false;show("播放内存不足","error");continue;}
+            buffering=true;show("正在缓冲","loading");
         }
-        if(client){const int count=esp_http_client_read(client,reinterpret_cast<char*>(bytes.get()),1024);
-            if(count>0){stalls=0;mediaBytes_+=count;if((streamed+=count)>65536)retries=0;if(!audio_.nativeInput(4,bytes.get(),count)){close();playing=false;show("当前音频无法解码","error");}}
-            // A read timeout is a pause in a slow stream, not its end.
-            else if(count==-ESP_ERR_HTTP_EAGAIN&&++stalls<4)continue;
+        if(client){
+            if(buffering){
+                if(reader.running&&xStreamBufferBytesAvailable(reader.ring)<reader.start()){vTaskDelay(pdMS_TO_TICKS(20));continue;}
+                buffering=false;show("正在播放");
+            }
+            const size_t count=xStreamBufferReceive(reader.ring,bytes.get(),1024,pdMS_TO_TICKS(20));
+            if(count>0){mediaBytes_+=count;if((streamed+=count)>65536)retries=0;if(!audio_.nativeInput(4,bytes.get(),count)){close();playing=false;show("当前音频无法解码","error");}}
+            // Ran dry while the stream is still open: wait for the ring to fill again.
+            else if(reader.running){buffering=true;++mediaUnderruns_;show("正在缓冲","loading");}
             else{
-                error_=count;socketError_=esp_http_client_get_errno(client);{int tlsCode=0,tlsFlags=0;tlsResult_=esp_http_client_get_and_clear_last_tls_error(client,&tlsCode,&tlsFlags);tlsError_=tlsCode;tlsFlags_=tlsFlags;}readFailHeap_=heap_caps_get_free_size(MALLOC_CAP_8BIT);close();
+                reader.end();const int failed=reader.result;
+                error_=failed;socketError_=esp_http_client_get_errno(client);{int tlsCode=0,tlsFlags=0;tlsResult_=esp_http_client_get_and_clear_last_tls_error(client,&tlsCode,&tlsFlags);tlsError_=tlsCode;tlsFlags_=tlsFlags;}readFailHeap_=heap_caps_get_free_size(MALLOC_CAP_8BIT);close();
                 // Live radio reconnects a few times before giving up.
                 if(retries<3){++retries;show("电台重新连接","loading");restart=retryPause(retries);}
-                else{playing=false;show(count==0?"播放结束":"媒体连接断开",count==0?"ready":"error");}
+                else{playing=false;show(failed==0?"播放结束":"媒体连接断开",failed==0?"ready":"error");}
             }
         }
         stackFree_=uxTaskGetStackHighWaterMark(nullptr);
@@ -1789,6 +1835,6 @@ void NativeServices::snapshot(char* out,size_t size)const{
     char gate[230];audio_.gateSnapshot(gate,sizeof(gate));const size_t tail=strlen(out);
     if(tail&&tail<size)snprintf(out+tail-1,size-tail+1,",\"gate\":%s,\"voice_barge_in\":false,\"barge_aborts\":0,\"barge_acks\":0,\"barge_recoveries\":0,\"barge_mem\":[0,0]}",gate);
     const size_t end=strlen(out);if(end&&end<size)snprintf(out+end-1,size-end+1,",\"prepare\":[%u,%u,%u]}",audio_.prepareError.load(),audio_.prepareFree.load(),audio_.prepareLargest.load());
-    const size_t check=strlen(out);if(check&&check+100<size)snprintf(out+check-1,size-check+1,",\"cloud_check\":[%u,%u,%u],\"http_retries\":%u,\"read_fail_heap\":%u}",cloudChecks_.load(),cloudCheckOk_?1U:0U,connectAttempts_.load(),httpRetries_.load(),readFailHeap_.load());
+    const size_t check=strlen(out);if(check&&check+150<size)snprintf(out+check-1,size-check+1,",\"cloud_check\":[%u,%u,%u],\"http_retries\":%u,\"read_fail_heap\":%u,\"media_bytes\":%u,\"radio_underruns\":%u}",cloudChecks_.load(),cloudCheckOk_?1U:0U,connectAttempts_.load(),httpRetries_.load(),readFailHeap_.load(),mediaBytes_.load(),mediaUnderruns_.load());
 }
 }

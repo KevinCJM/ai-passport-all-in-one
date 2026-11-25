@@ -26,7 +26,7 @@ class NativeServices {
     Job pending_{},current_{};bool pendingReady_{},network_{},memoryWaiting_{};int64_t pendingSince_{};
     std::atomic<uint32_t> desired_{},owner_{},macroRequest_{};
     std::atomic<bool> finished_{},allowed_{},ready_{},busy_{},online_{};
-    std::atomic<unsigned> httpCount_{},httpStatus_{},weatherUpdates_{},chatTx_{},chatRx_{},mediaBytes_{},stackFree_{};
+    std::atomic<unsigned> httpCount_{},httpStatus_{},weatherUpdates_{},chatTx_{},chatRx_{},mediaBytes_{},mediaUnderruns_{},stackFree_{};
     std::atomic<unsigned> ttsStarts_{},ttsStops_{},listenStarts_{};
     std::atomic<unsigned> httpRetries_{},cloudChecks_{},connectAttempts_{},readFailHeap_{};
     std::atomic<bool> cloudCheckOk_{};

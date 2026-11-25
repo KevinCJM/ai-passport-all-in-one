@@ -59,7 +59,7 @@ public:
         }else{
             uint8_t config{};if(!read(0x08,&config,1)||(config!=0&&!mode(0)))return false;
         }
-        initialized_=waiting_=true;next_=now+100;deadline_=now+5000;return true;
+        initialized_=waiting_=true;next_=now+100;deadline_=now+20000;return true;
     }
     void poll(uint64_t now) {
         if(!initialized_||now<next_)return;
@@ -68,9 +68,12 @@ public:
         const bool valid=read(0x04,soc,2)&&soc[0]<=100&&read(0x02,voltage,2);
         const auto raw=static_cast<uint16_t>(((unsigned(voltage[0])<<8)|voltage[1])&0x3fff);
         const unsigned mv=uint32_t(raw)*3125/10000;
-        reading_.known=valid&&mv>0&&mv<=5000;
+        // Woken from its sleep mode (deep sleep), the gauge reads 0% until it has measured again: a cell above
+        // 3.5 V is not empty, so wait ("--%") for its real value rather than show 0%.
+        const bool settling=valid&&waiting_&&soc[0]==0&&mv>=3500&&now<deadline_;
+        reading_.known=valid&&mv>0&&mv<=5000&&!settling;
         if(reading_.known){reading_.percent=soc[0];reading_.millivolts=mv;waiting_=false;}
-        else {reading_.percent=0;reading_.millivolts=0;++errors;if(now>=deadline_)waiting_=false;}
+        else {reading_.percent=0;reading_.millivolts=0;if(!settling)++errors;if(now>=deadline_)waiting_=false;}
         next_=now+(waiting_?100:10000);
     }
     bool sleep() {

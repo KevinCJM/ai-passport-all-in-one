@@ -22,7 +22,7 @@ from passport_identity import paired_port
 from passport_paths import helper, user_data, codex_command, PACKAGED
 from passport_i18n import T
 
-VERSION='0.1.25-preview'
+VERSION='0.1.26-preview'
 LABEL='local.ai-passport.assistant'
 WINDOWS=sys.platform=='win32'
 UI_PORT=8768

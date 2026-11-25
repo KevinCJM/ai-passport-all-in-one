@@ -46,7 +46,7 @@
     const status=el('div');status.className='pm-result';status.setAttribute('role','status');
     const form=el('fieldset');form.disabled=true;const controls=el('div'),picks=el('div'),arrangement=el('div'),preview=el('div'),actions=el('div');actions.className='pm-toolbar';
     form.append(controls,picks,arrangement,preview,actions);root.append(toolbar,status,form);
-    let catalog=[],apps=[],byId=new Map(),draft=null,revision=0,busy=false,dirty=false,previewPage=0;
+    let catalog=[],apps=[],byId=new Map(),draft=null,revision=0,busy=false,dirty=false,previewPage=0,follow=null;
     const api=async(path,body)=>{const response=await fetch(prefix+path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});const text=await response.text();let data;try{data=JSON.parse(text);}catch(_){throw Error('设备未返回配置，请重新连接后读取');}if(!response.ok)throw Error(data.error||'设备拒绝了配置（'+response.status+'）');return data;};
     const shown=id=>!draft.hidden.includes(id);
     // Modes 1 (nine a screen) and 3 (compact list) have no pages and share one order.
@@ -57,7 +57,7 @@
     const title=g=>draft.mode===0?catalog[g].name:flat()?'全部功能':draft.names[g];
     function change(fn,redraw=true){const before=clone(draft);try{fn();encode(draft);dirty=true;status.textContent='有未保存的修改';if(redraw)render();}catch(e){draft=before;status.textContent=e.message;if(redraw)render();}}
     function customCount(group,except=-1){return draft.orders[2].filter(id=>id!==except&&shown(id)&&draft.assignment[id]===group).length;}
-    function enable(id,yes){
+    function enable(id,yes){if(yes)follow=id;
       if(!yes){if(id===10)throw Error('系统设置必须保留');draft.hidden=[...new Set([...draft.hidden,id])];return;}
       let group=draft.assignment[id];
       if(customCount(group,id)>=9){
@@ -71,7 +71,7 @@
       draft.hidden=draft.hidden.filter(x=>x!==id);
     }
     function move(id,group,before){
-      if(before===id)return;
+      if(before===id)return;follow=id;
       if(draft.mode===2){if(customCount(group,id)>=9)throw Error('本页已有9项，请选择其他页面');draft.assignment[id]=group;}
       else if(draft.mode===0&&category(id)!==group)throw Error('跨分类移动请使用“自定义分页”');
       const ids=order();ids.splice(ids.indexOf(id),1);
@@ -85,6 +85,8 @@
       const screens=[],per=draft.mode===3?7:9;
       if(flat()){const ids=list(0);for(let i=0;i<ids.length;i+=per)screens.push({title:'全部功能',ids:ids.slice(i,i+per),first:i,total:ids.length});}
       else for(const g of groupIds()){const ids=list(g);if(ids.length)screens.push({title:title(g),ids});}
+      // The preview follows the item just moved or shown, instead of staying on the first screen.
+      if(follow!==null){const i=screens.findIndex(s=>s.ids.includes(follow));if(i>=0)previewPage=i;follow=null;}
       previewPage=Math.max(0,Math.min(previewPage,screens.length-1));const shown=screens[previewPage];
       const nav=el('div');nav.className='pm-toolbar';
       button('上一屏',()=>{previewPage=Math.max(0,previewPage-1);renderPreview();},nav,previewPage===0);
@@ -96,6 +98,8 @@
       screen.append(body);preview.append(nav,screen,el('small','预览展示排列；图标以胸牌实际显示为准。'));
     }
     function render(){
+      // Each edit redraws everything: keep the page and the function picker where they were.
+      const pageY=scope.scrollY,picked=picks.querySelector('.pm-picks')?.scrollTop||0;
       controls.replaceChildren();const top=el('div');top.className='pm-toolbar';top.append(el('strong','显示方式'));
       const modes=el('select');modes.setAttribute('aria-label','菜单显示方式');[[0,'原有分类'],[2,'自定义分页'],[1,'不分页 · 九宫格'],[3,'不分页 · 紧凑列表']].forEach(([i,name])=>{const o=el('option',name);o.value=i;modes.append(o);});modes.value=draft.mode;modes.onchange=()=>change(()=>{draft.mode=Number(modes.value);previewPage=0;});top.append(modes,el('small','已显示 '+apps.filter(a=>shown(a.id)).length+' / '+apps.length+' 项'));
       const about=el('small',['按原来的 5 个分类分页，可调整分类顺序和分类里的顺序。','不分页：选中的功能按顺序排，每屏 9 个九宫格，长按上下翻屏。','自己建页、起页名（1～8 个字），用每项右边的下拉框决定放在哪页；每页最多 9 个，最多 8 页。','不分页：每屏 7 行的紧凑列表（图标＋名称），长按上下快移 7 项。'][draft.mode]);about.className='pm-mode';controls.append(top,about);
@@ -111,7 +115,7 @@
         if(draft.mode===2)button('删除页',()=>change(()=>{if(draft.pageCount===1)throw Error('至少保留一页');if(draft.assignment[10]===group)throw Error('请先将系统设置移动到其他页面');for(const id of draft.orders[2]){if(draft.assignment[id]===group){draft.hidden=[...new Set([...draft.hidden,id])];draft.assignment[id]=0;}else if(draft.assignment[id]>group)--draft.assignment[id];}draft.names.splice(group,1);draft.names.push('');draft.pages=draft.pages.slice(0,draft.pageCount).filter(p=>p!==group).map(p=>p>group?p-1:p);--draft.pageCount;while(draft.pages.length<PAGES)draft.pages.push(draft.pages.length);}),header);
         section.append(header);const ids=list(group);section.ondragover=e=>e.preventDefault();section.ondrop=e=>drop(e,group);
         if(!ids.length)section.append(el('small','此页为空，胸牌会自动跳过。'));
-        ids.forEach((id,index)=>{const row=el('div');row.className='pm-item';row.draggable=true;row.ondragstart=e=>{e.stopPropagation();e.dataTransfer.setData('text/plain',JSON.stringify({kind:'app',id}));};row.ondragover=e=>e.preventDefault();row.ondrop=e=>{e.stopPropagation();drop(e,group,id);};row.append(el('span','⋮⋮ '+byId.get(id).name));button('↑',()=>change(()=>move(id,group,ids[index-1])),row,index===0);button('↓',()=>change(()=>{const all=order(),a=all.indexOf(id),b=all.indexOf(ids[index+1]);[all[a],all[b]]=[all[b],all[a]];}),row,index===ids.length-1);
+        ids.forEach((id,index)=>{const row=el('div');row.className='pm-item';row.draggable=true;row.ondragstart=e=>{e.stopPropagation();e.dataTransfer.setData('text/plain',JSON.stringify({kind:'app',id}));};row.ondragover=e=>e.preventDefault();row.ondrop=e=>{e.stopPropagation();drop(e,group,id);};row.append(el('span','⋮⋮ '+byId.get(id).name));button('↑',()=>change(()=>move(id,group,ids[index-1])),row,index===0);button('↓',()=>change(()=>{const all=order(),a=all.indexOf(id),b=all.indexOf(ids[index+1]);[all[a],all[b]]=[all[b],all[a]];follow=id;}),row,index===ids.length-1);
           if(draft.mode===2){const target=el('select');target.setAttribute('aria-label',byId.get(id).name+'所在页面');draft.pages.slice(0,draft.pageCount).forEach(p=>{const option=el('option',draft.names[p]);option.value=p;target.append(option);});target.value=group;target.onchange=()=>change(()=>move(id,Number(target.value)));row.append(target);}
           button('隐藏',()=>change(()=>enable(id,false)),row,id===10);section.append(row);
         });arrangement.append(section);
@@ -119,6 +123,7 @@
       if(draft.mode===2)button('＋ 新增页面',()=>change(()=>{if(draft.pageCount>=PAGES)throw Error('最多8页');const p=draft.pageCount++;draft.pages[p]=p;draft.names[p]='新页面';}),arrangement,draft.pageCount>=PAGES);
       renderPreview();actions.replaceChildren();button('恢复默认',()=>change(()=>{draft=defaults(catalog);previewPage=0;}),actions);
       const save=button('保存到胸牌',saveDraft,actions);save.className='pm-save';
+      const pickList=picks.querySelector(".pm-picks");if(pickList)pickList.scrollTop=picked;if(Math.abs(scope.scrollY-pageY)>1)scope.scrollTo(0,pageY);
     }
     async function read(){if(busy)return;busy=true;reload.disabled=true;form.disabled=true;status.textContent='正在读取胸牌…';try{const state=await api('/menu');const groups=[];for(let g=0;g<CATEGORIES;g++)groups.push(await api('/menu/catalog?group='+g));catalog=groups;apps=catalog.flatMap((g,group)=>g.apps.map(a=>({...a,group})));byId=new Map(apps.map(a=>[a.id,a]));const next=decode(state.layout);if(next.count!==apps.length)throw Error('功能目录与配置不一致，请重新读取');draft=next;revision=state.revision;dirty=false;previewPage=0;render();form.disabled=false;status.textContent='已读取胸牌当前配置';}catch(e){status.textContent='读取失败：'+e.message;}finally{busy=false;reload.disabled=false;}}
     async function saveDraft(){if(busy||!draft)return;busy=true;form.disabled=true;reload.disabled=true;status.textContent='正在保存到胸牌…';try{const layout=encode(draft),result=await api('/menu',{layout,revision});const until=Date.now()+20000;let saved=false;while(Date.now()<until){await new Promise(resolve=>setTimeout(resolve,300));const state=await api('/menu');if(state.done===result.ticket){if(state.result)throw Error('胸牌写入失败，原配置仍然保留');if(state.layout!==layout)throw Error('配置已被其他页面修改，请重新读取');revision=state.revision;saved=true;break;}if(!state.pending&&state.revision!==revision)throw Error('配置已变化，请重新读取');}if(!saved)throw Error('保存确认超时，请重新读取胸牌核对');dirty=false;status.textContent='已保存到胸牌，菜单已更新';}catch(e){status.textContent='保存失败：'+e.message;}finally{busy=false;form.disabled=false;reload.disabled=false;}}
