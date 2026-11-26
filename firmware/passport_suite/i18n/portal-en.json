@@ -33,7 +33,6 @@
  "东北": "Northeast",
  "东莞": "Dongguan",
  "中": "fair",
- "中英文均可搜索，无需手机上网。更多城市可在胸牌「所在城市」中按 IP 定位；代理或 VPN 可能影响结果。": "Search in Chinese or English; no internet needed on the phone. For more cities, use \"City\" > Locate by IP on the badge; a proxy or VPN may affect it.",
  "中英翻译": "Translate",
  "主要货币": "Main currency",
  "乌鲁木齐": "Urumqi",
@@ -192,7 +191,6 @@
  "最多8页": "Up to 8 pages",
  "有未保存的修改": "Unsaved changes",
  "未命名网络": "Unnamed network",
- "未找到城市，请换个名称或按 IP 定位": "No city found; try another name or locate by IP",
  "未找到网络，可重新扫描或手动输入。": "No networks found; rescan or enter one by hand.",
  "未找到该网络，请确认是 2.4 GHz WiFi": "Network not found; is it 2.4 GHz WiFi?",
  "本地和省内电台 {} 个。": "{} local and provincial stations.",
@@ -379,5 +377,12 @@
  "黑龙江": "Heilongjiang",
  "（保留）": "(kept)",
  "＋ 新增页面": "+ New page",
- "＋ 添加模式": "+ Add mode"
+ "＋ 添加模式": "+ Add mode",
+ "联网搜索": "Online search",
+ "联网搜索结果": "Online results",
+ "中英文均可搜索，无需手机上网。列表里没有的县、镇，按「联网搜索」由 Passport 通过它连接的 WiFi 查找。": "Search in Chinese or English; no internet needed on the phone. For a county or town not listed, tap \"Online search\": Passport looks it up over its own WiFi.",
+ "未找到城市，可按「联网搜索」": "No city found; try Online search",
+ "请输入地名": "Enter a place name",
+ "联网也没找到，换个名称试试": "Not found online either; try another name",
+ "找到 {} 个地点，选好后按保存": "Found {} places; choose one and tap Save"
 }

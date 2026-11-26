@@ -14,6 +14,7 @@
 #include "esp_mac.h"
 #include "esp_app_desc.h"
 #include "esp_http_client.h"
+#include "esp_crt_bundle.h"
 #include "nvs.h"
 #include "lwip/sockets.h"
 #include <cctype>
@@ -265,6 +266,41 @@ esp_err_t WifiPortal::stockSearch(httpd_req_t* request){
         cJSON_AddStringToObject(o,"id",f.id);cJSON_AddStringToObject(o,"n",f.name);cJSON_AddStringToObject(o,"t",f.type);cJSON_AddStringToObject(o,"c",f.code);cJSON_AddItemToArray(items,o);}
     return sendJson(request,json);
 }
+// Places the built-in catalog lacks (counties, towns): Photon, OpenStreetMap's place-name search, through the device's
+// own WiFi. Its GeoJSON (about 3 KB for eight places) goes to the page unchanged; the page picks the fields. Photon is
+// HTTPS only, and a TLS handshake needs more than the server task's 6 KiB stack, so the request runs on a task of its own.
+esp_err_t WifiPortal::citySearch(httpd_req_t* request){
+    if(!access(request))return reply(request,"403 Forbidden","{\"message\":\"请在设备上开启手机配置后重试\"}");
+    char word[160]{};
+    if(httpd_req_get_url_query_str(request,word,sizeof(word))!=ESP_OK||strncmp(word,"kw=",3)||!word[3])return reply(request,"400 Bad Request","{\"message\":\"请输入地名\"}");
+    for(const char* c=word+3;*c;++c)if(!isalnum(static_cast<unsigned char>(*c))&&!strchr("%._~-+",*c))return reply(request,"400 Bad Request","{\"message\":\"搜索内容无效\"}");
+    struct Job{char url[420];char body[6144];int size;bool ok;TaskHandle_t waiter;};
+    std::unique_ptr<Job> job(new(std::nothrow) Job{});
+    if(!job)return reply(request,"500 Internal Server Error","{\"message\":\"设备内存不足，请稍后重试\"}");
+    // Only settlements and administrative areas, not streets or shops.
+    snprintf(job->url,sizeof(job->url),"https://photon.komoot.io/api/?q=%s&limit=8&osm_tag=place:city&osm_tag=place:town&osm_tag=place:county"
+             "&osm_tag=place:municipality&osm_tag=place:region&osm_tag=place:state&osm_tag=boundary:administrative",word+3);
+    job->waiter=xTaskGetCurrentTaskHandle();
+    const auto run=[](void* arg){
+        auto& j=*static_cast<Job*>(arg);
+        esp_http_client_config_t config{};config.url=j.url;config.timeout_ms=8000;config.buffer_size=1024;config.buffer_size_tx=1024;
+        config.addr_type=HTTP_ADDR_TYPE_INET;config.crt_bundle_attach=esp_crt_bundle_attach;config.user_agent="AI-Passport";config.user_data=&j;
+        config.event_handler=[](esp_http_client_event_t* e)->esp_err_t{
+            auto& j=*static_cast<Job*>(e->user_data);
+            if(e->event_id==HTTP_EVENT_ON_DATA&&e->data_len>0){const int n=std::min<int>(e->data_len,int(sizeof(j.body))-1-j.size);if(n>0){memcpy(j.body+j.size,e->data,n);j.size+=n;}}
+            return ESP_OK;};
+        if(auto client=esp_http_client_init(&config)){
+            j.ok=esp_http_client_perform(client)==ESP_OK&&esp_http_client_get_status_code(client)==200&&j.size<int(sizeof(j.body))-1;
+            esp_http_client_cleanup(client);
+        }
+        xTaskNotifyGive(j.waiter);vTaskDelete(nullptr);
+    };
+    if(xTaskCreate(run,"city_search",10240,job.get(),4,nullptr)!=pdPASS)return reply(request,"500 Internal Server Error","{\"message\":\"设备内存不足，请稍后重试\"}");
+    ulTaskNotifyTake(pdTRUE,portMAX_DELAY);  // The client's own timeouts end the request; the job outlives nothing.
+    if(!job->ok)return reply(request,"502 Bad Gateway","{\"message\":\"搜索失败：Passport 需要先连上能上网的 WiFi\"}");
+    httpd_resp_set_type(request,"application/json");httpd_resp_set_hdr(request,"Cache-Control","no-store");
+    return httpd_resp_send(request,job->body,job->size);
+}
 // {"items":[{"id":"105.AAPL","n":"苹果"},...]}: 1-12 securities, names cut to fit.
 esp_err_t WifiPortal::stockSave(httpd_req_t* request){
     if(!access(request)||!sameOrigin(request))return reply(request,"403 Forbidden","{\"message\":\"请在设备上开启手机配置后重试\"}");
@@ -405,6 +441,7 @@ esp_err_t WifiPortal::get(httpd_req_t* request){
     if(!strncmp(request->uri,"/podcast/search?",16))return podcastSearch(request);
     if(!strcmp(request->uri,"/stock/list"))return stockList(request);
     if(!strncmp(request->uri,"/stock/search?",14))return stockSearch(request);
+    if(!strncmp(request->uri,"/city/search?",13))return citySearch(request);
     if(!strcmp(request->uri,"/wheel/list"))return wheelList(request);
     httpd_resp_set_hdr(request,"Cache-Control","no-store");
     if(!strncmp(request->uri,"/wifi/scan",10)){

@@ -22,7 +22,7 @@ from passport_identity import paired_port
 from passport_paths import helper, user_data, codex_command, PACKAGED
 from passport_i18n import T
 
-VERSION='0.1.26-preview'
+VERSION='0.1.27-preview'
 LABEL='local.ai-passport.assistant'
 WINDOWS=sys.platform=='win32'
 UI_PORT=8768
@@ -271,12 +271,15 @@ class Controller:
         self.serve()
         def run():
             from serial.tools import list_ports
-            retry=1;last_deps=0
+            retry=1;last_deps=0;logged=''
             while not self.stop.is_set():
                 try:
                     if time.monotonic()-last_deps>(2 if self.permission_polling.is_set() else 15):self.deps=dependencies();last_deps=time.monotonic()
                     self.step(list(list_ports.comports()));self.refresh_after_permission();retry=1
                 except Exception as error:
+                    # The cause chain is what tells a bond problem from an unreachable badge; once per distinct failure.
+                    detail=repr(error)+(' <- '+repr(error.__cause__) if error.__cause__ else '')
+                    if detail!=logged:print(time.strftime('%Y-%m-%d %H:%M:%S'),'connect failed:',detail,file=sys.stderr,flush=True);logged=detail
                     self.disconnect();self.error=str(error) if isinstance(error,(ValueError,ConnectionError,TimeoutError)) else '内部错误：'+type(error).__name__
                     self.status='连接未就绪，%d 秒后重试'%min(retry*2,15);retry=min(retry*2,15)
                 self.stop.wait(retry)
@@ -612,6 +615,13 @@ def main():
         if WINDOWS and not args.background and not args.self_test:
             import webbrowser;webbrowser.open(WEB+'#assistant')  # opened again: show the running one
         return
+    if sys.stderr is None:
+        # A windowed Windows app has no console, so the BLE diagnostics went nowhere; keep them in assistant.log
+        # (the Mac login item already writes there).
+        log=directory/'assistant.log'
+        if log.exists() and log.stat().st_size>1<<20:log.replace(directory/'assistant.old.log')
+        sys.stdout=sys.stderr=log.open('a',encoding='utf-8',buffering=1)
+    print(time.strftime('%Y-%m-%d %H:%M:%S'),'assistant',VERSION,sys.platform,'started',file=sys.stderr,flush=True)
     if args.self_test:
         import bleak,sounddevice,psutil,websockets,cryptography,paho.mqtt.client,serial
         if WINDOWS:import pystray,PIL,passport_windows

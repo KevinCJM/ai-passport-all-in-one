@@ -31,7 +31,7 @@ def main():
     assert result.returncode == 0, log[-4000:]
     assert not any(t in log for t in ('SUITE_FAIL', 'Guru Meditation', 'assert failed', 'CORRUPT HEAP')), log[-4000:]
     done = re.search(r'CITY_CHECKS_DONE cities=(\d+) heap=(\d+) model=(\d+) runtime=(\d+)', log)
-    assert done and int(done[1]) == 519, log[-3000:]
+    assert done and int(done[1]) == 537, log[-3000:]
     frames, active = [], None
     for line in log.splitlines():
         if line.startswith('FRAME_BEGIN '):

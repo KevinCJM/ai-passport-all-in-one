@@ -32,6 +32,7 @@ class WifiPortal {
     esp_err_t podcastSave(httpd_req_t*);
     esp_err_t stockList(httpd_req_t*);
     esp_err_t stockSearch(httpd_req_t*);
+    esp_err_t citySearch(httpd_req_t*);
     esp_err_t stockSave(httpd_req_t*);
     esp_err_t wheelList(httpd_req_t*);
     esp_err_t wheelSave(httpd_req_t*);

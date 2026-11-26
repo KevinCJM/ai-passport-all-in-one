@@ -20,6 +20,7 @@ AI Passport 胸牌（ESP32-C3、8 MB Flash、无 PSRAM、240×320 屏、三个�
 
 - **English**：「系统设置 › 语言 Language」切换中文 / English，手机配置页右上角也能切换。胸牌界面、按键提示、手机配置页和电脑助手都跟着变；电台、新闻、农历这类内容和离线语音解析仍是中文，「语音指令」能听懂英文功能名（如 "open the radio"），其他英文说法交给小智的大模型。做法和维护见 [多语言设计](../docs/i18n-design.md)。
 - **收音机选台**：长按上键打开选台列表，可以换到其他省市的电台（选的地区会记住，选「本地」回到所在城市）。
+- **所在城市更全**：手机配置页列出全部地级市（按省分组，共 380 多个中国城市），列表里没有的县、镇可以点「联网搜索」，由胸牌通过它连着的 WiFi 查找（OpenStreetMap 地名数据）。
 
 ## 0.5.48 更新：语音指令打开电脑功能不再超时，长按更快
 
@@ -262,7 +263,7 @@ python -m esptool --chip esp32c3 -p PORT -b 921600 write-flash \
 
 ## 电脑助手（Mac / Windows）
 
-电脑助手是运行在电脑上的配套程序（源码 `scripts/passport_assistant.py`，当前版本 `0.1.26-preview`）。语音输入、AI 控制器、电脑监控、离座锁屏、飞书提醒、打开电脑程序和 USB 借网等功能，需要电脑上开着助手。胸牌和电脑之间优先走 USB 线，拔线后自动改走蓝牙。
+电脑助手是运行在电脑上的配套程序（源码 `scripts/passport_assistant.py`，当前版本 `0.1.27-preview`）。语音输入、AI 控制器、电脑监控、离座锁屏、飞书提醒、打开电脑程序和 USB 借网等功能，需要电脑上开着助手。胸牌和电脑之间优先走 USB 线，拔线后自动改走蓝牙。
 
 | | Mac | Windows（预览） |
 | --- | --- | --- |
@@ -275,7 +276,7 @@ python -m esptool --chip esp32c3 -p PORT -b 921600 write-flash \
 
 ### 1. 安装
 
-安装包在 [Releases › 电脑助手 0.1.26 预览版](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/assistant-v0.1.26-preview)：Mac 下载 `…-macos-arm64.pkg`，Windows 下载 `…-windows-x64.zip`，可用同页的 `SHA256SUMS` 校验。
+安装包在 [Releases › 电脑助手 0.1.27 预览版](https://github.com/KevinCJM/ai-passport-all-in-one/releases/tag/assistant-v0.1.27-preview)：Mac 下载 `…-macos-arm64.pkg`，Windows 下载 `…-windows-x64.zip`，可用同页的 `SHA256SUMS` 校验。
 
 **Mac**：双击 `.pkg` 安装，助手会装进「应用程序」。安装包没有签名和 Apple 公证，双击安装包或第一次打开时如果提示无法验证，到「系统设置 › 隐私与安全性」点「仍要打开」。
 
@@ -363,7 +364,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 | 网页提示端口 8768 被占用 | 可能已经开着一个助手，或者有其他程序占用了这个端口。助手不能同时运行两个：再打开一次时，Windows 会直接打开已运行助手的网页。 |
 | 要刷机 | 先「暂停助手」或退出助手，释放串口。 |
 
-日志在数据目录里：`gateway.log`（USB 网关）；Mac 版还有 `assistant.log`。反馈问题时，请附上设置网页「诊断」里复制的信息。
+日志在数据目录里：`gateway.log`（USB 网关）和 `assistant.log`（连接失败的原因，0.1.27 起 Windows 版也有，在 `%APPDATA%\AI Passport`）。反馈问题时，请附上设置网页「诊断」里复制的信息。
 
 ### 7. 隐私与卸载
 

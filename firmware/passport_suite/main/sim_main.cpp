@@ -1541,7 +1541,10 @@ void testInternationalCities(passport::Runtime& runtime){
         }
         ++count;
     }
-    CHECK(count==519);
+    CHECK(count==537);
+    // Prefectures named after the region rather than their seat.
+    CHECK(!strcmp(spokenCity("德宏")->name,"芒市"));CHECK(!strcmp(spokenCity("林芝")->name,"林芝"));
+    CHECK(!strcmp(spokenCity("甘南")->name,"合作"));CHECK(!strcmp(spokenCity("仙桃")->name,"仙桃"));
     const auto original=runtime.model.weatherReading;
     runtime.model.weatherReading.update("纽约","晴",13,8,17,55,0,25);uiRender(runtime);uiCapture("city_new_york_home");
     CHECK(runtime.switchTo(App::Forecast)==Result::Ok);

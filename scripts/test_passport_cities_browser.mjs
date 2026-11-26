@@ -8,12 +8,13 @@ import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const out=path.join(root,'releases/city-support-test');fs.mkdirSync(out,{recursive:true});
 const html=fs.readFileSync(path.join(root,'firmware/passport_device/main/wifi_portal_page.hpp'),'utf8').split('R"PORTAL(')[1].split(')PORTAL"')[0];
-let stored={city:'Kelowna',country:'CA',province:'加拿大',latitude:49.88,longitude:-119.49},posts=[];
+let searches=[],stored={city:'Kelowna',country:'CA',province:'加拿大',latitude:49.88,longitude:-119.49},posts=[];
 const server=http.createServer(async(req,res)=>{
  if(req.url==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(html);return;}
  if(req.url==='/menu-editor.js'){res.setHeader('Content-Type','text/javascript');res.end(fs.readFileSync(path.join(root,'scripts/passport_menu.js')));return;}
  res.setHeader('Content-Type','application/json; charset=utf-8');
  if(req.url==='/identity/data'){res.statusCode=404;res.end('{}');return;}
+ if(req.url.startsWith('/city/search?kw=')){searches.push(decodeURIComponent(req.url.slice(16)));res.end(fs.readFileSync(path.join(root,'scripts/fixtures/photon-changxing.json')));return;}
  if(req.url==='/media/prefs'){res.end(JSON.stringify(stored));return;}
  if(req.url==='/media'&&req.method==='POST'){
   let body='';for await(const chunk of req)body+=chunk;
@@ -65,6 +66,16 @@ try{
  for(const cc of ['CA','GB']){assert(await select('伦敦',cc),'London '+cc+' unavailable');await save();assert(stored.country===cc,'wrong London country');}
  const before=posts.length;await search('not-a-real-city-123');await evaluate(`document.getElementById('save-media').click()`);await pause(100);assert(posts.length===before,'empty search overwrote city');
  await search('温哥华');assert(await select('温哥华','CA'),'Chinese search failed');await save();
+ // 联网搜索 for a county the catalog lacks (a real Photon reply): Enter searches when nothing is listed, the county
+ // comes first with its province cut to the radio region, and saving sends it.
+ await search('长兴');await evaluate(`document.getElementById('city-search').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'}))`);
+ await until(`document.getElementById('media-message').textContent.includes('找到')`);assert(searches.at(-1)==='长兴','online search not sent');
+ const online=await evaluate(`JSON.parse(document.getElementById('city').value)`);
+ assert(online.city==='长兴'&&online.province==='浙江'&&online.country==='CN'&&Math.abs(online.latitude-31.03)<0.05,'online county not first: '+JSON.stringify(online));
+ const places=await evaluate(`[...document.querySelector('#city optgroup').children].map(o=>JSON.parse(o.value))`);
+ assert(places.length===8&&places.at(-1).city==='长兴村'&&places.some(p=>p.city==='长兴镇'&&p.province==='上海'),'online order or municipality wrong');
+ await save();assert(stored.city==='长兴'&&stored.province==='浙江','online place not saved');
+ await search('长');assert(await evaluate(`!document.querySelector('#city optgroup')?.label.includes('联网')`),'online results kept after typing');
  // Android's captive-portal window opens no file picker: a tap that never leaves the page must explain what to do.
  await evaluate(`document.getElementById('tab-card').click()`);await until(`!document.getElementById('save-card').disabled`);
  await evaluate(`document.getElementById('photo-file').click()`);await pause(1700);
@@ -76,7 +87,7 @@ try{
  const shot=await call('Page.captureScreenshot',{format:'png',fromSurface:true});fs.writeFileSync(path.join(out,'city-portal-mobile.png'),Buffer.from(shot.data,'base64'));
  assert(await evaluate(`document.documentElement.scrollWidth<=window.innerWidth`),'mobile page overflows');
  assert(exceptions.length===0,'browser exceptions: '+JSON.stringify(exceptions));
- const report={status:'PASS',real_chrome:true,physical_device_accessed:false,portal_catalog_cities:count,regions:regions.map(x=>x[2]),unlisted_ip_city_retained:true,same_name_ip_coordinates_retained:true,london_disambiguated:true,english_country_search:true,empty_search_did_not_save:true,photo_picker_hint:true,posts:posts.length,exceptions};
+ const report={status:'PASS',real_chrome:true,physical_device_accessed:false,portal_catalog_cities:count,regions:regions.map(x=>x[2]),unlisted_ip_city_retained:true,same_name_ip_coordinates_retained:true,london_disambiguated:true,english_country_search:true,empty_search_did_not_save:true,photo_picker_hint:true,online_county_search:true,posts:posts.length,exceptions};
  fs.writeFileSync(path.join(out,'city-browser-verification.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));
  await call('Browser.close');
 }finally{
